@@ -1,0 +1,63 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &5729798009123603879
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7929395796022145117}
+  - component: {fileID: 1490173310331926324}
+  m_Layer: 0
+  m_Name: darkbearSkill
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7929395796022145117
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5729798009123603879}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1490173310331926324
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5729798009123603879}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4d971b00d9f1b024fa6a23554cb55cfe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Skillname: "\u9ED1\u6697\u9F7F\u8F6E"
+  CDtime: 8
+  CDkey: 8
+  damage: 4
+  level: 1
+  lifetime: 4
+  pass: 4
+  speed: 2
+  number: 1
+  bullet: {fileID: 7371771136305436370, guid: e2cd3934b037f0a4c95b3f4b20015e15, type: 3}
+  size: 1
+  interval: 0.5
+  player: {fileID: 0}
+  angel: 0
+  isfaceenemy: 0
+  icon: {fileID: 21300000, guid: c02f9d1839918124381f389b318efc69, type: 3}
+  radius: 5
