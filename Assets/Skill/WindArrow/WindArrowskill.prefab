@@ -1,0 +1,65 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &8615763878822732016
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4227494241022100592}
+  - component: {fileID: 6012714189568000076}
+  m_Layer: 0
+  m_Name: WindArrowskill
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4227494241022100592
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8615763878822732016}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 891.1212, y: 551.59564, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6012714189568000076
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8615763878822732016}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b225e0ae1fe6f66449152e92a12c0243, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Skillname: "\u98CE\u7BAD"
+  CDtime: 1
+  CDkey: 1
+  damage: 1
+  level: 1
+  lifetime: 10
+  pass: 0
+  speed: 6
+  number: 1
+  bullet: {fileID: 4113026640461606547, guid: cd52411b788261d4582b002c973f338a, type: 3}
+  size: 1
+  interval: 0
+  player: {fileID: 0}
+  angel: 0
+  isfaceenemy: 0
+  icon: {fileID: 21300000, guid: 275c47fe35c5bcc4581c431b67c2f492, type: 3}
+  attackRadius: 5
+  circleSegments: 64
+  circleColor: {r: 1, g: 1, b: 1, a: 0.3}
