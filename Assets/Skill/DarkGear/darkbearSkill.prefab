@@ -52,7 +52,7 @@ MonoBehaviour:
   lifetime: 4
   pass: 4
   speed: 2
-  number: 1
+  number: 3
   bullet: {fileID: 7371771136305436370, guid: e2cd3934b037f0a4c95b3f4b20015e15, type: 3}
   size: 1
   interval: 0.5

@@ -54,3 +54,5 @@ MonoBehaviour:
   icon: {fileID: 21300000, guid: f91f712675b852f45b57c679ce0cd227, type: 3}
   skill: {fileID: 2926060281001066810, guid: c67543657029f654d910270b8d460d18, type: 3}
   battleUI: {fileID: 0}
+  upgradeGroup: learn
+  maxUpgrades: 5

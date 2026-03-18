@@ -26,7 +26,7 @@ public class enemy : Attribute
         ani= GetComponent<Animator>();
     }
 
-    private void OnCollisionEnter(Collision collision)
+    protected virtual void OnCollisionEnter(Collision collision)
     {
         if (rolestate != state.dead)
         {
@@ -35,17 +35,21 @@ public class enemy : Attribute
                 Player Player = collision.gameObject.GetComponent<Player>();
                 if (Player.health > 0)
                 {
+                    // Íæ¼ÒÉÁ±ÜÅÐ¶¨
+                    float evaRoll = UnityEngine.Random.value * 100;
+                    if (Player.EVA > evaRoll) return;
+
                     Player.health -= atk;
                     GameObject number = Instantiate(atknumber, collision.transform.position, default);
                     number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = atk.ToString();
                     collision.gameObject.GetComponent<Player>().startturnred();
                     if (Player.health <= 0)
                     {
-                        Player.death();//Íæ¼ÒËÀÍö
+                        Player.death();
                     }
                 }
             }
-        }  
+        }
     }
     public void getrole()
     {
@@ -67,7 +71,7 @@ public class enemy : Attribute
         }
     }
 
-    private void FixedUpdate()
+    protected virtual void FixedUpdate()
     {
         if(role != null)
         {
@@ -134,7 +138,7 @@ public class enemy : Attribute
         transform.GetComponent<SpriteRenderer>().material = material;
     }
 
-    public void Destroy1()
+    public virtual void Destroy1()
     {
         if (rolestate != state.dead)
         {

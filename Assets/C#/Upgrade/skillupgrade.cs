@@ -6,33 +6,49 @@ public class skillupgrade : Upgradeoptionsbase
 {
     public override void chocieupgrade()
     {
+        battleUI = GameObject.Find("BattleUI").GetComponent<battleUI>();
+        player = GameObject.Find("playerlayer").transform.GetChild(0).gameObject.GetComponent<Player>();
+        Skillbase choiceskill=null;
+        foreach(Transform ski in player.SkillList)
+        {
+            Skillbase s = ski.GetComponent<Skillbase>();
+            if (skill.Skillname==s.Skillname)
+            {
+                choiceskill = s;
+            }
+        }
         switch (skillAtr)
         {
             case skillAttribute.CDtime:
-                skill.CDtime += (int)upgradenumber;
+                choiceskill.CDtime += upgradenumber; // 减少CD填负数，增加CD填正数
                 break;
             case skillAttribute.damage:
-                skill.damage += (int)upgradenumber;
+                choiceskill.damage += (int)upgradenumber;
                 break;
             case skillAttribute.lifetime:
-                skill.lifetime += upgradenumber;
+                choiceskill.lifetime += upgradenumber;
                 break;
             case skillAttribute.pass:
-                skill.pass += (int)upgradenumber;
+                choiceskill.pass += (int)upgradenumber;
                 break;
             case skillAttribute.speed:
-                skill.speed += (int)upgradenumber;
+                choiceskill.speed += upgradenumber;
                 break;
             case skillAttribute.number:
-                skill.number += (int)upgradenumber;
+                choiceskill.number += (int)upgradenumber;
                 break;
             case skillAttribute.size:
-                skill.size += upgradenumber;
+                choiceskill.size += upgradenumber;
                 break;
             case skillAttribute.interval:
-                skill.interval += (int)upgradenumber;
+                choiceskill.interval += upgradenumber;
+                break;
+            case skillAttribute.attackRadius:
+                SkillWindArrow wa = choiceskill as SkillWindArrow;
+                if (wa != null) wa.attackRadius += upgradenumber;
                 break;
         }
         closechoice();
+        battleUI.RefreshSkill();
     }
 }

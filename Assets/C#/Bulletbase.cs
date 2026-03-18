@@ -30,42 +30,53 @@ public class Bulletbase : MonoBehaviour
         speed = fatherskill.speed;
         size = fatherskill.size;
         player = GameObject.Find("playerlayer").transform.GetChild(0).GetComponent<Attribute>();
-        rb= GetComponent<Rigidbody>();
+        rb = GetComponent<Rigidbody>();
+        rb.useGravity = false;          // 禁用重力，防止火球埋进地里
+        rb.constraints = RigidbodyConstraints.FreezePositionY  // 锁定Y轴位置
+                       | RigidbodyConstraints.FreezeRotation;  // 锁定旋转
         enemy = GameObject.Find("enemylayer").transform;
-        transform.localScale = transform.localScale * size;//调整子弹大小
+        transform.localScale = transform.localScale * size;
     }
-    //伤害事件
     private void OnTriggerEnter(Collider other)
     {
+        if (!other.CompareTag("enemy")) return;
+
+        enemy enemy = other.GetComponent<enemy>();
+        if (enemy.health > 0)
+        {
+            // 闪避判定：EVA 为闪避概率（0~100）
+            float evaRoll = UnityEngine.Random.value * 100;
+            if (enemy.EVA > evaRoll)
+            {
+                // 闪避成功，不造成伤害，但仍消耗穿透
+                pass -= 1;
+                if (pass < 0) Destroy();
+                return;
+            }
+
+            float finaldamage = damage + player.atk;
+            float random = UnityEngine.Random.value * 100;
+            if (player.CR > random)
+            {
+                finaldamage = finaldamage * (player.CD / 100);
+            }
+            finaldamage -= enemy.def;
+            enemy.health -= damage;
+            enemy.health -= (int)finaldamage;
+            GameObject atknumber = enemy.atknumber;
+            GameObject number = Instantiate(atknumber, other.transform.position, default);
+            number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = ((int)finaldamage).ToString();
+            other.GetComponent<enemy>().startturnred();
+            if (enemy.health <= 0)
+            {
+                enemy.Destroy1();
+            }
+        }
+
         pass -= 1;
         if (pass < 0)
         {
             Destroy();
-        }
-        if (other.CompareTag("enemy"))
-        {
-            enemy enemy = other.GetComponent<enemy>();
-            if (enemy.health > 0)
-            {
-                float finaldamage=damage+player.atk;//最终伤害=伤害+角色攻击力
-                float random = UnityEngine.Random.value *100;//暴击率0-100
-                if (player.CR > random)
-                {
-                    finaldamage = finaldamage*(player.CD/100);//如若暴击，最终伤害乘以暴击伤害,暴击伤害为（120-无限）
-                }
-                finaldamage -= enemy.def;//最终伤害减去怪物防御力
-                enemy.health -= damage;
-                enemy.health -= (int)finaldamage;
-                GameObject atknumber = enemy.atknumber;
-                GameObject number = Instantiate(atknumber, other.transform.position, default);
-                number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = ((int)finaldamage).ToString();
-                other.GetComponent<enemy>().startturnred();
-                if (enemy.health <= 0)
-                {
-                    enemy.Destroy1();
-                    //enemy死亡
-                }
-            }
         }
     }
     public void Destroy()
@@ -105,16 +116,13 @@ public class Bulletbase : MonoBehaviour
     }
     void FixedUpdate()
     {
-        if (cango ) //position拼写错了（汗
+        if (cango)
         {
             Vector3 vect = new Vector3(distance.x, 0, distance.z).normalized * speed;
-            GetComponent<Rigidbody>().velocity = vect;//赋予向量
+            rb.velocity = vect;
             float angle = Mathf.Atan2(distance.z, distance.x) * Mathf.Rad2Deg;
             transform.rotation = Quaternion.Euler(0, 0, angle);
-            if (role==null)
-            {
-                getrole();
-            }
+            // 不再每帧重新寻找目标，方向在发射时固定
             lifetime -= Time.fixedDeltaTime;
             if (lifetime <= 0)
             {

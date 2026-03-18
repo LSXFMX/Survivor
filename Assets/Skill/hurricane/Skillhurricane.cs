@@ -11,7 +11,8 @@ public class Skillhurricane : Skillbase
         float nowangle = 0;
         for (int i = 0; i < number; i++)
         {
-            GameObject newbullet = Instantiate(bullet, player.transform.position, Quaternion.Euler(new Vector3(0, 0, angel)));//创建子弹
+            Vector3 spawnPosition = player.transform.position + new Vector3(0, size, 0);
+            GameObject newbullet = Instantiate(bullet, spawnPosition, Quaternion.Euler(new Vector3(0, 0, angel)));//创建子弹
             Bulletbase n = newbullet.GetComponent<Bulletbase>();
             n.fatherskill = this;
             n.GetFather();

@@ -54,3 +54,5 @@ MonoBehaviour:
   icon: {fileID: 21300000, guid: c02f9d1839918124381f389b318efc69, type: 3}
   skill: {fileID: 1490173310331926324, guid: 3d13d04418d914c4f822cece8f2f2aab, type: 3}
   battleUI: {fileID: 0}
+  upgradeGroup: darkbear
+  maxUpgrades: 5
