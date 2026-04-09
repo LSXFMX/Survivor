@@ -5,6 +5,7 @@ public class YuanMuManager : MonoBehaviour
     public static YuanMuManager Instance { get; private set; }
 
     private int _current = 0;
+    public int perSecond = 0; // 每秒自动增加的源木量（可被奇遇修改）
 
     public int Current => _current;
 

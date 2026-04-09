@@ -20,6 +20,14 @@ public class Camp : enemy
             rb.constraints = RigidbodyConstraints.FreezeAll;
         }
         fixedPosition = transform.position;
+
+        // 应用难度倍率到营地血量
+        if (DifficultyManager.Instance != null)
+        {
+            var cfg = DifficultyManager.Instance.Current;
+            healthmax = Mathf.RoundToInt(healthmax * cfg.hpMultiplier);
+            health    = healthmax;
+        }
     }
 
     protected override void FixedUpdate()
@@ -53,6 +61,7 @@ public class Camp : enemy
         if (healthBar != null)
             healthBar.Hide();
 
+        ToastManager.Show("已攻占营地，每秒源木 +1");
         StartCoroutine(YuanMuCoroutine());
     }
 
@@ -61,7 +70,9 @@ public class Camp : enemy
         while (true)
         {
             yield return new WaitForSeconds(1f);
-            YuanMuManager.Instance?.Add(1);
+            // 基础每秒+1，加上奇遇4的额外加成
+            int bonus = YuanMuManager.Instance != null ? YuanMuManager.Instance.perSecond : 0;
+            YuanMuManager.Instance?.Add(1 + bonus);
         }
     }
 }

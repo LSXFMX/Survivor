@@ -31,8 +31,8 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0.38268343, y: 0, z: 0, w: 0.92387956}
   m_LocalPosition: {x: 0.97, y: 1.22, z: -2.69}
-  m_LocalScale: {x: 3, y: 3, z: 3}
-  m_ConstrainProportionsScale: 0
+  m_LocalScale: {x: 10, y: 10, z: 10}
+  m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 45, y: 0, z: 0}
@@ -155,10 +155,10 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.18
-  m_Height: 0.71807754
+  m_Radius: 0.5905953
+  m_Height: 1.1811908
   m_Direction: 0
-  m_Center: {x: -0.006704569, y: 0, z: 0.15490592}
+  m_Center: {x: 0.020258155, y: -0.049999982, z: 0.06952408}
 --- !u!114 &2313709403811745565
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -183,3 +183,4 @@ MonoBehaviour:
   rb: {fileID: 0}
   enemy: {fileID: 0}
   role: {fileID: 0}
+  distance: {x: 0, y: 0, z: 0}

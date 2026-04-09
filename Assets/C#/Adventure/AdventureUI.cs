@@ -45,7 +45,9 @@ public class AdventureUI : MonoBehaviour
 
     public void Hide()
     {
-        Time.timeScale = 1;
+        battleUI bui = GameObject.Find("BattleUI")?.GetComponent<battleUI>();
+        if (bui != null) bui.ResumeTime();
+        else Time.timeScale = 1;
         gameObject.SetActive(false);
     }
 
@@ -55,8 +57,12 @@ public class AdventureUI : MonoBehaviour
     private void TryExecute(AdventureOptionBase option)
     {
         if (option == null) return;
-        YuanMuManager.Instance?.Spend(_cost);
+        // 源木在 AdventureEventManager.OnTriggerButtonClick 已扣除，这里不重复扣费。
         option.Execute();
+
+        // 第一次完成奇遇后解锁门挑战
+        GateChallengeManager.Instance?.Unlock();
+
         Hide();
     }
 

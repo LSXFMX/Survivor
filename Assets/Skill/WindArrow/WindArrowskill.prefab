@@ -49,9 +49,9 @@ MonoBehaviour:
   CDkey: 1
   damage: 1
   level: 1
-  lifetime: 10
+  lifetime: 20
   pass: 0
-  speed: 6
+  speed: 8
   number: 1
   bullet: {fileID: 4113026640461606547, guid: cd52411b788261d4582b002c973f338a, type: 3}
   size: 1

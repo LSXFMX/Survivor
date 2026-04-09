@@ -59,19 +59,33 @@ public class AdventureEventManager : MonoBehaviour
         if (adventureUI != null && adventureUI.IsShowing) return;
 
         var (optA, optB) = PickTwoOptions();
+        if (optA == null || optB == null) return;
         adventureUI?.Show(optA, optB, triggerThreshold);
     }
 
     private (AdventureOptionBase, AdventureOptionBase) PickTwoOptions()
     {
-        int indexA = Random.Range(0, optionPool.Count);
+        List<AdventureOptionBase> available = new List<AdventureOptionBase>();
+        foreach (var opt in optionPool)
+        {
+            if (opt == null) continue;
+            if (opt.IsAvailableInCurrentDifficulty()) available.Add(opt);
+        }
+
+        if (available.Count < 2)
+        {
+            Debug.LogWarning("[AdventureEventManager] 当前难度可用选项少于2个");
+            return (null, null);
+        }
+
+        int indexA = Random.Range(0, available.Count);
         int indexB = indexA;
         int safety = 0;
-        while (indexB == indexA && optionPool.Count > 1)
+        while (indexB == indexA && available.Count > 1)
         {
-            indexB = Random.Range(0, optionPool.Count);
+            indexB = Random.Range(0, available.Count);
             if (++safety > 100) break;
         }
-        return (optionPool[indexA], optionPool[indexB]);
+        return (available[indexA], available[indexB]);
     }
 }

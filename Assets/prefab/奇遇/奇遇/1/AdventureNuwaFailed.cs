@@ -18,19 +18,19 @@ public class AdventureNuwaFailed : AdventureOptionBase
             int increase = Mathf.Max(1, Mathf.RoundToInt(sp.maxenemy * 0.2f));
             sp.maxenemy += increase;
 
-            // 添加两个刷怪点 cube
+            // 添加两个刷怪点 cube（作为 Spawnpoint 子对象，在其附近偏移）
             if (spawnPointCubePrefab != null)
             {
                 for (int i = 0; i < 2; i++)
                 {
-                    // 在 Spawnpoint 附近随机偏移生成新刷怪点
-                    Vector3 offset = new Vector3(
+                    // 直接作为子对象生成，localPosition 在 Spawnpoint 局部坐标系内偏移
+                    GameObject cube = Instantiate(spawnPointCubePrefab, sp.transform);
+                    cube.transform.localPosition = new Vector3(
                         Random.Range(-5f, 5f),
-                        0,
+                        0f,
                         Random.Range(-5f, 5f)
                     );
-                    Instantiate(spawnPointCubePrefab, sp.transform.position + offset,
-                                Quaternion.identity, sp.transform);
+                    cube.transform.localRotation = Quaternion.identity;
                 }
             }
         }

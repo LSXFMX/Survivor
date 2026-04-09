@@ -1,0 +1,106 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: GateChallengeConfig
+  m_EditorClassIdentifier: Assembly-CSharp::GateChallengeConfig
+  floors:
+  - floor: 1
+    enemyCount: 1
+    enemyHealth: 50
+    enemyAtk: 20
+    enemyDef: 0
+    enemySpeed: 0
+    enemyEVA: 0
+  - floor: 2
+    enemyCount: 1
+    enemyHealth: 70
+    enemyAtk: 10
+    enemyDef: 5
+    enemySpeed: 0
+    enemyEVA: 0
+  - floor: 3
+    enemyCount: 4
+    enemyHealth: 20
+    enemyAtk: 5
+    enemyDef: 0
+    enemySpeed: 15
+    enemyEVA: 0
+  - floor: 4
+    enemyCount: 2
+    enemyHealth: 50
+    enemyAtk: 10
+    enemyDef: 0
+    enemySpeed: 0
+    enemyEVA: 0
+  - floor: 5
+    enemyCount: 3
+    enemyHealth: 100
+    enemyAtk: 30
+    enemyDef: 0
+    enemySpeed: 0
+    enemyEVA: 10
+  - floor: 6
+    enemyCount: 2
+    enemyHealth: 120
+    enemyAtk: 5
+    enemyDef: 15
+    enemySpeed: 0
+    enemyEVA: 0
+  - floor: 7
+    enemyCount: 4
+    enemyHealth: 150
+    enemyAtk: 30
+    enemyDef: 0
+    enemySpeed: 0
+    enemyEVA: 0
+  - floor: 8
+    enemyCount: 1
+    enemyHealth: 300
+    enemyAtk: 15
+    enemyDef: 0
+    enemySpeed: 0
+    enemyEVA: 10
+  - floor: 9
+    enemyCount: 2
+    enemyHealth: 300
+    enemyAtk: 40
+    enemyDef: 0
+    enemySpeed: 0
+    enemyEVA: 0
+  - floor: 10
+    enemyCount: 4
+    enemyHealth: 200
+    enemyAtk: 30
+    enemyDef: 0
+    enemySpeed: 0
+    enemyEVA: 0
+  - floor: 11
+    enemyCount: 2
+    enemyHealth: 350
+    enemyAtk: 70
+    enemyDef: 0
+    enemySpeed: 0
+    enemyEVA: 0
+  - floor: 12
+    enemyCount: 3
+    enemyHealth: 400
+    enemyAtk: 50
+    enemyDef: 0
+    enemySpeed: 0
+    enemyEVA: 0
+  - floor: 13
+    enemyCount: 3
+    enemyHealth: 600
+    enemyAtk: 60
+    enemyDef: 0
+    enemySpeed: 0
+    enemyEVA: 0

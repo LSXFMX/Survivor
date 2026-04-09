@@ -89,6 +89,10 @@ public class SkillWindArrow : Skillbase
 
         foreach (Transform e in enemylayer)
         {
+            // 跳过已死亡的敌人
+            enemy en = e.GetComponent<enemy>();
+            if (en != null && en.rolestate == enemy.state.dead) continue;
+
             float dist = Vector3.Distance(player.transform.position, e.position);
             if (dist <= attackRadius)
                 result.Add(e);

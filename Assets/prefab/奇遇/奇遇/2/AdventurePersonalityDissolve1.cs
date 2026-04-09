@@ -23,13 +23,27 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
             if (p == null) continue;
             p.healthmax = Mathf.Max(1, p.healthmax / 2);
             p.health    = Mathf.Clamp(p.health / 2, 1, p.healthmax);
+            
+            // 确保原始玩家有"Player"标签
+            t.tag = "Player";
         }
 
-        // 以第一个玩家为模板克隆，克隆体已经继承了减半后的数值
+        // 以第一个玩家为模板克隆
         GameObject original = playerlayer.GetChild(0).gameObject;
         Vector3 offset = new Vector3(1.5f, 0, 0);
-        Instantiate(original, original.transform.position + offset,
+        GameObject clone = Instantiate(original, original.transform.position + offset,
                     original.transform.rotation, playerlayer);
+        
+        // 关键：标记为分身
+        clone.tag = "Clone";
+        
+        // 复制玩家数据
+        Player clonePlayer = clone.GetComponent<Player>();
+        if (clonePlayer != null)
+        {
+            clonePlayer.healthmax = original.GetComponent<Player>().healthmax;
+            clonePlayer.health = original.GetComponent<Player>().health;
+        }
 
         base.Execute();
     }

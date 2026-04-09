@@ -123,7 +123,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   rolename: "\u8611\u83C7\u4EBA"
-  health: 2
+  health: 10
   healthmax: 10
   atk: 2
   def: 2

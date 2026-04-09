@@ -46,6 +46,8 @@ public class skillupgrade : Upgradeoptionsbase
             case skillAttribute.attackRadius:
                 SkillWindArrow wa = choiceskill as SkillWindArrow;
                 if (wa != null) wa.attackRadius += upgradenumber;
+                SkillSporeField sf = choiceskill as SkillSporeField;
+                if (sf != null) sf.attackRadius += upgradenumber;
                 break;
         }
         closechoice();

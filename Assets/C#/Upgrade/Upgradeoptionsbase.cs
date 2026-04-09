@@ -71,7 +71,7 @@ public class Upgradeoptionsbase : MonoBehaviour
                 ChoiceUI.Instance.RecordUpgrade(upgradeGroup);
         }
 
-        Time.timeScale = 1.0f;
         battleUI.choiceUI.SetActive(false);
+        battleUI.ResumeTime();
     }
 }

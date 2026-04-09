@@ -23,7 +23,16 @@ public class enemy : Attribute
     void OnEnable()
     {
         playerlayer = GameObject.Find("playerlayer").transform;
-        ani= GetComponent<Animator>();
+        ani = GetComponent<Animator>();
+
+        // 根据难度缩放基础属性
+        if (DifficultyManager.Instance != null)
+        {
+            var cfg = DifficultyManager.Instance.Current;
+            healthmax = Mathf.RoundToInt(healthmax * cfg.hpMultiplier);
+            health    = healthmax;
+            atk       = Mathf.RoundToInt(atk * cfg.atkMultiplier);
+        }
     }
 
     protected virtual void OnCollisionEnter(Collision collision)
@@ -39,7 +48,7 @@ public class enemy : Attribute
                     float evaRoll = UnityEngine.Random.value * 100;
                     if (Player.EVA > evaRoll) return;
 
-                    Player.health -= atk;
+                    Player.health -= (int)atk;
                     GameObject number = Instantiate(atknumber, collision.transform.position, default);
                     number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = atk.ToString();
                     collision.gameObject.GetComponent<Player>().startturnred();

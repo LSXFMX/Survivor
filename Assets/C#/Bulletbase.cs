@@ -39,9 +39,10 @@ public class Bulletbase : MonoBehaviour
     }
     private void OnTriggerEnter(Collider other)
     {
-        if (!other.CompareTag("enemy")) return;
-
         enemy enemy = other.GetComponent<enemy>();
+        if (enemy == null) enemy = other.GetComponentInParent<enemy>();
+        if (enemy == null) return;
+
         if (enemy.health > 0)
         {
             // 闪避判定：EVA 为闪避概率（0~100）
@@ -64,9 +65,9 @@ public class Bulletbase : MonoBehaviour
             enemy.health -= damage;
             enemy.health -= (int)finaldamage;
             GameObject atknumber = enemy.atknumber;
-            GameObject number = Instantiate(atknumber, other.transform.position, default);
+            GameObject number = Instantiate(atknumber, enemy.transform.position, default);
             number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = ((int)finaldamage).ToString();
-            other.GetComponent<enemy>().startturnred();
+            enemy.startturnred();
             if (enemy.health <= 0)
             {
                 enemy.Destroy1();
@@ -105,7 +106,7 @@ public class Bulletbase : MonoBehaviour
         {
             Vector3 postion1 = role.transform.position;//目标坐标
             Vector3 postion2 = transform.position;//自己坐标
-            distance = postion1 - postion2;
+            distance = postion1 - postion2 + new Vector3(0, 2f, 0); // 无条件抬高2f
         }
         else
         {

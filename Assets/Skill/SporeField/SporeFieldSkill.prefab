@@ -1,0 +1,65 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &716478499434189255
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2938070459861553257}
+  - component: {fileID: 5144768759590319663}
+  m_Layer: 0
+  m_Name: SporeFieldSkill
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2938070459861553257
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 716478499434189255}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 61.006413, y: -11.697762, z: 76.6376}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5144768759590319663
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 716478499434189255}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5a77562702d579140bf3eede5824de8c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Skillname: "\u5B62\u5B50\u9886\u57DF"
+  CDtime: 5
+  CDkey: 5
+  damage: 3
+  level: 1
+  lifetime: 15
+  pass: 0
+  speed: 0
+  number: 0
+  bullet: {fileID: 5158840640220324632, guid: b5bcebecb71bf654ab9f654c1c934c83, type: 3}
+  size: 1
+  interval: 0.1
+  player: {fileID: 0}
+  angel: 0
+  isfaceenemy: 0
+  icon: {fileID: 21300000, guid: 42dbef7d6ce5025448ef3c9659bba802, type: 3}
+  attackRadius: 8
+  circleSegments: 64
+  circleColor: {r: 0, g: 1, b: 0.2, a: 0.4}

@@ -54,3 +54,5 @@ MonoBehaviour:
   icon: {fileID: 0}
   skill: {fileID: 0}
   battleUI: {fileID: 0}
+  upgradeGroup: Def
+  maxUpgrades: 5

@@ -7,10 +7,23 @@ public class Spawnpoint : MonoBehaviour
     public Transform enemylayer;
     public battleUI b;
     public List<GameObject> enemy;
-    public float SpawnTimer;//刷怪间隔
+    public float SpawnTimer;
     public int maxenemy;
     public float timer;
 
+    [Header("N5+ 蝙蝠")]
+    public GameObject batPrefab; // 拖入蝙蝠 prefab，N5~N8 自动加入刷怪池
+
+    void Start()
+    {
+        // N5~N8 难度将蝙蝠加入刷怪池
+        if (batPrefab != null && DifficultyManager.Instance != null)
+        {
+            string label = DifficultyManager.Instance.Current.label;
+            if (label == "N5" || label == "N6" || label == "N7" || label == "N8")
+                enemy.Add(batPrefab);
+        }
+    }
 
     void FixedUpdate()
     {
@@ -25,20 +38,21 @@ public class Spawnpoint : MonoBehaviour
         }
     }
 
-    public void Spawn()//刷怪方法
+    public void Spawn()
     {
-        if(enemylayer.childCount<maxenemy)
+        if(enemylayer.childCount < maxenemy)
         {
-            Instantiate(randomobj(), getrandompoint().position,Quaternion.Euler(45,0,0),enemylayer);
+            Instantiate(randomobj(), getrandompoint().position, Quaternion.Euler(45, 0, 0), enemylayer);
         }
     }
 
-    public GameObject randomobj()//获取随机敌人对象
+    public GameObject randomobj()
     {
         int random = Random.Range(0, enemy.Count);
         return enemy[random];
     }
-    public Transform getrandompoint()//随机选择刷怪点
+
+    public Transform getrandompoint()
     {
         int random = Random.Range(0, transform.childCount);
         return transform.GetChild(random);

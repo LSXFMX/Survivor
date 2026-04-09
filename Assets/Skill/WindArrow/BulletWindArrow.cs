@@ -24,9 +24,7 @@ public class BulletWindArrow : Bulletbase
         _elapsed = 0f;
 
         Vector3 endPos = target != null ? target.position : transform.position + Vector3.forward * 5f;
-        float dist = Vector3.Distance(
-            new Vector3(_startPos.x, 0, _startPos.z),
-            new Vector3(endPos.x, 0, endPos.z));
+        float dist = Vector3.Distance(_startPos, endPos);
         _totalTime = dist / Mathf.Max(speed, 0.1f);
     }
 
@@ -37,10 +35,9 @@ public class BulletWindArrow : Bulletbase
         _elapsed += Time.fixedDeltaTime;
         float t = Mathf.Clamp01(_elapsed / _totalTime);
 
-        // 实时追踪目标位置
+        // 实时追踪目标位置（不锁Y轴）
         Vector3 endPos = _target != null ? _target.position : transform.position;
         Vector3 newPos = Vector3.Lerp(_startPos, endPos, t);
-        newPos.y = _startPos.y; // 保持Y轴不变
 
         // 朝向目标（2D sprite，绕Z轴）
         Vector3 dir = endPos - transform.position;
