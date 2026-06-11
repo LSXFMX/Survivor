@@ -126,12 +126,13 @@ MonoBehaviour:
   health: 10
   healthmax: 10
   atk: 2
-  def: 2
+  def: 0
   speed: 3
   CR: 0
   CD: 0
   EVA: 0
   DR: 0
+  regen: 0
   exp: 0
   expmax: 0
   level: 0

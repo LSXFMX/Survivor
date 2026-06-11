@@ -15,7 +15,21 @@ public class AdventureOption7_YuanmuThrower : AdventureOptionBase
 
     public override void Execute()
     {
-        var player = GameObject.Find("playerlayer")?.transform.GetChild(0)?.GetComponent<Player>();
+        Player player = null;
+        var playerLayer = GameObject.Find("playerlayer")?.transform;
+        if (playerLayer != null)
+        {
+            foreach (Transform t in playerLayer)
+            {
+                if (t != null && t.CompareTag("Player"))
+                {
+                    player = t.GetComponent<Player>();
+                    break;
+                }
+            }
+            if (player == null && playerLayer.childCount > 0)
+                player = playerLayer.GetChild(0).GetComponent<Player>();
+        }
         if (player != null && YuanMuManager.Instance != null)
         {
             int yuanmu = YuanMuManager.Instance.Current;

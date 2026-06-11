@@ -34,8 +34,39 @@ public class DifficultySelectUI : MonoBehaviour
         "解锁世界Boss", // N8
     };
 
+    // OverlayLayer 化的运行时占位
+    [System.NonSerialized] private Transform _originalParent;          // 原始父节点（首次 reparent 之前记录，OnDisable 时还原）
+    [System.NonSerialized] private int _originalSiblingIndex = -1;      // 原始 sibling 顺序（OnDisable 时还原）
+    [System.NonSerialized] private GameObject _runtimeBackdrop;         // 动态加的全屏黑色遮罩
+
     void OnEnable()
     {
+        // ============ 关键：彻底解决"关卡选择被压在主菜单下层 / 看起来歪在屏幕底部"的层级问题 ============
+        // 项目里有多个嵌套 Canvas（外层"Canvas" → 子 Canvas"标题UI"），sub-Canvas 在同 SortingOrder 下
+        // 默认会画在父 Canvas 内的兄弟 Image 之上 —— DifficultyPanel 作为父 Canvas 的兄弟 Image，
+        // 怎么改 sibling 顺序都会被"标题UI"sub-Canvas 整个盖住，表现为"红色横幅 + 主菜单按钮在最上面"。
+        //
+        // 解决：把整个 DifficultySelectUI 这个 GameObject **reparent** 到一个**场景根级**、
+        // SortingOrder=10000 的 OverlayCanvas 下（UIOverlayLayer 自动创建），完全脱离原 Canvas 层级，
+        // 这是唯一能确定性"画在所有 UI 之上"的方案。
+        Transform overlay = UIOverlayLayer.Get();
+        if (overlay != null && transform.parent != overlay)
+        {
+            // 首次 enable：记录原父节点，OnDisable 时还原（避免对场景结构产生持久副作用）
+            if (_originalParent == null)
+            {
+                _originalParent = transform.parent;
+                _originalSiblingIndex = transform.GetSiblingIndex();
+            }
+            transform.SetParent(overlay, false);
+            transform.SetAsLastSibling();
+        }
+
+        // 额外：原 DifficultyPanel 自带的白色 alpha=0.392 半透明背景**根本盖不住主菜单**，
+        // 所以这里**额外**动态创建一个全屏黑色 0.6 alpha 的 backdrop 作为遮罩，
+        // 挂在 OverlayLayer 下、且位于本 panel 之前（先绘制 → 在底）。
+        EnsureRuntimeBackdrop(overlay);
+
         if (tooltipPanel != null)
         {
             tooltipPanel.SetActive(false);
@@ -64,9 +95,37 @@ public class DifficultySelectUI : MonoBehaviour
         }
     }
 
-    void OnDisable()
+    /// <summary>
+    /// 创建/复用一个全屏黑色 0.6 alpha 的 backdrop，挂在 OverlayLayer 下、放在 DifficultyPanel 之前。
+    /// 用来遮住主菜单（红色横幅 + 开始游戏/退出游戏按钮）。
+    /// </summary>
+    private void EnsureRuntimeBackdrop(Transform overlay)
     {
-        if (tooltipPanel != null) tooltipPanel.SetActive(false);
+        if (overlay == null) return;
+        if (_runtimeBackdrop == null)
+        {
+            _runtimeBackdrop = new GameObject("DifficultyPanelBackdrop", typeof(RectTransform));
+            _runtimeBackdrop.transform.SetParent(overlay, false);
+            var rt = (RectTransform)_runtimeBackdrop.transform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+
+            var img = _runtimeBackdrop.AddComponent<Image>();
+            img.color = new Color(0f, 0f, 0f, 0.6f);
+            img.raycastTarget = true; // 吞掉点击，防止穿透到下层主菜单按钮
+
+            // Button 双保险吞事件
+            var btn = _runtimeBackdrop.AddComponent<Button>();
+            btn.targetGraphic = img;
+            btn.transition = Selectable.Transition.None;
+        }
+        _runtimeBackdrop.SetActive(true);
+        // backdrop 必须画在本 panel 之前（更早绘制 → 在下层）→ 先把 backdrop 设到末位再把自己设到末位
+        _runtimeBackdrop.transform.SetAsLastSibling();
+        transform.SetAsLastSibling();
     }
 
     private void OnSelectDifficulty(int index)
@@ -75,6 +134,13 @@ public class DifficultySelectUI : MonoBehaviour
         if (tooltipPanel != null) tooltipPanel.SetActive(false);
         gameObject.SetActive(false);
         titleScript?.click_start();
+    }
+
+    void OnDisable()
+    {
+        if (tooltipPanel != null) tooltipPanel.SetActive(false);
+        // 关掉动态加的 backdrop，避免它在面板隐藏后仍然挡着屏幕
+        if (_runtimeBackdrop != null) _runtimeBackdrop.SetActive(false);
     }
 
     private void SetupTooltipTrigger(GameObject target, int index)

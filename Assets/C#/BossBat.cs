@@ -26,7 +26,13 @@ public class BossBat : enemy
     public int        summonCount    = 2;
     public GameObject batPrefab;
 
+    [Header("自然回血")]
+    [Tooltip("每秒按 healthmax 的百分比自然回血。被亡者领域操控后失效（MindControlled 一旦挂上，FixedUpdate 短路，回血不再 tick）。")]
+    public float naturalHealPctPerSecond = 0.02f; // 默认 2%/s
+
     [HideInInspector] public battleUI battleUI;
+    // 累积小数血量，避免 RoundToInt 在 0.02×3000=60 这种整除场景之外丢精度
+    private float _healAccum;
 
     // ── 状态 ──────────────────────────────────────────
     private enum BossState { idle, move, dash, summon, dead }
@@ -43,11 +49,8 @@ public class BossBat : enemy
     // ── 初始化 ────────────────────────────────────────
     protected new void OnEnable()
     {
-        // 手动初始化父类私有字段
-        var playerlayer = GameObject.Find("playerlayer")?.transform;
-        typeof(enemy).GetField("playerlayer",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-            ?.SetValue(this, playerlayer);
+        // 父类私有字段已改为 protected，直接赋值
+        playerlayer = GameObject.Find("playerlayer")?.transform;
 
         _ani = GetComponent<Animator>();
         _rb  = GetComponent<Rigidbody>();
@@ -85,6 +88,14 @@ public class BossBat : enemy
     {
         if (_state == BossState.dead) return;
         if (_busy) return; // 协程运行中，不干预
+
+        // 亡者领域：被控制为友军后，行为完全交给 MindControlled
+        if (GetComponent<MindControlled>() != null) return;
+
+        // 自然回血：每秒按 healthmax 的百分比恢复。
+        //   • 放在 MindControlled 短路之后 → 被亡者领域操控时不再 tick，等价于"失去自然回血词条"。
+        //   • 死亡 / busy 协程时也已被上面 return 拦截，不会在死后偷偷回血。
+        TickNaturalHeal();
 
         // 保持 Y 轴固定
         if (_rb != null)
@@ -207,10 +218,48 @@ public class BossBat : enemy
         base.OnCollisionEnter(collision);
     }
 
+    /// <summary>
+    /// 关底 Boss 自然回血：每帧按 fixedDeltaTime 累积 `healthmax × naturalHealPctPerSecond × dt`，
+    /// 累积到 ≥1 时回填整数到 health（最多到 healthmax）。
+    ///
+    /// 失效条件（在调用方已生效，不需要这里再判）：
+    ///   • 已死亡：FixedUpdate 顶部 _state==dead 直接 return；
+    ///   • 被亡者领域操控：MindControlled 存在时短路 return（"失去自然回血词条"语义）；
+    ///   • busy 协程（冲刺/召唤）期间：FixedUpdate _busy return → 战斗演出阶段不回血，
+    ///     防止 boss 在冲刺逃跑/召唤无敌帧里偷血。
+    /// </summary>
+    private void TickNaturalHeal()
+    {
+        if (naturalHealPctPerSecond <= 0f) return;
+        if (health <= 0 || health >= healthmax) return;
+        _healAccum += healthmax * naturalHealPctPerSecond * Time.fixedDeltaTime;
+        if (_healAccum >= 1f)
+        {
+            int gain = (int)_healAccum;
+            _healAccum -= gain;
+            health = Mathf.Min(healthmax, health + gain);
+        }
+    }
+
     // ── 死亡 ──────────────────────────────────────────
     public override void Destroy1()
     {
         if (rolestate == state.dead) return;
+
+        // 亡者领域：被孢子领域伤害过，统一复活拦截（BossBat 不调 base.Destroy1，必须在此自行拦截。
+        // WorldBossBat 调 base.Destroy1() 经此入口；命中复活时，外层子类会继续执行 OnWorldBossDefeated——
+        // 故 WorldBossBat.Destroy1 自身也已加了相同前置拦截，提前 return。这里只服务普通 BossBat。）
+        // _reviveAttempted 防重入：WorldBossBat 已在外层投过一次，进入这里就不能再投第二次。
+        if (!_reviveAttempted)
+        {
+            _reviveAttempted = true;
+            if (TombDomainHook.TryReviveAsAlly(this))
+            {
+                Debug.Log($"[亡者领域] 吸血鬼领主 {gameObject.name} 被复活为友军");
+                return;
+            }
+        }
+
         rolestate = state.dead;
         _state    = BossState.dead;
         _busy     = false;
@@ -224,6 +273,48 @@ public class BossBat : enemy
             col.enabled = false;
 
         Instantiate(expstone, transform.position, Quaternion.Euler(45, 0, 0));
+
+        // 首次击败吸血鬼领主（蝙蝠社群 Boss）里程碑：解锁成就装备5「吸血鬼大君」+ 蝙蝠好感度 +10（仅首次）
+        if (EquipmentSystem.Instance != null)
+        {
+            bool alreadyUnlockedLord = EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.AchievementEquipment, 5);
+            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.AchievementEquipment, 5);
+            if (!alreadyUnlockedLord)
+            {
+                ToastManager.Show("吸血鬼大君启程已记录！蝙蝠社群好感度 +10");
+                if (FavorManager.Instance != null)
+                {
+                    FavorManager.Instance.AddFavor(FactionType.Bat, 10);
+                    ToastManager.Show($"蝙蝠社群好感度 +10（当前：{FavorManager.Instance.GetFavor(FactionType.Bat)}）");
+                }
+                else
+                {
+                    int cur = UnityEngine.PlayerPrefs.GetInt("Favor_Bat", 0);
+                    int next = Mathf.Clamp(cur + 10, 0, 100);
+                    UnityEngine.PlayerPrefs.SetInt("Favor_Bat", next);
+                    UnityEngine.PlayerPrefs.Save();
+                    ToastManager.Show($"蝙蝠社群好感度 +10（当前：{next}）");
+                }
+            }
+        }
+
+        // 每次击败蝙蝠Boss → 好感度 +1
+        if (FavorManager.Instance != null)
+        {
+            FavorManager.Instance.AddFavor(FactionType.Bat, 1);
+            int newFavor = FavorManager.Instance.GetFavor(FactionType.Bat);
+            ToastManager.Show($"蝙蝠社群好感度 +1（当前：{newFavor}）");
+        }
+        else
+        {
+            string key = "Favor_Bat";
+            int cur = PlayerPrefs.GetInt(key, 0);
+            int next = Mathf.Clamp(cur + 1, 0, 100);
+            PlayerPrefs.SetInt(key, next);
+            PlayerPrefs.Save();
+            ToastManager.Show($"蝙蝠社群好感度 +1（当前：{next}）");
+        }
+
         battleUI?.OnBossDefeated();
         StartCoroutine(Destroy2());
     }

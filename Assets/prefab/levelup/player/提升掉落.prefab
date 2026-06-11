@@ -44,8 +44,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4dacee4b314d6f843b7e4f698855fd66, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Upgradename: "\u63D0\u5347\u6389\u843D"
-  Upgradedescription: "\u6389\u5B9D\u7387+1%"
+  Upgradename: "\u63D0\u5347\u7ECF\u9A8C\u6548\u7387"
+  Upgradedescription: "\u7ECF\u9A8C\u6548\u7387+1%"
   type: 0
   upgradenumber: 1
   skillAtr: 0

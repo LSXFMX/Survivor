@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &847498696998580186
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8353047915069751663}
+  - component: {fileID: 1553246814931342065}
+  m_Layer: 0
+  m_Name: LearnFormOfWind
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8353047915069751663
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 847498696998580186}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1553246814931342065
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 847498696998580186}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e2b5c0d13f4d5e6f908192a14152493d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Upgradename: "\u98CE\u4E4B\u5F62"
+  Upgradedescription: "\u98CE\u7BAD\u8FDB\u5316\uFF1A\u547D\u4E2D\u670910%\u6982\u7387\u53EC\u5524\u98CE\u5203"
+  type: 2
+  upgradenumber: 0
+  skillAtr: 0
+  playerAtr: 0
+  player: {fileID: 0}
+  icon: {fileID: 21300000, guid: 696a45800aceb404cbe244bd5855e68f, type: 3}
+  skill: {fileID: 6012714189568000077, guid: a1b2c3d4e5f64738291a3b4c5d6e7f80, type: 3}
+  battleUI: {fileID: 0}
+  upgradeGroup: formofwind
+  maxUpgrades: 1
+  requireFavor: 0
+  favorFaction: 0
+  favorThreshold: 10

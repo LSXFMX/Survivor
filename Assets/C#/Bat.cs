@@ -31,6 +31,20 @@ public class Bat : enemy
     private float _diveCooldown = 0f;
     private bool  _hitThisDive  = false;
 
+    // 状态卡死兜底（2026-06，亡者领域友军蝙蝠"复活后原地不动"修复）：
+    // 进入 dive/rise 时记录时间戳；FixedUpdate 里若停留超过 _stuckThreshold 还没回到 fly/idle，
+    // 强制重置状态机。覆盖"协程被异常打断 / role 中途丢失 / 拉升目标无法收敛"等所有卡死路径。
+    private float _stateEnterTime = 0f;
+    private const float _stuckThreshold = 8f;
+
+    // 亡者领域：被复活为友军时由 MindControlled 设为 true。
+    // 友军蝙蝠保留原有"飞行+俯冲"行为，只是攻击目标从 Player 换成最近敌人。
+    [System.NonSerialized] public bool isAllyMode = false;
+
+    // 性能：把 enemy 私有 OnEnable 的 MethodInfo 缓存为 static，避免每只蝙蝠生成时都做一次
+    // GetMethod 反射查找。蝙蝠潮（N7+）会同屏几十只，反射开销叠加可见。
+    private static System.Reflection.MethodInfo _baseEnemyOnEnable;
+
     void Awake()
     {
         _rb  = GetComponent<Rigidbody>();
@@ -39,9 +53,12 @@ public class Bat : enemy
 
     protected new void OnEnable()
     {
-        var baseOnEnable = typeof(enemy).GetMethod("OnEnable",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        baseOnEnable?.Invoke(this, null);
+        if (_baseEnemyOnEnable == null)
+        {
+            _baseEnemyOnEnable = typeof(enemy).GetMethod("OnEnable",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        }
+        _baseEnemyOnEnable?.Invoke(this, null);
 
         _rb  = GetComponent<Rigidbody>();
         // _ani 已在 Awake 赋值
@@ -56,6 +73,11 @@ public class Bat : enemy
     protected override void FixedUpdate()
     {
         if (rolestate == state.dead) return;
+
+        // 亡者领域：被控制为友军后，"飞行+俯冲"逻辑保留（用户要求与原蝙蝠一致），
+        // 只是 role 由 MindControlled 每帧喂入最近敌人 GameObject，
+        // 同时 OnTriggerEnter 改为伤害敌人而非 Player。
+        // 注意：MindControlled 不再接管蝙蝠的移动，这里继续往下跑。
 
         // 朝向翻转（从当前缩放取绝对值，不依赖 Sca 字段）
         if (role != null)
@@ -74,12 +96,12 @@ public class Bat : enemy
             case BatState.idle:
                 SetMove(false);
                 if (role == null) getrole();
-                else _state = BatState.fly;
+                else { _state = BatState.fly; _stateEnterTime = Time.time; }
                 break;
 
             case BatState.fly:
                 SetMove(true);
-                if (role == null) { _state = BatState.idle; break; }
+                if (role == null) { _state = BatState.idle; _stateEnterTime = Time.time; break; }
 
                 // 悬浮目标位置
                 Vector3 flyTarget = new Vector3(
@@ -98,10 +120,25 @@ public class Bat : enemy
 
             case BatState.dive:
                 // 由协程驱动，FixedUpdate 不额外移动
+                if (Time.time - _stateEnterTime > _stuckThreshold)
+                {
+                    // 协程异常 / 目标无法到达 → 强制收尾，下一帧从 fly 重新决策
+                    StopAllCoroutines();
+                    _diveCooldown = diveInterval;
+                    _state = BatState.fly;
+                    _stateEnterTime = Time.time;
+                }
                 break;
 
             case BatState.rise:
-                // 由协程驱动
+                // 由协程驱动；同样加卡死兜底
+                if (Time.time - _stateEnterTime > _stuckThreshold)
+                {
+                    StopAllCoroutines();
+                    _diveCooldown = diveInterval;
+                    _state = BatState.fly;
+                    _stateEnterTime = Time.time;
+                }
                 break;
         }
     }
@@ -111,6 +148,7 @@ public class Bat : enemy
         if (_state == BatState.dive || _state == BatState.rise) yield break;
 
         _state       = BatState.dive;
+        _stateEnterTime = Time.time;
         _hitThisDive = false;
 
         // 锁定俯冲目标（玩家当前位置）
@@ -128,16 +166,28 @@ public class Bat : enemy
         // 短暂停留
         yield return new WaitForSeconds(0.2f);
 
-        // 拉升：回到悬浮高度
+        // 拉升：回到悬浮高度。
+        //   修 Bug（2026-06，亡者领域友军蝙蝠"原地不动"）：
+        //     原代码 `if (role != null) { ... 拉升 ... }`，一旦俯冲过程中 role 被 MindControlled
+        //     切走（目标敌人死亡 / 友军把它打死 / 缓存失效）就整个 rise 块被跳过，
+        //     但 _state 早已被设为 rise、_diveCooldown 也未重置，FixedUpdate 里的 rise case 是
+        //     空体（"由协程驱动"），导致蝙蝠永远卡在 rise 状态→看起来"原地不动"。
+        //     新版：role 为空时也要把状态机收尾——直接以"原地拉到默认 flyHeight 高度"作为兜底，
+        //     并保证最终 `_state = fly`、`_diveCooldown = diveInterval`。
         _state = BatState.rise;
-        if (role != null)
+        _stateEnterTime = Time.time;
         {
+            // 优先用当前 role 的 Y 做基准；role 为空（场上无敌人/缓存空窗）时退化为
+            // "在自身当前 Y 上叠加一个微抬"，避免无限循环。
+            float baseY = (role != null) ? role.transform.position.y : transform.position.y;
             Vector3 riseTarget = new Vector3(
                 transform.position.x,
-                role.transform.position.y + flyHeight,
+                baseY + flyHeight,
                 transform.position.z);
 
-            while (Mathf.Abs(transform.position.y - riseTarget.y) > 0.1f)
+            // 用一个安全帧上限防止极端情况死循环（理论上不会触发，留作保底）
+            int safetyFrames = 600; // 600 * 0.02s = 12s
+            while (Mathf.Abs(transform.position.y - riseTarget.y) > 0.1f && safetyFrames-- > 0)
             {
                 if (rolestate == state.dead) yield break;
                 transform.position = Vector3.MoveTowards(
@@ -148,6 +198,7 @@ public class Bat : enemy
 
         _diveCooldown = diveInterval;
         _state        = BatState.fly;
+        _stateEnterTime = Time.time;
     }
 
     // 俯冲时用 Trigger 检测伤害
@@ -156,6 +207,29 @@ public class Bat : enemy
         if (rolestate == state.dead) return;
         if (_state != BatState.dive) return; // 只在俯冲阶段造成伤害
         if (_hitThisDive) return;            // 每次俯冲只打一次
+
+        if (isAllyMode)
+        {
+            // 友军模式：撞到敌人才造成伤害（且不能打自己/别的友军）
+            if (other.CompareTag("Player")) return;
+            enemy en = other.GetComponent<enemy>();
+            if (en == null || en == this) return;
+            if (en.health <= 0 || en.rolestate == state.dead) return;
+            if (en.GetComponent<MindControlled>() != null) return; // 不打友军
+
+            int dmg = Mathf.Max(1, (int)(atk - en.def));
+            _hitThisDive = true;
+            en.health -= dmg;
+
+            // 用统一的"友军伤害飘字"——头顶 + 高亮紫色 + 放大，避免被绿色/流光友军身体盖住
+            MindControlled.SpawnAllyDamageNumber(en, dmg);
+            en.startturnred();
+            // 亡者领域：标记"被友军打过"，让它在 Destroy1 时进入"友军击杀复活链路"（20%）
+            TombDomainHook.MarkAllyDamage(en);
+            if (en.health <= 0) en.Destroy1();
+            return;
+        }
+
         if (!other.CompareTag("Player")) return;
 
         Player player = other.GetComponent<Player>();
@@ -167,7 +241,7 @@ public class Bat : enemy
         _hitThisDive = true;
         player.health -= (int)atk;
 
-        if (atknumber != null)
+        if (atknumber != null && DamageNumberSettings.Visible)
         {
             GameObject number = Instantiate(atknumber, other.transform.position, Quaternion.identity);
             number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = atk.ToString();
@@ -180,6 +254,18 @@ public class Bat : enemy
     public override void Destroy1()
     {
         if (rolestate == state.dead) return;
+
+        // 亡者领域：被孢子领域伤害过，统一复活拦截（Bat 不调 base.Destroy1，所以必须在这自己拦截）
+        if (!_reviveAttempted)
+        {
+            _reviveAttempted = true;
+            if (TombDomainHook.TryReviveAsAlly(this))
+            {
+                Debug.Log($"[亡者领域] 蝙蝠 {gameObject.name} 被复活为友军");
+                return;
+            }
+        }
+
         rolestate = state.dead;
         _state    = BatState.idle;
         SetMove(false);

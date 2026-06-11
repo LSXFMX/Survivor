@@ -61,7 +61,18 @@ public class Camp : enemy
         if (healthBar != null)
             healthBar.Hide();
 
-        ToastManager.Show("已攻占营地，每秒源木 +1");
+        int campCount = PlayerPrefs.GetInt("CampCapturedCount", 0) + 1;
+        PlayerPrefs.SetInt("CampCapturedCount", campCount);
+        PlayerPrefs.Save();
+
+        ToastManager.Show($"已攻占营地，每秒源木 +1 (累计攻占: {campCount}/100)");
+
+        if (campCount >= 100 && EquipmentSystem.Instance != null && !EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.AchievementEquipment, 5))
+        {
+            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.AchievementEquipment, 5);
+            ToastManager.Show("成就装备5「扎营大师」已解锁！");
+        }
+
         StartCoroutine(YuanMuCoroutine());
     }
 

@@ -33,6 +33,9 @@ public class WorldBossMushroomMan : BossMushroomMan
     {
         if (rolestate == state.dead) return;
 
+        // 亡者领域：被控制为友军后，行为完全交给 MindControlled（不再追玩家、不再走激活逻辑）
+        if (GetComponent<MindControlled>() != null) return;
+
         if (!_activated)
         {
             // 受到攻击（血量减少）也激活
@@ -64,6 +67,20 @@ public class WorldBossMushroomMan : BossMushroomMan
     public override void Destroy1()
     {
         if (rolestate == state.dead) return;
+
+        // 亡者领域：先在最外层拦截。命中则不能让 base.Destroy1 之后的
+        // worldBossManager.OnWorldBossDefeated 执行——那会错误地把"被控制"当成"被击败"。
+        // _reviveAttempted 设为 true 后，base.Destroy1（→ BossMushroomMan.Destroy1）就不会再
+        // 重复调一次 hook（避免双重判定）。
+        if (!_reviveAttempted)
+        {
+            _reviveAttempted = true;
+            if (TombDomainHook.TryReviveAsAlly(this))
+            {
+                Debug.Log($"[亡者领域] 世界蘑菇Boss {gameObject.name} 被永久控制为友军");
+                return;
+            }
+        }
 
         // 调用父类死亡流程（播动画、生成经验石等）
         // 但不触发 battleUI.OnBossDefeated()，所以先把 battleUI 置空

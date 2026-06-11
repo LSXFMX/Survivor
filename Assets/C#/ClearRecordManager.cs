@@ -29,8 +29,12 @@ public class ClearRecordManager : MonoBehaviour
         PlayerPrefs.Save();
         Debug.Log($"[通关记录] {label} 通关次数：{count}");
 
-        // 通关获得【源】（难度数字=获得数量）
-        GachaManager.Instance?.GrantYuanFromClear(label);
+        // 通关获得【源】：难度数字 * (1 + 本局击败世界Boss数量)
+        int worldBossDefeated = WorldBossManager.Instance != null
+            ? WorldBossManager.Instance.DefeatedCountThisRun
+            : 0;
+        int rewardMultiplier = 1 + Mathf.Max(0, worldBossDefeated);
+        GachaManager.Instance?.GrantYuanFromClear(label, rewardMultiplier);
 
         switch (label)
         {
@@ -160,7 +164,7 @@ public class ClearRecordManager : MonoBehaviour
     private void GrantN8Reward()
     {
         if (EquipmentSystem.Instance == null) return;
-        int roll = Random.Range(18, 21); // id 12/13/14
+        int roll = Random.Range(18, 21); // id 18/19/20（和平之剑/甲/心）
         bool alreadyUnlocked = EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, roll);
         if (alreadyUnlocked)
         {

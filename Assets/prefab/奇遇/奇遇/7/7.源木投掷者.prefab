@@ -46,5 +46,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   optionName: "\u6E90\u6728\u6295\u63B7\u8005"
   optionDescription: "\u4F60\u628A\u6E90\u6728\u6254\u51FA\u53BB\u4E86"
-  effectDescription: "\u6E05\u7A7A\u6E90\u6728\uFF0C\u6BCF\u6263\u9664\u4E00\u70B9\u6E90\u6728\u589E\u52A0\u4E00\u70B9\u653B\u51FB"
-  icon: {fileID: 21300000, guid: 9d0b910bcfc2b984f9702caa185fbda0, type: 3}
+  effectDescription: "\u6E05\u7A7A\u6E90\u6728\uFF0C\u6BCF\u6263\u966450\u70B9\u6E90\u6728\u589E\u52A01\u70B9\u653B\u51FB"
+  icon: {fileID: 21300000, guid: 8871340985efe0247a6eaa28c1d0a24d, type: 3}

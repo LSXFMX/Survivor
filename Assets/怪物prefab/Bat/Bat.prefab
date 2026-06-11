@@ -124,9 +124,9 @@ MonoBehaviour:
   rolename: "\u8759\u8760"
   health: 10
   healthmax: 10
-  atk: 3
+  atk: 2
   def: 0
-  speed: 6
+  speed: 5
   CR: 0
   CD: 0
   EVA: 5
@@ -147,8 +147,8 @@ MonoBehaviour:
     type: 3}
   flyHeight: 2
   diveRange: 5
-  diveSpeed: 12
-  diveInterval: 3
+  diveSpeed: 10
+  diveInterval: 4
   riseSpeed: 6
 --- !u!54 &6944300445478062508
 Rigidbody:

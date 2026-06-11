@@ -45,9 +45,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Skillname: "\u5B62\u5B50\u9886\u57DF"
-  CDtime: 5
-  CDkey: 5
-  damage: 3
+  CDtime: 4
+  CDkey: 4
+  damage: 5
   level: 1
   lifetime: 15
   pass: 0

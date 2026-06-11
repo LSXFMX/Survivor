@@ -47,4 +47,4 @@ MonoBehaviour:
   optionName: "\u5BFB\u627E\u65E0\u5C3D\u6E90\u6728"
   optionDescription: "\u51FA\u53D1\u96F7\u9706\u53F7\uFF0C\u5BFB\u627E\u65E0\u5C3D\u6E90\u6728"
   effectDescription: "\u6BCF\u79D2\u6E90\u6728+2\uFF0C\u7ACB\u523B\u83B7\u5F9750\u6E90\u6728"
-  icon: {fileID: 21300000, guid: 97bd4693ce6d5c34aa6b7d18b3563268, type: 3}
+  icon: {fileID: 21300000, guid: 6f021c08efe667d42a828dc4d891df5a, type: 3}

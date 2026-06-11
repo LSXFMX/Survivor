@@ -27,6 +27,11 @@ public class BossMushroomMan : enemy
     [Header("预警线（LineRenderer）")]
     public LineRenderer dashWarningLine;
 
+    [Header("自然回血")]
+    [Tooltip("每秒按 healthmax 的百分比自然回血。被亡者领域操控后失效（MindControlled 一旦挂上，FixedUpdate 短路，回血不再 tick）。")]
+    public float naturalHealPctPerSecond = 0.02f; // 默认 2%/s
+    private float _healAccum;
+
     [HideInInspector]
     public battleUI battleUI; // 由 battleUI.SpawnBoss() 赋值
 
@@ -51,10 +56,8 @@ public class BossMushroomMan : enemy
     // 覆盖 OnEnable，强制设置 Boss 体型
     protected new void OnEnable()
     {
-        var playerlayer = GameObject.Find("playerlayer")?.transform;
-        typeof(enemy).GetField("playerlayer",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-            ?.SetValue(this, playerlayer);
+        // 父类已将 playerlayer 改为 protected，直接赋值
+        playerlayer = GameObject.Find("playerlayer")?.transform;
 
         cachedAni = GetComponent<Animator>();
 
@@ -77,6 +80,12 @@ public class BossMushroomMan : enemy
     protected override void FixedUpdate()
     {
         if (bossState == BossState.dead) return;
+
+        // 亡者领域：被控制为友军后，行为完全交给 MindControlled
+        if (GetComponent<MindControlled>() != null) return;
+
+        // 自然回血：放在 MindControlled 短路之后，等价于"被亡者领域操控后失去自然回血词条"。
+        TickNaturalHeal();
 
         if (role != null && bossState != BossState.dash)
         {
@@ -166,16 +175,59 @@ public class BossMushroomMan : enemy
             dashWarningLine.gameObject.SetActive(false);
     }
 
+    /// <summary>
+    /// 关底 Boss 自然回血：每帧按 fixedDeltaTime 累积 `healthmax × naturalHealPctPerSecond × dt`，
+    /// 累积 ≥1 时回填整数到 health（不超过 healthmax）。
+    ///
+    /// 失效条件（在调用方已生效，不需要这里再判）：
+    ///   • 已死亡：FixedUpdate 顶部 bossState==dead 已 return；
+    ///   • 被亡者领域操控：MindControlled 存在时短路 return（"失去自然回血词条"语义）。
+    /// </summary>
+    private void TickNaturalHeal()
+    {
+        if (naturalHealPctPerSecond <= 0f) return;
+        if (health <= 0 || health >= healthmax) return;
+        _healAccum += healthmax * naturalHealPctPerSecond * Time.fixedDeltaTime;
+        if (_healAccum >= 1f)
+        {
+            int gain = (int)_healAccum;
+            _healAccum -= gain;
+            health = Mathf.Min(healthmax, health + gain);
+        }
+    }
+
     // 覆盖死亡，隐藏预警线
     public override void Destroy1()
     {
         if (rolestate == state.dead) return;
+
+        // 亡者领域：被孢子领域伤害过，统一复活拦截（BossMushroomMan 不调 base.Destroy1，必须在此自行拦截。
+        // WorldBossMushroomMan 调 base.Destroy1() 经此入口；命中时，外层子类会继续执行 OnWorldBossDefeated——
+        // 故 WorldBossMushroomMan.Destroy1 自身也已加前置拦截，提前 return。这里只服务普通 BossMushroomMan。）
+        // _reviveAttempted 防重入：WorldBossMushroomMan 已在外层投过一次，进入这里就不能再投第二次。
+        if (!_reviveAttempted)
+        {
+            _reviveAttempted = true;
+            if (TombDomainHook.TryReviveAsAlly(this))
+            {
+                Debug.Log($"[亡者领域] 蘑菇王 {gameObject.name} 被复活为友军");
+                return;
+            }
+        }
+
         HideWarning();
         bossState = BossState.dead;
         rolestate = state.dead;
         StopAllCoroutines();
-        GetAnimator()?.SetBool("ismove", false);
-        GetAnimator()?.SetTrigger("dead");
+        // 蘑菇王在 OnEnable 设置 bossScale=20，理论不会启用孢子变异（IsMushroomEnemy 仍可能命中），
+        // 这里保险地清掉彩色 overlay，避免万一启用时挡住死亡动画的尸体帧。
+        ClearSporeMutationColor();
+        var animator = GetAnimator();
+        if (animator != null)
+        {
+            animator.SetBool("ismove", false);
+            animator.SetTrigger("dead");
+        }
         // 禁用碰撞体
         foreach (var col in GetComponents<Collider>())
             col.enabled = false;

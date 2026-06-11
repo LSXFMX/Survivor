@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 6793547876425968985}
   - component: {fileID: 8411330213596177078}
   m_Layer: 0
-  m_Name: "2.\u4EBA\u683C\u89E3\u79BB"
+  m_Name: "2.\u6211\u4E0E\u6211"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -44,7 +44,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 518e52c4b81a31c40bf82c76ef86a609, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  optionName: "\u4EBA\u683C\u89E3\u79BB"
-  optionDescription: "\u4F60\u611F\u89C9\u81EA\u5DF1\u6709\u4E1D\u5206\u88C2\u4E86..."
-  effectDescription: "\u514B\u9686\u73A9\u5BB6\uFF0C\u4F46\u73A9\u5BB6\u514B\u9686\u4F53\u7684\u57FA\u7840\u6570\u503C\u5F88\u4F4E\uFF0C\u800C\u4E14\u4E00\u78B0\u5C31\u788E"
-  icon: {fileID: 21300000, guid: 1a182829cb50cca4d9a3979f9d7c1452, type: 3}
+  optionName: "\u6211\u4E0E\u6211"
+  optionDescription: "\u5728\u90A3\u65E0\u4EBA\u4E4B\u5883\u4E2D\uFF0C\u552F\u4F60\u6211\u77B3\u5B54\u76F8\u5408"
+  effectDescription: "\u4E00\u5206\u4E3A\u4E8C\uFF0C\u9010\u65E0\u53D8\u8005"
+  icon: {fileID: 21300000, guid: 2a7b3c9e1d4f0e2a8b6c5d4e3f2a1b09, type: 3}
+  oneShot: 1

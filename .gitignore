@@ -99,3 +99,17 @@ InitTestScene*.unity*
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*.kiro/
 .vscode/
 .vsconfig
+
+# === 项目本地临时产物（不进仓库）===
+# 蝙蝠图临时输出（_tools/ 下脚本的一次性产物）
+/_tmp_bat_out/
+# image_gen 历史产物（生成立绘/图标的草稿，正式产物已落到 Assets/）
+/generated-images/
+# 手动备份图（.bak 副本，正式资源已经在仓库）
+*.png.bak
+*.png.bak.meta
+*.backup.png
+*.backup.png.meta
+
+# CodeBuddy / 工作区元数据
+.codebuddy/

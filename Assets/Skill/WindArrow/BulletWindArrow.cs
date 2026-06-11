@@ -1,7 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// 风箭子弹：匀速直线追踪目标，100%命中
+/// 风箭子弹：匀速直线追踪目标。目标途中被销毁时，落点附近再解析敌人。
+/// formOfWindSource 由 SkillWindArrow 发射时注入，避免运行时找不到风之形。
 /// </summary>
 public class BulletWindArrow : Bulletbase
 {
@@ -9,12 +10,31 @@ public class BulletWindArrow : Bulletbase
     private float _elapsed;
     private float _totalTime;
     private Vector3 _startPos;
+    static int s_diagSetTarget;
+
+    /// <summary>已处理命中（Trigger 或飞到终点），避免重复结算。</summary>
+    bool _impactFinished;
+
+    /// <summary>由 SkillWindArrow 在 Instantiate 后赋值，勿依赖兄弟遍历查找。</summary>
+    public SkillFormOfWind formOfWindSource;
+
+    [SerializeField] float impactSnapRadius = 2.2f;
 
     public override void GetFather()
     {
         base.GetFather();
+        if (fatherskill != null && fatherskill.player != null)
+        {
+            var attr = fatherskill.player.GetComponent<Attribute>();
+            if (attr != null) player = attr;
+        }
         rb.useGravity = false;
         rb.isKinematic = true;
+
+        // 风箭染色统一改为「按所选角色身份」分流，由 PlayerSkinSkillBuff.ApplySkinTintToWindArrowBullet
+        // 在 SkillWindArrow.Useskill 实例化子弹后调用。
+        // 之前这里有一段「学了亡者领域 → 染紫」的逻辑（TryApplyTombDomainTint），实际并未真正生效，
+        // 且会与角色身份染色冲突，已整体删除。
     }
 
     public void SetTarget(Transform target)
@@ -26,6 +46,29 @@ public class BulletWindArrow : Bulletbase
         Vector3 endPos = target != null ? target.position : transform.position + Vector3.forward * 5f;
         float dist = Vector3.Distance(_startPos, endPos);
         _totalTime = dist / Mathf.Max(speed, 0.1f);
+        if (_totalTime < 1e-4f)
+            _totalTime = 0.08f;
+
+        if (s_diagSetTarget < 6)
+        {
+            s_diagSetTarget++;
+            FormOfWindDebug.Err("SetTarget", $"#{s_diagSetTarget} dist={dist:F3} totalTime={_totalTime:F4} speed={speed}");
+        }
+    }
+
+    protected override void OnTriggerEnter(Collider other)
+    {
+        if (_impactFinished || !cango) return;
+
+        enemy hit = other.GetComponent<enemy>();
+        if (hit == null) hit = other.GetComponentInParent<enemy>();
+        if (hit == null || hit.health <= 0 || hit.rolestate == global::enemy.state.dead) return;
+        // 亡者领域：风箭不打被控制为友军的目标
+        if (hit.GetComponent<MindControlled>() != null) return;
+
+        _impactFinished = true;
+        ApplyWindArrowImpact(hit, transform.position);
+        Destroy();
     }
 
     void FixedUpdate()
@@ -35,11 +78,9 @@ public class BulletWindArrow : Bulletbase
         _elapsed += Time.fixedDeltaTime;
         float t = Mathf.Clamp01(_elapsed / _totalTime);
 
-        // 实时追踪目标位置（不锁Y轴）
         Vector3 endPos = _target != null ? _target.position : transform.position;
         Vector3 newPos = Vector3.Lerp(_startPos, endPos, t);
 
-        // 朝向目标（2D sprite，绕Z轴）
         Vector3 dir = endPos - transform.position;
         if (dir.sqrMagnitude > 0.0001f)
         {
@@ -49,30 +90,121 @@ public class BulletWindArrow : Bulletbase
 
         transform.position = newPos;
 
-        if (t >= 1f)
+        bool arrived = t >= 1f || _elapsed >= _totalTime - 1e-5f;
+        if (arrived)
         {
-            HitTarget();
+            if (!_impactFinished)
+            {
+                _impactFinished = true;
+                Vector3 impactPos = transform.position;
+                enemy e = ResolveEnemyForImpact(impactPos);
+                if (e != null)
+                    ApplyWindArrowImpact(e, impactPos);
+                else if (SkillFormOfWind.DebugTrace)
+                    Debug.Log("[风箭HitTarget] 落点附近无存活敌人");
+            }
             Destroy();
         }
     }
 
-    private void HitTarget()
+    /// <summary>与敌人重叠（Trigger）或飞到终点时共用：风之形 + 伤害。</summary>
+    void ApplyWindArrowImpact(enemy e, Vector3 impactPos)
     {
-        if (_target == null) return;
-        enemy e = _target.GetComponent<enemy>();
-        if (e == null || e.health <= 0) return;
+        if (e == null || player == null) return;
 
-        if (e.EVA > UnityEngine.Random.value * 100f) return;
+        Transform hitTransform = e.transform;
 
-        float finaldamage = damage + player.atk;
+        // 风之形必须在闪避判定之前触发：否则高 EVA 敌人会导致 TryProc 永不执行。
+        if (fatherskill is SkillWindArrow wa)
+        {
+            if (SkillFormOfWind.DebugTrace)
+                Debug.Log("[风之形·入口] 调用 TryProc");
+            SkillFormOfWind.TryProcOnWindArrowHit(ResolveOwnerPlayer(), wa, hitTransform, impactPos, formOfWindSource);
+        }
+
+        if (e.EVA > UnityEngine.Random.value * 100f)
+        {
+            if (SkillFormOfWind.DebugTrace) Debug.Log("[风箭HitTarget-2] 目标闪避");
+            return;
+        }
+
+        // 伤害公式：技能基础伤害 × (1 + 攻击力 × 0.1)，再走暴击与防御
+        float finaldamage = damage * (1f + player.atk * 0.1f);
+        bool isCrit = false;
         if (player.CR > UnityEngine.Random.value * 100f)
+        {
             finaldamage *= player.CD / 100f;
+            isCrit = true;
+        }
         finaldamage -= e.def;
 
         e.health -= (int)finaldamage;
-        GameObject num = Instantiate(e.atknumber, _target.position, default);
-        num.transform.GetChild(0).GetComponent<TMPro.TextMeshProUGUI>().text = ((int)finaldamage).ToString();
+
+        if (DamageNumberSettings.Visible)
+        {
+            GameObject num = Instantiate(e.atknumber, hitTransform.position, default);
+            var txt = num.transform.GetChild(0).GetComponent<TMPro.TextMeshProUGUI>();
+            txt.text = ((int)finaldamage).ToString();
+            if (isCrit) txt.color = new Color32(255, 215, 0, 255);
+        }
         e.startturnred();
         if (e.health <= 0) e.Destroy1();
+    }
+
+    enemy ResolveEnemyForImpact(Vector3 impactPos)
+    {
+        if (_target != null)
+        {
+            var e = _target.GetComponent<enemy>();
+            // 亡者领域：原锁定目标若已被控制为友军（玩家中途复活了它），改为就近重选，避免打到友军
+            if (e != null && e.health > 0 && e.rolestate != global::enemy.state.dead && !e._mindControlledFlag)
+                return e;
+        }
+
+        return FindClosestLivingEnemyNear(impactPos, impactSnapRadius);
+    }
+
+    static enemy FindClosestLivingEnemyNear(Vector3 p, float maxDist)
+    {
+        Transform layer = GameObject.Find("enemylayer")?.transform;
+        if (layer == null) return null;
+
+        float maxSq = maxDist * maxDist;
+        enemy best = null;
+        float bestSq = maxSq;
+
+        foreach (Transform t in layer)
+        {
+            var en = t.GetComponent<enemy>();
+            if (en == null || en.health <= 0 || en.rolestate == global::enemy.state.dead) continue;
+            // 亡者领域：风箭着弹后吸附敌人时，跳过友军 boss/小怪
+            if (en._mindControlledFlag) continue;
+
+            Vector3 d = t.position - p;
+            d.y = 0f;
+            float sq = d.sqrMagnitude;
+            if (sq < bestSq)
+            {
+                bestSq = sq;
+                best = en;
+            }
+        }
+
+        return best;
+    }
+
+    Player ResolveOwnerPlayer()
+    {
+        if (fatherskill != null && fatherskill.player != null)
+        {
+            var go = fatherskill.player;
+            var p = go.GetComponent<Player>();
+            if (p == null) p = go.GetComponentInParent<Player>();
+            if (p != null) return p;
+        }
+        if (player == null) return null;
+        var p2 = player.GetComponent<Player>();
+        if (p2 == null) p2 = player.GetComponentInParent<Player>();
+        return p2;
     }
 }

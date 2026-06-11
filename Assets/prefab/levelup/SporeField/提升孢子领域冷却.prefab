@@ -45,9 +45,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Upgradename: "\u63D0\u5347\u5B62\u5B50\u9886\u57DF\u51B7\u5374"
-  Upgradedescription: "\u5B62\u5B50\u9886\u57DF\u51B7\u5374-10%"
+  Upgradedescription: "\u5B62\u5B50\u9886\u57DF\u51B7\u5374-30%"
   type: 1
-  upgradenumber: -0.1
+  upgradenumber: -0.3
   skillAtr: 0
   playerAtr: 0
   player: {fileID: 0}

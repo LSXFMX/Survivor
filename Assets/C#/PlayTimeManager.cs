@@ -10,8 +10,18 @@ public class PlayTimeManager : MonoBehaviour
     public static PlayTimeManager Instance { get; private set; }
 
     private const string KEY = "TotalPlayMinutes";
+    private const int HOURGLASS_UNLOCK_MINUTES = 30;
 
     private float _secondAccum = 0f; // 本局累计秒数（未满1分钟的部分）
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void Bootstrap()
+    {
+        if (Instance != null) return;
+        GameObject go = new GameObject("[PlayTimeManager]");
+        DontDestroyOnLoad(go);
+        go.AddComponent<PlayTimeManager>();
+    }
 
     void Awake()
     {
@@ -20,8 +30,16 @@ public class PlayTimeManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
+    void Start()
+    {
+        // 兜底：如果历史累计时长已满足条件，进入游戏即补发沙漏解锁
+        TryUnlockHourglassByPlayTime(GetTotalMinutes());
+    }
+
     void Update()
     {
+        if (Time.timeScale <= 0f) return;
+
         _secondAccum += Time.unscaledDeltaTime;
 
         // 每满60秒写一次 PlayerPrefs
@@ -33,16 +51,20 @@ public class PlayTimeManager : MonoBehaviour
             PlayerPrefs.Save();
             Debug.Log($"[游戏时长] 累计 {total} 分钟");
 
-            // 通知装备4解锁检查
-            if (total >= 30 && EquipmentSystem.Instance != null)
-            {
-                bool alreadyUnlocked = EquipmentSystem.Instance.IsEquipmentUnlocked(
-                    EquipmentType.AchievementEquipment, 4);
-                EquipmentSystem.Instance.UnlockEquipment(EquipmentType.AchievementEquipment, 4);
-                if (!alreadyUnlocked)
-                    ToastManager.Show("成就装备4「沙漏」已解锁！");
-            }
+            TryUnlockHourglassByPlayTime(total);
         }
+    }
+
+    private void TryUnlockHourglassByPlayTime(int totalMinutes)
+    {
+        if (totalMinutes < HOURGLASS_UNLOCK_MINUTES) return;
+        if (EquipmentSystem.Instance == null) return;
+
+        bool alreadyUnlocked = EquipmentSystem.Instance.IsEquipmentUnlocked(
+            EquipmentType.AchievementEquipment, 4);
+        EquipmentSystem.Instance.UnlockEquipment(EquipmentType.AchievementEquipment, 4);
+        if (!alreadyUnlocked)
+            ToastManager.Show("成就装备4「沙漏」已解锁！");
     }
 
     /// <summary>获取累计游戏时长（分钟）</summary>

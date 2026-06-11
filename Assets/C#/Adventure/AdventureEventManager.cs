@@ -24,6 +24,10 @@ public class AdventureEventManager : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+        // 新一局开始：清空奇遇已使用集合，使所有 oneShot 奇遇恢复可用
+        AdventureOptionBase.usedOptionsThisRun.Clear();
+        // 同步清零"人格解离"独立计数（该奇遇用计数式而非 HashSet 控制最多触发 1/2 次）
+        AdventurePersonalityDissolve.ResetRunCounter();
         if (triggerButton != null)
         {
             _buttonImage = triggerButton.GetComponent<Image>();

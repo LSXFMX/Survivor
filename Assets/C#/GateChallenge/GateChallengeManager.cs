@@ -7,6 +7,7 @@ using TMPro;
 public class GateChallengeManager : MonoBehaviour
 {
     public static GateChallengeManager Instance { get; private set; }
+    private const string KEY_GATE_CHALLENGE_STARTED_ONCE = "GateChallengeStartedOnce";
 
     [Header("UI")]
     public Button gateChallengeButton;
@@ -33,6 +34,13 @@ public class GateChallengeManager : MonoBehaviour
     private int  _currentFloor    = 1;
     private int  _remainCount     = 0;
     private List<GateChallengeEnemy> _spawnedEnemies = new List<GateChallengeEnemy>();
+
+    /// <summary>
+    /// 难度倍率：每次奇遇·愚弄触发 ResetAndDouble 后 ×2。
+    /// 作用于敌人血量 / 攻击 / 防御 / 闪避（闪避做上限 95% 防止 100% 无敌）。
+    /// 默认 1（标配数值）。
+    /// </summary>
+    public int DifficultyMultiplier { get; private set; } = 1;
 
     // 按钮组件缓存
     private Image            _btnImage;
@@ -85,6 +93,25 @@ public class GateChallengeManager : MonoBehaviour
 
     public int CurrentFloor => _currentFloor;
 
+    /// <summary>
+    /// 奇遇·愚弄专用：把进度重置到第 1 层，同时把难度倍率 ×2。
+    /// 已在挑战中也允许重置（先取消当前挑战，再重置进度与倍率）。
+    /// 这样玩家可以反复用愚弄+重新挑战来叠加倍率，搭配技能上限奖励快速堆 build。
+    /// </summary>
+    public void ResetAndDouble()
+    {
+        if (_inChallenge) CancelChallenge();
+
+        _currentFloor = 1;
+        DifficultyMultiplier = Mathf.Max(1, DifficultyMultiplier) * 2;
+
+        // 解锁状态保留，让玩家可立刻重新点击挑战按钮。
+        if (_unlockedThisRun && gateChallengeButton != null)
+            gateChallengeButton.gameObject.SetActive(true);
+
+        ToastManager.Show($"门挑战已重置至第1层，难度 ×{DifficultyMultiplier}！");
+    }
+
     private void OnChallengeButtonClick()
     {
         if (_inChallenge)
@@ -122,12 +149,12 @@ public class GateChallengeManager : MonoBehaviour
             }
         }
 
-        // 初次进行门挑战 → 解锁成就装备3（钥匙剑）
-        if (floor == 1 && EquipmentSystem.Instance != null)
+        // 记录“已进行过门挑战”，供跨场景兜底补发钥匙剑解锁
+        if (floor == 1)
         {
-            bool alreadyUnlocked = EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.AchievementEquipment, 3);
-            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.AchievementEquipment, 3);
-            if (!alreadyUnlocked) ToastManager.Show("成就装备3「钥匙剑」已解锁！");
+            PlayerPrefs.SetInt(KEY_GATE_CHALLENGE_STARTED_ONCE, 1);
+            PlayerPrefs.Save();
+            TryUnlockKeySword();
         }
 
         _inChallenge = true;
@@ -142,6 +169,14 @@ public class GateChallengeManager : MonoBehaviour
         // 按钮改为"挑战中"
         if (_btnText != null) _btnText.text = "挑战中";
 
+        // 奇遇·愚弄会把 DifficultyMultiplier 翻倍，敌人血量/攻击/防御按倍率放大；
+        // 闪避做 95% 上限，防止 ×N 后变成 100%+ 完全免疫。
+        int mult       = Mathf.Max(1, DifficultyMultiplier);
+        int finalHp    = data.enemyHealth * mult;
+        int finalAtk   = data.enemyAtk    * mult;
+        int finalDef   = data.enemyDef    * mult;
+        int finalEva   = Mathf.Min(95, data.enemyEVA * mult);
+
         for (int i = 0; i < data.enemyCount; i++)
         {
             Vector3 spawnPos = GetSpawnPos(i, data.enemyCount);
@@ -149,12 +184,12 @@ public class GateChallengeManager : MonoBehaviour
             GateChallengeEnemy e = obj.GetComponent<GateChallengeEnemy>();
             if (e == null) continue;
 
-            e.health    = data.enemyHealth;
-            e.healthmax = data.enemyHealth;
-            e.atk       = data.enemyAtk;
-            e.def       = data.enemyDef;
+            e.health    = finalHp;
+            e.healthmax = finalHp;
+            e.atk       = finalAtk;
+            e.def       = finalDef;
             e.speed     = data.enemySpeed > 0 ? data.enemySpeed : e.speed;
-            e.EVA       = data.enemyEVA;
+            e.EVA       = finalEva;
 
             _spawnedEnemies.Add(e);
 
@@ -162,7 +197,16 @@ public class GateChallengeManager : MonoBehaviour
                 Instantiate(healthBarPrefab, obj.transform);
         }
 
-        ToastManager.Show($"门挑战第{floor}层开始！击败所有敌人！");
+        string suffix = mult > 1 ? $"（难度 ×{mult}）" : string.Empty;
+        ToastManager.Show($"门挑战第{floor}层开始！击败所有敌人！{suffix}");
+    }
+
+    private void TryUnlockKeySword()
+    {
+        if (EquipmentSystem.Instance == null) return;
+        bool alreadyUnlocked = EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.AchievementEquipment, 3);
+        EquipmentSystem.Instance.UnlockEquipment(EquipmentType.AchievementEquipment, 3);
+        if (!alreadyUnlocked) ToastManager.Show("成就装备3「钥匙剑」已解锁！");
     }
 
     private void EnsureRuntimeRefs()
@@ -236,15 +280,17 @@ public class GateChallengeManager : MonoBehaviour
 
     private void UpdateUI(int floor)
     {
-        if (floorText != null) floorText.text = $"门挑战 第{floor}层";
+        int mult = Mathf.Max(1, DifficultyMultiplier);
+        if (floorText != null)
+            floorText.text = mult > 1 ? $"门挑战 第{floor}层（×{mult}）" : $"门挑战 第{floor}层";
         if (remainText == null || config == null || floor - 1 >= config.floors.Length) return;
 
         GateFloorData data = config.floors[floor - 1];
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"剩余敌人：{Mathf.Max(0, _remainCount)}");
-        if (data.enemyDef   > 0) sb.AppendLine($"防御力：{data.enemyDef}");
+        if (data.enemyDef   > 0) sb.AppendLine($"防御力：{data.enemyDef * mult}");
         if (data.enemySpeed > 0) sb.AppendLine($"移动速度：{data.enemySpeed}");
-        if (data.enemyEVA   > 0) sb.AppendLine($"闪避率：{data.enemyEVA}%");
+        if (data.enemyEVA   > 0) sb.AppendLine($"闪避率：{Mathf.Min(95, data.enemyEVA * mult)}%");
         remainText.text = sb.ToString().TrimEnd();
     }
 

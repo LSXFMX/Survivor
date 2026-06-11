@@ -32,6 +32,10 @@ public class WorldBossManager : MonoBehaviour
     public Transform enemylayer; // 世界Boss生成在此节点下
 
     private HashSet<FactionType> _unlockedFactions = new HashSet<FactionType>();
+    private HashSet<FactionType> _defeatedFactions = new HashSet<FactionType>();
+
+    /// <summary>本局已击败的世界Boss数量（按社群去重）</summary>
+    public int DefeatedCountThisRun => _defeatedFactions.Count;
 
     void Awake()
     {
@@ -89,6 +93,14 @@ public class WorldBossManager : MonoBehaviour
                 wbBat.worldBossManager = this;
             }
 
+            // 头顶血条：在此处统一挂载，确保所有世界Boss都能显示（v9 关键修复）
+            // 原因：WorldBossMushroomMan/WorldBossBat 继承自 BossMushroomMan/BossBat，
+            // 不是 WorldBossBase 的子类，所以 WorldBossBase.OnEnable 里的 AddComponent
+            // 永远不会被触发——这正是 v1~v8 血条始终未出现的根因。
+            // 现在改为：实例化后立即 AddComponent，与脚本继承链完全解耦。
+            if (obj.GetComponent<WorldBossHealthBar>() == null)
+                obj.AddComponent<WorldBossHealthBar>();
+
             Debug.Log($"[WorldBoss] {entry.faction} 世界Boss已生成");
         }
     }
@@ -96,6 +108,9 @@ public class WorldBossManager : MonoBehaviour
     /// <summary>世界Boss被击败时由子类调用</summary>
     public void OnWorldBossDefeated(FactionType faction)
     {
+        // 记录本局击败数（用于通关源奖励倍率）
+        _defeatedFactions.Add(faction);
+
         if (_unlockedFactions.Contains(faction)) return;
 
         // 成就装备3「钥匙剑」：解锁世界Boss奖励，未解锁则跳过加成
@@ -117,7 +132,19 @@ public class WorldBossManager : MonoBehaviour
         // 慢动作
         Time.timeScale = slowMoScale;
         yield return new WaitForSecondsRealtime(slowMoDuration);
-        Time.timeScale = 1f;
+
+        // 恢复时间流。
+        // 之前是硬编码 Time.timeScale = 1f，会把玩家在战斗 UI 上选的 2x / 3x 倍速吞掉
+        // ——视觉上 speedButtonText 仍显示「X2/X3」但实际游戏速度被强制回到 1x，
+        // 与 battleUI.speedMode 内部状态不一致。
+        // 改为复用 battleUI.ResumeTime()：它会按 speedMode 在 1~3 之间 Clamp，
+        // 并尊重 CanUseTripleSpeed() 的 3 倍速解锁判定，与 Click_continue / AdventureUI.Click_close
+        // 等其它"恢复时间流"路径完全一致。
+        battleUI bui = GameObject.Find("BattleUI")?.GetComponent<battleUI>();
+        if (bui != null)
+            bui.ResumeTime();
+        else
+            Time.timeScale = 1f; // 兜底：找不到 battleUI 时退回 1x，保持原有行为
 
         yield return new WaitForSecondsRealtime(revealDelay);
 
@@ -153,6 +180,18 @@ public class WorldBossManager : MonoBehaviour
             // 60：孢子领域冷却（未制作，留空）
             if (favor >= 70) { ToastManager.Show("闪避率 +1");   yield return new WaitForSeconds(0.4f); }
             // 80：孢子领域范围（未制作，留空）
+            if (favor >= 90) { ToastManager.Show("自然回血 +1"); yield return new WaitForSeconds(0.4f); }
+        }
+        else if (faction == FactionType.Bat)
+        {
+            if (favor >= 10) { ToastManager.Show("经验效率 +5"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 20) { ToastManager.Show("攻击力 +10");   yield return new WaitForSeconds(0.4f); }
+            if (favor >= 30) { ToastManager.Show("移动速度 +2"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 40) { ToastManager.Show("血族血统冷却缩短 20%"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 50) { ToastManager.Show("防御力 +2");   yield return new WaitForSeconds(0.4f); }
+            if (favor >= 60) { ToastManager.Show("血族血统范围 +10"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 70) { ToastManager.Show("闪避率 +1");   yield return new WaitForSeconds(0.4f); }
+            if (favor >= 80) { ToastManager.Show("血族血统数量 +1"); yield return new WaitForSeconds(0.4f); }
             if (favor >= 90) { ToastManager.Show("自然回血 +1"); yield return new WaitForSeconds(0.4f); }
         }
 
@@ -197,7 +236,43 @@ public class WorldBossManager : MonoBehaviour
         }
         else if (faction == FactionType.Bat)
         {
-            // 蝙蝠社群加成待后续制作
+            if (favor >= 10)
+            {
+                player.DR += 5;
+                EquipmentSystem.Instance?.UnlockEquipment(EquipmentType.FavorEquipment, 3); // 血族血统解锁（存档好感度装备0）
+            }
+            if (favor >= 20) player.atk += 10;
+            if (favor >= 30) player.speed += 2;
+            if (favor >= 40)
+                ApplyBloodlineBonus(cdMul: 0.8f);
+            if (favor >= 50) player.def += 2;
+            if (favor >= 60)
+                ApplyBloodlineBonus(radiusBonus: 10f);
+            if (favor >= 70) player.EVA += 1;
+            if (favor >= 80)
+                ApplyBloodlineBonus(countBonus: 1);
+            if (favor >= 90) player.regen += 1;
+
+            if (favor >= 50)
+                EquipmentSystem.Instance?.UnlockEquipment(EquipmentType.FavorEquipment, 4);
+            if (favor >= 100)
+                EquipmentSystem.Instance?.UnlockEquipment(EquipmentType.FavorEquipment, 5);
+        }
+    }
+
+    /// <summary>
+    /// 对血族血统技能应用加成：冷却乘区、射程、蝙蝠数量。</summary>
+    private void ApplyBloodlineBonus(float cdMul = 1f, float radiusBonus = 0f, int countBonus = 0)
+    {
+        if (player == null) return;
+        foreach (Transform t in player.SkillList)
+        {
+            SkillBloodline bl = t.GetComponent<SkillBloodline>();
+            if (bl == null) continue;
+            if (cdMul < 1f && cdMul > 0f)
+                bl.CDtime = Mathf.Max(0.2f, bl.CDtime * cdMul);
+            if (radiusBonus > 0f) bl.attackRadius += radiusBonus;
+            if (countBonus > 0)   bl.number += countBonus;
         }
     }
 
@@ -211,7 +286,8 @@ public class WorldBossManager : MonoBehaviour
             if (sf == null) continue;
             if (damage > 0)      sf.damage       += damage;
             if (cdReduction > 0) sf.CDtime        = Mathf.Max(0.5f, sf.CDtime - cdReduction);
-            if (radiusBonus > 0) sf.attackRadius += radiusBonus;
+            // 亡者领域锁定后：孢子领域半径固定为 10，不再被世界 Boss 奖励加范围
+            if (radiusBonus > 0 && !sf.IsLockedByTombDomain) sf.attackRadius += radiusBonus;
         }
     }
 

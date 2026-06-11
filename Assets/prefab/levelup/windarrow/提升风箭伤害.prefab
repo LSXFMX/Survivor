@@ -54,5 +54,5 @@ MonoBehaviour:
   icon: {fileID: 21300000, guid: 275c47fe35c5bcc4581c431b67c2f492, type: 3}
   skill: {fileID: 6012714189568000076, guid: 5fbd3629b9ce741478953e1c336c33d5, type: 3}
   battleUI: {fileID: 0}
-  upgradeGroup: 'windarrow '
+  upgradeGroup: windarrow
   maxUpgrades: 5
