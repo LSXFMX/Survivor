@@ -103,6 +103,11 @@ public class getnewskill : Upgradeoptionsbase
             PlayerSkinSkillBuff.ApplyXiaWuBloodlineBuff(newBloodline);
         }
 
+        // SSR9「三清化一」+ SSR6「影分身之术」联动（已移除）：
+        // SSR6 不再补齐技能——分身保持创建时的"随机一半"技能列表。
+        // 新学的技能只加到本体 SkillList，不同步到 SkillListClone。
+        // SkillListClone 中的技能列表在分身合并时就已固定。
+
         battleUI.RefreshSkill();
         closechoice();
     }

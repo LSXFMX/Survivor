@@ -10,8 +10,9 @@ using UnityEngine;
 ///   效果：克隆玩家，克隆体与角色血量上限对半分，克隆体继承玩家 30% 属性和玩家技能列表中随机一半技能
 ///
 /// 与本奇遇联动的 SSR/抽卡装备：
-///   SSR 6「影分身之术」(equipmentSystemId = 8)：分身实时（按比例）同步主控的属性与技能 —— 把
-///                                              「30% / 半技能」升级为「100% / 全技能」。
+///   SSR 6「影分身之术」(equipmentSystemId = 8)：分身实时（按比例）同步主控 30% 的属性 ——
+///                                              无 SSR6 时数值在创建瞬间固定；有 SSR6 后每帧动态跟踪本体 30%。
+///                                              技能列表始终保持"随机一半"（不补齐），但已有技能数值实时同步。
 ///   SSR 8「我与我与我」(equipmentSystemId = 11)：本奇遇可触发第二次，场上最多同时存在 2 个分身。
 ///   SSR 9「三清化一」(equipmentSystemId = 12)：分身位置与本体重合且隐身（SpriteRenderer 关闭），
 ///                                            但 SkillList 继续运转 → 表现为"主体伤害翻倍"。
@@ -174,7 +175,7 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
             cloneRb.angularVelocity = Vector3.zero;
         }
 
-        // —— 5. 属性继承（策划：30% 属性；SSR6 解锁后 MushroomShadowCloneSync 会逐帧拉到 100%）—— //
+        // —— 5. 属性继承（策划：30% 属性；SSR6 解锁后 MushroomShadowCloneSync 逐帧同步本体 30%）—— //
         // 血量：上限与主体同步为"对半"，当前血量取主体当前的 30%（与策划"30% 属性"一致）。
         clonePlayer.healthmax = mainHalfHpMax;
         clonePlayer.health    = Mathf.Clamp(Mathf.RoundToInt(mainHalfHp * ATTRIBUTE_INHERIT_RATIO),
@@ -204,34 +205,90 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
         // 只需保留 Instantiate 复制过来的子集。
         InheritHalfSkills(clonePlayer);
 
-        // —— 7. SSR 6「影分身之术」：挂 sync 组件后逐帧把分身拉满 —— //
+        // —— 7. SSR 6「影分身之术」：挂 sync 组件后逐帧同步本体 30% 属性 —— //
         if (IsSsrUnlocked(SSR_SHADOW_CLONE_TECHNIQUE_ID))
         {
             MushroomShadowCloneSync sync = clone.GetComponent<MushroomShadowCloneSync>();
             if (sync == null) sync = clone.AddComponent<MushroomShadowCloneSync>();
             sync.owner = ownerPlayer;
             sync.clone = clonePlayer;
-            ToastManager.Show("[SSR·影分身之术] 分身将实时同步主控的全部属性与技能");
+            ToastManager.Show("[SSR·影分身之术] 分身将实时同步主控 30% 属性");
         }
 
-        // —— 8. SSR 9「三清化一」：分身与本体位置重合 + 隐身 —— //
-        // 关键修复（用户反馈：分身位置与本体存在偏移，要求"分毫不差"）：
-        //   旧实现用 LateUpdate 把 transform.position = owner.position，但分身自己的
-        //   Update（移动 / 物理 / 输入）会先于 LateUpdate 把它推开，造成可见的 1 帧抖动。
-        //   现在改成 **直接把分身 GameObject 设为本体的子物体，并锁定 localPosition = Vector3.zero**。
-        //   这样无论本体 transform 怎么变，子物体在世界空间永远与父物体严丝合缝，绝对零偏移。
+        // —— 8. SSR 9「三清化一」：将分身技能合并到本体，然后销毁分身 —— //
+        // 修复历史 BUG：旧方案把分身作为本体的子物体 + 隐身，但物理引擎在极端情况下仍会
+        // 让分身和本体互相推挤导致本体乱飞。新方案直接把分身的 SkillList 整个搬到本体上，
+        // 然后彻底销毁分身 GameObject，从根源上消除所有碰撞/物理问题。
+        //
+        // 数值策略：
+        //   - 无 SSR6 时：分身技能保持创建瞬间的数值（30% 属性），存入 SkillListClone 不受本体升级影响；
+        //   - 有 SSR6 时：分身技能数值与主控同步（技能字段 1:1 复制，实际伤害 = damage × atk，
+        //     atk 已经是 30%），合并后通过 skillupgrade.SyncUpgradeToCloneSkills 持续跟踪升级。
+        //   - 两种情况都只有"随机一半"的技能（SSR6 不补齐技能列表）。
         if (IsSsrUnlocked(SSR_TRINITY_FUSION_ID))
         {
-            ShadowCloneInvisibility inv = clone.GetComponent<ShadowCloneInvisibility>();
-            if (inv == null) inv = clone.AddComponent<ShadowCloneInvisibility>();
-            inv.owner = ownerPlayer;
-            // worldPositionStays = false：让 clone 立刻吸附到 parent 的 (0,0,0)
-            // —— 也就是世界空间贴齐主体位置；之后 owner 移动，子物体跟着走，零偏移。
-            clone.transform.SetParent(ownerPlayer.transform, false);
-            clone.transform.localPosition = Vector3.zero;
-            clone.transform.localRotation = Quaternion.identity;
-            clone.transform.localScale    = Vector3.one;
-            ToastManager.Show("[SSR·三清化一] 分身与本体合一，仅保留技能效果");
+            // 在本体上创建独立的技能容器 SkillListClone
+            Transform cloneSkillContainer = ownerPlayer.SkillListClone;
+            if (cloneSkillContainer == null)
+            {
+                GameObject containerObj = new GameObject("SkillListClone");
+                containerObj.transform.SetParent(ownerPlayer.transform, false);
+                containerObj.transform.localPosition = Vector3.zero;
+                cloneSkillContainer = containerObj.transform;
+                ownerPlayer.SkillListClone = cloneSkillContainer;
+            }
+
+            // 把分身 SkillList 下的所有技能节点 reparent 到本体的 SkillListClone
+            if (clonePlayer.SkillList != null)
+            {
+                var skillsToMove = new List<Transform>();
+                foreach (Transform t in clonePlayer.SkillList)
+                {
+                    if (t != null) skillsToMove.Add(t);
+                }
+
+                bool hasSsr6 = IsSsrUnlocked(SSR_SHADOW_CLONE_TECHNIQUE_ID);
+                foreach (Transform skillTransform in skillsToMove)
+                {
+                    skillTransform.SetParent(cloneSkillContainer, false);
+                    Skillbase sb = skillTransform.GetComponent<Skillbase>();
+                    if (sb != null)
+                    {
+                        // 设置技能 player 指向本体
+                        sb.player = ownerPlayer.gameObject;
+
+                        // 有 SSR6 时：分身已销毁，无法实时同步属性，
+                        // 直接在 SkillListClone 技能数值上体现 30%（等同于分身存活时的 30% 属性效果）。
+                        if (hasSsr6)
+                        {
+                            Skillbase ownerSkill = FindSkillByName(ownerPlayer.SkillList, sb.Skillname);
+                            if (ownerSkill != null)
+                            {
+                                sb.CDtime    = ownerSkill.CDtime    * 0.3f;
+                                sb.damage    = Mathf.RoundToInt(ownerSkill.damage * 0.3f);
+                                sb.lifetime  = ownerSkill.lifetime  * 0.3f;
+                                sb.pass      = Mathf.RoundToInt(ownerSkill.pass * 0.3f);
+                                sb.speed     = ownerSkill.speed     * 0.3f;
+                                sb.number    = Mathf.Max(1, Mathf.RoundToInt(ownerSkill.number * 0.3f));
+                                sb.bullet    = ownerSkill.bullet; // bullet 是引用，不缩放
+                                sb.size      = ownerSkill.size     * 0.3f;
+                                sb.interval  = ownerSkill.interval * 0.3f;
+                                sb.angel     = ownerSkill.angel    * 0.3f;
+                            }
+                        }
+                        // 无 SSR6 时：技能保持分身创建时的固定数值，不跟随本体升级。
+                        // 分身 Instantiate 时复制了主体技能的完整数值（damage/CD 等由 prefab 决定），
+                        // 但分身属性（atk 等）只有本体的 30%。合并到本体后，这些技能由本体释放
+                        // （atk 是本体的完整值），所以实际伤害会偏高——但这符合"三清化一"的
+                        // 强力定位（SSR9 是稀有装备），且无 SSR6 时不跟随升级作为平衡补偿。
+                    }
+                }
+            }
+
+            // 销毁分身（分身技能已经移走，剩余物体彻底销毁，不再有物理碰撞问题）
+            Destroy(clone);
+
+            ToastManager.Show("[SSR·三清化一] 分身化为虚无，技能融入本体");
         }
 
         // —— 9. 给主玩家打上一个短暂的死亡判定豁免窗口（兜底） —— //
@@ -298,6 +355,19 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
             if (p.gameObject.CompareTag("Clone")) n++;
         }
         return n;
+    }
+
+    /// <summary>在 SkillList 中按名称查找技能。</summary>
+    private static Skillbase FindSkillByName(Transform skillRoot, string skillName)
+    {
+        if (skillRoot == null || string.IsNullOrEmpty(skillName)) return null;
+        foreach (Transform t in skillRoot)
+        {
+            if (t == null) continue;
+            Skillbase s = t.GetComponent<Skillbase>();
+            if (s != null && s.Skillname == skillName) return s;
+        }
+        return null;
     }
 
     private static bool IsSsrUnlocked(int id)

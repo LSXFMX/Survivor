@@ -659,11 +659,11 @@ public class EquipmentInitializer : MonoBehaviour
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, 11))
             ToastManager.Show("[抽卡·SSR] 我与我与我：人格解离可触发第二次（场上最多 2 个分身）");
 
-        // SSR_9「三清化一」(equipmentSystemId=12)：分身位置与本体重合且隐身，只保留技能效果。
-        // 实际逻辑在 AdventurePersonalityDissolve.Execute 中挂 ShadowCloneInvisibility 组件，
-        // 这里只做 toast 提示。
+        // SSR_9「三清化一」(equipmentSystemId=12)：分身技能直接合并到本体，分身被销毁。
+        // 实际逻辑在 AdventurePersonalityDissolve.Execute 中把分身 SkillList 搬到本体 SkillListClone，
+        // 然后 Destroy 分身，彻底避免物理碰撞问题。这里只做 toast 提示。
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, 12))
-            ToastManager.Show("[抽卡·SSR] 三清化一：分身将与本体合一，仅保留技能效果");
+            ToastManager.Show("[抽卡·SSR] 三清化一：分身技能将融入本体，效果翻倍");
 
         // SSR_10「饮血剑」(equipmentSystemId=13)：全能吸血 +1（所有伤害来源造成伤害的 1% 转为回血）。
         // 数值在 Bulletbase / BulletSporeField / BulletBloodlineBat 等结算点调用 TryAllSourceLifesteal 触发。

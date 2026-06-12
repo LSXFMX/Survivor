@@ -13,6 +13,11 @@ public class Player : Attribute
     public Animator ani;
     public battleUI battleUI;
     public Transform SkillList;
+    /// <summary>
+    /// SSR9「三清化一」：分身技能被合并到本体后，存放在这个独立容器中。
+    /// 容器内技能保持分身的数值比例，不受本体升级影响，由本体 Update 统一释放。
+    /// </summary>
+    [HideInInspector] public Transform SkillListClone;
     public float PickupRadius;
 
     [Header("UR 角色加成依赖资源")]
@@ -314,6 +319,19 @@ public class Player : Attribute
             foreach (Transform Skill in SkillList)
             {
                 Skillbase s = Skill.GetComponent<Skillbase>();
+                s.player = gameObject;
+                if (s.CDkey >= s.CDtime)
+                    StartCoroutine(s.Useskill());
+            }
+        }
+
+        // SSR9「三清化一」：释放合并过来的分身技能
+        if (SkillListClone != null && SkillListClone.childCount > 0)
+        {
+            foreach (Transform Skill in SkillListClone)
+            {
+                Skillbase s = Skill.GetComponent<Skillbase>();
+                if (s == null) continue;
                 s.player = gameObject;
                 if (s.CDkey >= s.CDtime)
                     StartCoroutine(s.Useskill());

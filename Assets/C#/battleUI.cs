@@ -228,6 +228,32 @@ public class battleUI : MonoBehaviour
             if (IsEternalSkill(sb))
                 AttachEternalBorder(skill);
         }
+
+        // SSR9「三清化一」：也显示合并过来的分身技能图标（避免重复显示已有同名技能）
+        if (player != null && player.SkillListClone != null)
+        {
+            foreach (Transform cloneSkill in player.SkillListClone)
+            {
+                Skillbase sb = cloneSkill != null ? cloneSkill.GetComponent<Skillbase>() : null;
+                if (sb == null || !ShouldCreateCooldownUI(sb)) continue;
+
+                // 跳过已在 Skilllist 中存在的同名技能（避免 UI 重复图标）
+                bool duplicate = false;
+                foreach (Transform t in Skilllist)
+                {
+                    Skillbase existing = t != null ? t.GetComponent<Skillbase>() : null;
+                    if (existing != null && existing.Skillname == sb.Skillname) { duplicate = true; break; }
+                }
+                if (duplicate) continue;
+
+                GameObject skill = Instantiate(SkillUI, Skillroom);
+                skill.transform.GetChild(0).GetComponent<Image>().sprite = sb.icon;
+                skill.transform.GetChild(1).GetComponent<Image>().sprite = sb.icon;
+                UpdateSkillCountText(skill, sb);
+                if (IsEternalSkill(sb))
+                    AttachEternalBorder(skill);
+            }
+        }
     }
 
     private bool ShouldCreateCooldownUI(Skillbase sb)
