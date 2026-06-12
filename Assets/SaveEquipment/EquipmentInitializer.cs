@@ -29,6 +29,11 @@ public class EquipmentInitializer : MonoBehaviour
         EnsurePersistentUnlocks();
         ApplyAllEquipments();
 
+        // 复活管理器（R_2 读档币）：进入战斗时重置"每局仅一次"状态。
+        // ReviveManager 是 DontDestroyOnLoad 单例，若场景里没有就动态创建一个。
+        EnsureReviveManager();
+        ReviveManager.Instance?.ResetForNewRun();
+
         // 测试模式（god-mode）：放在所有装备/抽卡加成之后，
         //   把玩家 hp/atk 强制拉到 99999，避免被前面的 += 累加稀释。
         //   开关由主菜单"测试模式"按钮控制，PlayerPrefs 持久化。
@@ -60,6 +65,18 @@ public class EquipmentInitializer : MonoBehaviour
         {
             Debug.LogWarning("[TestMode] YuanMuManager.Instance 未初始化，10000 源木发放失败");
         }
+    }
+
+    /// <summary>
+    /// 确保场景里存在 ReviveManager 单例。它是 DontDestroyOnLoad 持久对象——
+    /// 玩家第一次进入战斗时由本方法挂出来，之后跨场景复用，无需在场景里手工挂载。
+    /// 与 EquipmentSystem 的处理风格一致。
+    /// </summary>
+    private void EnsureReviveManager()
+    {
+        if (ReviveManager.Instance != null) return;
+        var go = new GameObject("ReviveManager (auto)");
+        go.AddComponent<ReviveManager>();
     }
 
     private void EnsurePersistentUnlocks()
@@ -338,12 +355,37 @@ public class EquipmentInitializer : MonoBehaviour
         ToastManager.Show("[装备] 成就装备0：风箭技能已激活");
     }
 
-    /// <summary>成就装备1：增加20%经验石拾取范围</summary>
+    /// <summary>
+    /// 成就装备1「大手子」：初始经验石吸取距离 +30%，
+    /// 每通关一个更高的难度额外 +5%（通关 N1 后 35%，N2 后 40%，以此类推）。
+    /// </summary>
     private void ApplyAchievement1_PickupRadius()
     {
         if (player == null) return;
-        player.PickupRadius *= 1.2f;
-        ToastManager.Show($"[装备] 成就装备1：拾取范围 x1.2");
+        // 基础加成 30%
+        float bonusPercent = 30f;
+        // 每通关一个更高难度 +5%（检查从 N1 开始连续通关了多少难度）
+        int clearedLevels = GetHighestClearedDifficultyCount();
+        bonusPercent += clearedLevels * 5f;
+        float multiplier = 1f + bonusPercent / 100f;
+        player.PickupRadius *= multiplier;
+        ToastManager.Show($"[装备] 大手子：拾取范围 +{bonusPercent:0}%（通关 {clearedLevels} 个难度）");
+    }
+
+    /// <summary>获取玩家已连续通关的最高难度数量（N1 通了=1，N1+N2 通了=2，...）</summary>
+    private int GetHighestClearedDifficultyCount()
+    {
+        if (ClearRecordManager.Instance == null || DifficultyManager.Instance == null) return 0;
+        int count = 0;
+        var configs = DifficultyManager.Instance.configs;
+        for (int i = 0; i < configs.Length; i++)
+        {
+            if (ClearRecordManager.Instance.GetClearCount(configs[i].label) > 0)
+                count++;
+            else
+                break; // 连续通关中断则停止计算
+        }
+        return count;
     }
 
     /// <summary>成就装备2：解锁冲刺技能（移动时按空格冲刺，2秒CD）</summary>
@@ -483,7 +525,9 @@ public class EquipmentInitializer : MonoBehaviour
         var sb = skill.GetComponent<Skillbase>();
         if (sb != null) sb.player = player.gameObject;
         SkillBloodline bl = skill.GetComponent<SkillBloodline>();
-        // 蝙蝠宝宝装备同时生效时要 +1 初始数量（与策划案一致）
+        // 夏无专属：开局自动获得血族血统时也立即享受 UR 加成（number→5, lifestealRatio→0.20）
+        if (bl != null) PlayerSkinSkillBuff.ApplyXiaWuBloodlineBuff(bl);
+        // 蝙蝠宝宝装备同时生效时要 +1 初始数量（叠加在夏无加成之上）
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment, 5) && bl != null)
             bl.number += 1;
         ToastManager.Show("[装备觉醒] 血族血统已在开局解锁！");
@@ -575,6 +619,28 @@ public class EquipmentInitializer : MonoBehaviour
         {
             player.CD += cdFruitCount * 0.1f;
             ToastManager.Show($"[抽卡] 暴伤灵果 ×{cdFruitCount}：暴击伤害 +{cdFruitCount * 0.1f:F1}");
+        }
+
+        // SR_6：速度灵果 - 每叠加一个，移动速度 +0.05（满池 100 件 = +5 移速）
+        //   注意：Attribute.speed 是 int，无法直接 += 0.05f；
+        //   采用「累积法」：count × 0.05 = 加成数值，向下取整后整体一次性加到 player.speed。
+        //   例：count=20 → +1；count=100 → +5；count=15 → +0（不足 20 累计不取整）。
+        //   这样数值含义与 SR_3 生命灵果（每件 +1）类似但分母更细，符合策划"100 个池"的设计。
+        int spdFruitCount = GachaManager.Instance.GetItemCount(GachaRarity.SR, 6);
+        if (spdFruitCount > 0 && player != null)
+        {
+            int spdBonus = Mathf.FloorToInt(spdFruitCount * 0.05f);
+            if (spdBonus > 0) player.speed += spdBonus;
+            ToastManager.Show($"[抽卡] 速度灵果 ×{spdFruitCount}：移动速度 +{spdBonus}（每20件+1）");
+        }
+
+        // R_2：读档币 - 每张可在死亡时原地复活一次，每局仅可使用一次。
+        //   实际消耗 / 复活流程由 ReviveManager 在 Player.death() 中拦截处理；
+        //   这里只做一次 Toast 让玩家知晓自己持有几张。
+        int reviveCount = GachaManager.Instance.GetItemCount(GachaRarity.R, 2);
+        if (reviveCount > 0)
+        {
+            ToastManager.Show($"[抽卡] 读档币 ×{reviveCount}：死亡时可消耗 1 张原地复活（本局上限 1 次）");
         }
 
         // ── SSR（抽卡解锁型，equipmentSystemId 与 GachaManager.ssrItems 一致）──

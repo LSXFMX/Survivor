@@ -61,8 +61,8 @@ public class skillupgrade : Upgradeoptionsbase
                 break;
             case skillAttribute.attackRadius:
                 SkillWindArrow wa = choiceskill as SkillWindArrow;
-                // 亡者领域锁定后：风箭半径固定为 10，不再被升级改动
-                if (wa != null && !wa.IsLockedByTombDomain) wa.attackRadius += upgradenumber;
+                // 2026-06 改动：亡者领域不再锁定风箭范围，风箭始终可被升级加范围
+                if (wa != null) wa.attackRadius += upgradenumber;
                 SkillSporeField sf = choiceskill as SkillSporeField;
                 // 亡者领域锁定后：孢子领域半径固定为 10，不再被升级改动
                 if (sf != null && !sf.IsLockedByTombDomain) sf.attackRadius += upgradenumber;

@@ -159,6 +159,12 @@ public class ArchiveManager : MonoBehaviour
         // 会自动注入名字/描述/howToGet/Sprite。
         EnsureGachaSsrIconsExist();
 
+        // 同样补全 R_2 读档币 / SR_6 速度灵果 两个新增 R/SR 抽卡装备图标。
+        // 直接在 gachaEquipmentContainer 下扫描全部 EquipmentIcon，按 gachaRarity 分组，
+        // 取首个同稀有度图标做模板克隆（保留 parent 一致以兼容 GridLayoutGroup）。
+        // 文本与 Sprite 由 EquipmentIcon.ApplyForcedGachaRSrOverrides 注入。
+        EnsureGachaRSrIconsExist();
+
         // ── 同样地补全 N8 通关装备 18/19/20（和平之剑/甲/心）三个图标 ──────────
         // 场景里通关装备容器历史上只挂到 N7（id 0~17），新增的 N8 三件没有 EquipmentIcon。
         // 这里在运行时用 N7 任一 EquipmentIcon 做模板 Instantiate，文本和图标
@@ -209,6 +215,67 @@ public class ArchiveManager : MonoBehaviour
         TryCloneSsrIcon(template, ssrParent, 11, existingIds);
         TryCloneSsrIcon(template, ssrParent, 12, existingIds);
         TryCloneSsrIcon(template, ssrParent, 13, existingIds);
+    }
+
+    /// <summary>
+    /// 在 GachaEquipment 容器下按 gachaRarity 分组，按需补出 R_2 / SR_6 的图标。
+    /// 已存在则跳过，幂等。模板来自首个同稀有度抽卡 EquipmentIcon。
+    ///
+    /// 与 EnsureGachaSsrIconsExist 同套路；文本/图标由
+    /// EquipmentIcon.ApplyForcedGachaRSrOverrides 自动注入。
+    ///
+    /// 实现注意：不再依赖容器名（如 "R" / "SR"）做查找——历史上场景容器命名可能不一致，
+    /// 容易导致克隆失败。改为直接在 gachaEquipmentContainer 下扫描全部 EquipmentIcon，
+    /// 按 gachaRarity 分组取首个作为模板，并复用它的 parent（Grid 布局父节点）。
+    /// </summary>
+    private void EnsureGachaRSrIconsExist()
+    {
+        if (gachaEquipmentContainer == null) return;
+
+        TryEnsureRarityIcon(GachaRarity.R, 2);
+        TryEnsureRarityIcon(GachaRarity.SR, 6);
+    }
+
+    private void TryEnsureRarityIcon(GachaRarity rarity, int targetId)
+    {
+        // 直接在整个抽卡容器下扫描；不再依赖容器名（兼容历史命名差异）。
+        EquipmentIcon[] all = gachaEquipmentContainer.GetComponentsInChildren<EquipmentIcon>(true);
+        if (all == null || all.Length == 0) return;
+
+        EquipmentIcon template = null;
+        var existingIds = new HashSet<int>();
+        foreach (var icon in all)
+        {
+            if (icon == null) continue;
+            if (icon.equipmentType != EquipmentType.GachaEquipment) continue;
+            if (icon.gachaRarity   != rarity)                       continue;
+            existingIds.Add(icon.equipmentId);
+            if (template == null) template = icon;
+        }
+        if (template == null)
+        {
+            Debug.LogWarning($"[ArchiveManager] 未在 GachaEquipment 容器下找到任何 {rarity} 模板，无法克隆 {rarity}_{targetId}");
+            return;
+        }
+        if (existingIds.Contains(targetId)) return;
+
+        Transform parent = template.transform.parent;
+        if (parent == null) parent = gachaEquipmentContainer.transform;
+
+        GameObject clone = Instantiate(template.gameObject, parent);
+        clone.name = $"{rarity}_{targetId} (auto)";
+
+        EquipmentIcon cloneIcon = clone.GetComponent<EquipmentIcon>();
+        if (cloneIcon == null) { Destroy(clone); return; }
+
+        cloneIcon.equipmentType = EquipmentType.GachaEquipment;
+        cloneIcon.gachaRarity   = rarity;
+        cloneIcon.equipmentId   = targetId;
+        cloneIcon.equipmentName = string.Empty;
+        cloneIcon.description   = string.Empty;
+        cloneIcon.howToGet      = string.Empty;
+
+        Debug.Log($"[ArchiveManager] 已克隆 {rarity}_{targetId} 图标（父节点 = {parent.name}）");
     }
 
     /// <summary>
@@ -704,6 +771,86 @@ public class ArchiveManager : MonoBehaviour
         {
             deleteArchiveConfirm.OpenConfirmPanel();
         }
+    }
+
+    // ── 【Editor 工具】静态化新增抽卡 / 通关装备图标 ───────────────────────────
+    //
+    // 背景：历史上新增的 R_2 读档币 / SR_6 速度灵果 / SSR_11(8) / SSR_12(9) / SSR_13(10) /
+    //       N8 通关装备 18/19/20 都是「运行时 Instantiate 模板克隆」出来的（见上面
+    //       EnsureGachaSsrIconsExist / EnsureGachaRSrIconsExist / EnsureClearEquipmentN8IconsExist），
+    //       这导致两个问题：
+    //         1) 非 Play 模式打开场景看不到这些图标，不利于策划在编辑器里直接调整布局；
+    //         2) 每次启动都要走克隆 + SetIconFromAssetPath（File.ReadAllBytes）流程，性能/稳定性差。
+    //
+    // 解决方案：提供 Editor 菜单，让开发者在编辑器里点一次即可把所有缺失图标
+    //          以"真实场景 GameObject"的形式生成出来，并立即把 equipmentName /
+    //          description / howToGet / Sprite 写入 SerializedField，保存场景后
+    //          它们就成为静态资源，下次进入场景（无论 Editor 或 Play 模式）直接可见，
+    //          运行时 EnsureXxxIconsExist 检测到已存在会自动跳过（幂等）。
+    //
+    // 使用步骤：
+    //   1) 打开 SampleScene；
+    //   2) 选中挂着 ArchiveManager 的 GameObject；
+    //   3) Inspector 里 ArchiveManager 组件右上角齿轮菜单 → "静态化生成所有缺失装备图标"；
+    //   4) 检查 Scene 视图里 GachaEquipment / ClearEquipment 容器下确实新增了图标；
+    //   5) Ctrl+S 保存场景。
+    //
+    // 之后每次新增装备时，再次点这个菜单即可——已存在的会跳过。
+    [ContextMenu("静态化生成所有缺失装备图标（Editor 工具）")]
+    public void EditorStaticGenerateMissingEquipmentIcons()
+    {
+#if UNITY_EDITOR
+        if (!Application.isEditor || Application.isPlaying)
+        {
+            Debug.LogWarning("[ArchiveManager] 静态化生成图标必须在非 Play 模式的 Editor 中调用");
+            return;
+        }
+
+        // 初始化容器字典（Editor 模式 Start 未跑过）
+        InitializeContainers();
+
+        int beforeCount = CountAllIconsInContainers();
+
+        // 跑三套补全逻辑——和运行时完全相同
+        EnsureGachaSsrIconsExist();
+        EnsureGachaRSrIconsExist();
+        EnsureClearEquipmentN8IconsExist();
+
+        // 关键差异：Editor 模式下 EquipmentIcon.Start 不会触发，
+        // 需要主动调用 EditorApplyForcedOverrides() 把文本/Sprite 立即写入。
+        // 这样保存场景后这些字段就以静态值持久化进 .unity 文件。
+        foreach (var container in equipmentContainers.Values)
+        {
+            if (container == null) continue;
+            var icons = container.GetComponentsInChildren<EquipmentIcon>(true);
+            foreach (var icon in icons)
+            {
+                if (icon == null) continue;
+                icon.EditorApplyForcedOverrides();
+                // 标记 SerializedObject 脏，确保保存场景时这次 Editor 注入的字段真的被持久化
+                UnityEditor.EditorUtility.SetDirty(icon);
+                if (icon.gameObject.scene.IsValid())
+                    UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(icon.gameObject.scene);
+            }
+        }
+
+        int afterCount = CountAllIconsInContainers();
+        Debug.Log($"[ArchiveManager] 静态化生成完成。新增图标 {afterCount - beforeCount} 个（{beforeCount} → {afterCount}）。");
+        Debug.Log($"[ArchiveManager] 请 Ctrl+S 保存场景，新增的图标即成为永久静态对象。");
+#else
+        Debug.LogError("[ArchiveManager] 该工具仅在 Unity Editor 中可用");
+#endif
+    }
+
+    private int CountAllIconsInContainers()
+    {
+        int n = 0;
+        foreach (var c in equipmentContainers.Values)
+        {
+            if (c == null) continue;
+            n += c.GetComponentsInChildren<EquipmentIcon>(true).Length;
+        }
+        return n;
     }
 
     // 积分解锁按钮点击

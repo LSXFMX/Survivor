@@ -24,8 +24,8 @@ public class SkillBloodline : Skillbase
     private readonly List<BulletBloodlineBat> _familiars = new List<BulletBloodlineBat>();
     private Transform _ownerTransform;
 
-    /// <summary>是否已解锁血族吸血（好感度≥50 + 存档装备）</summary>
-    public bool HasLifestealFromEquipment()
+    /// <summary>好感度装备004是否已解锁（纯装备判定，不含夏无特判）</summary>
+    private bool HasFavorEquipment004()
     {
         if (EquipmentSystem.Instance == null ||
             !EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment, 4))
@@ -33,6 +33,34 @@ public class SkillBloodline : Skillbase
         if (FavorManager.Instance == null)
             return UnityEngine.PlayerPrefs.GetInt("Favor_Bat", 0) >= 50;
         return FavorManager.Instance.GetFavor(FactionType.Bat) >= 50;
+    }
+
+    /// <summary>
+    /// 是否拥有血族吸血效果。
+    /// - 夏无：无条件拥有（无装备004时10%，有装备004时20%）
+    /// - 其他角色：需好感度≥50 + 装备004解锁
+    /// </summary>
+    public bool HasLifestealFromEquipment()
+    {
+        if (PlayerSkinSkillBuff.CurrentSkinIndex == PlayerSkinSkillBuff.SKIN_XIAWU)
+            return true;
+        return HasFavorEquipment004();
+    }
+
+    /// <summary>
+    /// 获取当前实际吸血比例。
+    /// - 夏无无装备004：10%
+    /// - 夏无有装备004：20%
+    /// - 其他角色有装备004：使用 prefab 配置的 lifestealRatio（默认10%/15%）
+    /// </summary>
+    public float GetEffectiveLifestealRatio()
+    {
+        if (PlayerSkinSkillBuff.CurrentSkinIndex == PlayerSkinSkillBuff.SKIN_XIAWU)
+        {
+            // 夏无：有装备004时20%，无装备004时自带10%
+            return HasFavorEquipment004() ? 0.20f : 0.10f;
+        }
+        return lifestealRatio;
     }
 
     private void Start()
@@ -158,7 +186,7 @@ public class SkillBloodline : Skillbase
             bat.fatherskill = this;
             bat.GetFather();
             bat.cango = true;
-            bat.SetupLifesteal(HasLifestealFromEquipment(), lifestealRatio);
+            bat.SetupLifesteal(HasLifestealFromEquipment(), GetEffectiveLifestealRatio());
             _familiars.Add(bat);
         }
 
@@ -175,11 +203,12 @@ public class SkillBloodline : Skillbase
     {
         int total = _familiars.Count;
         bool hasLifesteal = HasLifestealFromEquipment();
+        float effectiveRatio = GetEffectiveLifestealRatio();
         for (int i = 0; i < total; i++)
         {
             BulletBloodlineBat bat = _familiars[i];
             if (bat == null) continue;
-            bat.SetupLifesteal(hasLifesteal, lifestealRatio);
+            bat.SetupLifesteal(hasLifesteal, effectiveRatio);
             bat.ConfigureOrbit(_ownerTransform, i, total);
         }
     }

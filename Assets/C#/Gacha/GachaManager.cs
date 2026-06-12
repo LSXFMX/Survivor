@@ -55,13 +55,15 @@ public class GachaManager : MonoBehaviour
 
     // ── 抽卡奖池（全部由场景 Inspector 静态配置；运行时不再修改这些列表）──
     // 场景中已配置的内容（如有新增/调整，请直接改场景，不要在代码里加 Add）：
-    //   rItems   : 2 条 — Remake / 量子源木
-    //   srItems  : 6 条 — 经验灵果 / 攻击灵果 / 防御灵果 / 生命灵果 / 暴击灵果 / 暴伤灵果
-    //                    后 4 条用 unlockThreshold (50/50/100/100) 控制累计抽卡门槛进池
+    //   rItems   : 3 条 — Remake(0) / 量子源木(1) / 读档币(2; >=200 抽进池, 每 20 抽补 1)
+    //   srItems  : 7 条 — 经验灵果 / 攻击灵果 / 防御灵果 / 生命灵果 / 暴击灵果 / 暴伤灵果 / 速度灵果(6)
+    //                    后续条用 unlockThreshold (50/50/100/100/300) 控制累计抽卡门槛进池
     //   ssrItems : 10 条 — 便携营地~不忘初心(0~7) + 我与我与我(8) + 三清化一(9)
     //                    equipmentSystemId 与 EquipmentSystem 中真实 id 严格对齐：
     //                    0,1,2,3,6,7,8,9,11,12（4/5 已被 UR 风之形/地狱火占用，10 被 UR 亡者领域占用）
     //   urItems  : 3 条 — 风之形(eqId=4) / 地狱火(eqId=5) / 亡者领域(eqId=10)
+    // 注：R_2 读档币 / SR_6 速度灵果若场景里未配置，会在 Awake → EnsureNewGachaItemsExist 时
+    // 由代码兜底补出来；一旦场景 Inspector 把它们手动配上，本兜底因 RarityIdExists 命中会跳过。
     [Header("R 装备（可叠加） — 仅 Inspector 配置，运行时只读")]
     public List<GachaItemData> rItems = new List<GachaItemData>();
 
@@ -73,6 +75,22 @@ public class GachaManager : MonoBehaviour
 
     [Header("UR 装备（解锁型） — 仅 Inspector 配置，运行时只读")]
     public List<GachaItemData> urItems = new List<GachaItemData>();
+
+    // ── 新增 R/SR 抽卡装备的静态图标（直接在 GachaManager 节点 Inspector 里拖 PNG）──
+    // 历史问题：之前 EquipmentIcon.ApplyForcedGachaRSrOverrides 通过
+    //          File.ReadAllBytes + Texture2D.LoadImage 在运行时从 Application.dataPath
+    //          读 R/002.png / SR/6.png 来覆盖图标。这种"绕过 Unity 资源管线"的做法在打包后
+    //          dataPath 不再指向项目 Assets，且不同图片导入参数无法保证一致，导致图标
+    //          错误（截图显示读档币位置出现的是金色翅膀）。
+    //
+    // 现在改为标准的"Inspector 引用 Sprite"挂载：把 R/002.png 拖到 reviveCoinIcon、
+    // SR/6.png 拖到 speedFruitIcon 即可。EquipmentIcon 会优先从这里取 Sprite，
+    // 找不到再 fallback 到旧的文件读取路径，向后兼容。
+    [Header("R_2 读档币 / SR_6 速度灵果 静态图标（请把 PNG 拖到这里）")]
+    [Tooltip("R_2 读档币图标。建议拖 Assets/像素幸存者资源包/存档装备图标/抽卡装备/R/002.png")]
+    public Sprite reviveCoinIcon;
+    [Tooltip("SR_6 速度灵果图标。建议拖 Assets/像素幸存者资源包/存档装备图标/抽卡装备/SR/6.png")]
+    public Sprite speedFruitIcon;
 
     // 合并所有当前可用奖池（满足解锁条件的）
     private List<GachaItemData> AllItems
@@ -132,10 +150,125 @@ public class GachaManager : MonoBehaviour
         // 静态化：完全不再在代码里塞默认数据；只校验 Inspector 是否漏配。
         ValidateInspectorConfig();
 
+        // ── 例外：少量"新增抽卡装备"的代码补缺 ──────────────────────────
+        // 整体仍然遵循"全静态化、配置在场景"原则；但当新增装备是首发上线、
+        // 还来不及让所有协作者把场景同步过来时，允许在代码里"按 (rarity, rarityId) 不存在则补一条"。
+        // 这与之前 EquipmentIcon.ApplyForcedGachaSsrOverrides / ArchiveManager.EnsureGachaSsrIconsExist
+        // 是同一思路：场景文件里没拖也能跑通，新拉项目/老存档都不爆。
+        // 一旦后续把数据落到场景 Inspector，本方法因为「Find 命中=true」会自动跳过，零副作用。
+        EnsureNewGachaItemsExist();
+
         // 必须先 InitPool：须包含「未解锁」的 SSR/UR（unlockThreshold>0），否则解锁后 PoolKey 从未写入，
         // GetPoolRemain 缺省为 0，该道具永远不会进入可抽列表。
         InitPool();
         ApplyPoolRefillsByMilestone(PlayerPrefs.GetInt(KEY_DRAWCOUNT, 0)); // 读档时同步里程碑补池
+    }
+
+    /// <summary>
+    /// 按需补出新增的抽卡装备数据。
+    /// 完全幂等：已存在则直接返回。
+    ///
+    /// R_2 读档币：unlockThreshold=200, poolCount=100, 每 20 抽补 1 张。
+    /// SR_6 速度灵果：unlockThreshold=300, poolCount=100, 不再里程碑补池。
+    /// SSR_10 饮血剑(eqId=13)：unlockThreshold=500, poolCount=100。
+    /// </summary>
+    private void EnsureNewGachaItemsExist()
+    {
+        if (rItems != null && !RarityIdExists(rItems, 2))
+        {
+            rItems.Add(new GachaItemData
+            {
+                itemName = "读档币",
+                rarity = GachaRarity.R,
+                rarityId = 2,
+                equipmentSystemId = 0, // R 不使用 equipmentSystemId
+                poolCount = 100,
+                unlockThreshold = 200,
+                poolRefillEveryDraws = 20, // 之后每累计 20 抽追加 1 张
+                poolRefillAmount = 1,
+                icon = null,               // 图标由 EquipmentIcon.ApplyForcedGachaRSrOverrides 注入
+            });
+            Debug.Log("[GachaManager] 已补出 R_2 读档币（场景未配，代码兜底）");
+        }
+
+        if (srItems != null && !RarityIdExists(srItems, 6))
+        {
+            srItems.Add(new GachaItemData
+            {
+                itemName = "速度灵果",
+                rarity = GachaRarity.SR,
+                rarityId = 6,
+                equipmentSystemId = 0,
+                poolCount = 100,
+                unlockThreshold = 300,
+                poolRefillEveryDraws = 0,
+                poolRefillAmount = 0,
+                icon = null,
+            });
+            Debug.Log("[GachaManager] 已补出 SR_6 速度灵果（场景未配，代码兜底）");
+        }
+
+        // SSR_10 饮血剑 (equipmentSystemId=13)：累计抽卡 500 次后加入卡池
+        if (ssrItems != null && !RarityIdExists(ssrItems, 10))
+        {
+            ssrItems.Add(new GachaItemData
+            {
+                itemName = "饮血剑",
+                rarity = GachaRarity.SSR,
+                rarityId = 10,
+                equipmentSystemId = 13,
+                poolCount = 100,
+                unlockThreshold = 500,
+                poolRefillEveryDraws = 0,
+                poolRefillAmount = 0,
+                icon = null, // 由 EnsureSsrItemIcons 运行时注入
+            });
+            Debug.Log("[GachaManager] 已补出 SSR_10 饮血剑（场景未配，代码兜底）");
+        }
+
+        // 确保所有 SSR/UR 条目的 icon 字段不为空（场景 Inspector 未拖入时运行时补全）
+        EnsureSsrItemIcons();
+    }
+
+    /// <summary>
+    /// 运行时检查 ssrItems 中 icon 为 null 的条目，按 equipmentSystemId 动态加载图标。
+    /// 打包后走 Inspector 引用最可靠（本方法仅在编辑器和场景未完整配置时兜底）。
+    /// </summary>
+    private void EnsureSsrItemIcons()
+    {
+        if (ssrItems == null) return;
+        foreach (var item in ssrItems)
+        {
+            if (item == null || item.icon != null) continue;
+            string path = GetSsrIconPath(item.equipmentSystemId);
+            if (string.IsNullOrEmpty(path)) continue;
+            var tex = RuntimeAssetLoader.LoadTexture(null, null, path);
+            if (tex != null)
+                item.icon = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+        }
+    }
+
+    /// <summary>根据 equipmentSystemId 返回 SSR 图标的 Assets 相对路径。</summary>
+    private static string GetSsrIconPath(int eqId)
+    {
+        // equipmentSystemId → 文件名映射（与 EquipmentIcon.ApplyForcedGachaSsrOverrides 保持一致）
+        switch (eqId)
+        {
+            case 11: return "像素幸存者资源包/存档装备图标/抽卡装备/SSR/008.png";
+            case 12: return "像素幸存者资源包/存档装备图标/抽卡装备/SSR/009.png";
+            case 13: return "像素幸存者资源包/存档装备图标/抽卡装备/SSR/010.png";
+            default: return null; // 其它 SSR 由场景 Inspector 已拖好
+        }
+    }
+
+    private static bool RarityIdExists(List<GachaItemData> list, int rarityId)
+    {
+        if (list == null) return false;
+        foreach (var it in list)
+        {
+            if (it != null && it.rarityId == rarityId) return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -310,6 +443,10 @@ public class GachaManager : MonoBehaviour
         int draws = PlayerPrefs.GetInt(KEY_DRAWCOUNT, 0) + 1;
         PlayerPrefs.SetInt(KEY_DRAWCOUNT, draws);
 
+        // 每抽卡一次赠送 1 点存档装备积分
+        int pts = PlayerPrefs.GetInt("ClearEquipmentPoints", 0) + 1;
+        PlayerPrefs.SetInt("ClearEquipmentPoints", pts);
+
         // 软保底计数器更新：抽到 SSR 重置 SSR 计数，抽到 UR 重置 UR 计数；其它情况两条计数都 +1。
         // 这样 SSR/UR 是独立累积的——长期不出 UR 时，UR 概率会逐步逼近上限，但 SSR 不受影响（反之亦然）。
         if (item.rarity == GachaRarity.SSR)
@@ -438,7 +575,9 @@ public class GachaManager : MonoBehaviour
             + "3. 首次通关某难度后，可在聚宝盆领取首通宝箱：\n"
             + "   奖励 = 难度数字 × 6。\n"
             + "4. 首次点击主页面的草：一次性获得 100 源。\n"
-            + "5. 抽奖时若奖池为空，会退还本次消耗的源。";
+            + "5. 抽奖时若奖池为空，会退还本次消耗的源。\n"
+            + "\n【读档币】累计抽卡 200 次后加入卡池（初始 100 个），之后每累计 20 抽补充 1 个。\n"
+            + "\n【存档装备积分】每抽卡 1 次获得 1 点积分，可在存档装备界面兑换解锁装备。";
     }
 
     public void ResetAll()

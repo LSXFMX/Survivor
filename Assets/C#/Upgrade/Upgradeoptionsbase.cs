@@ -71,6 +71,11 @@ public class Upgradeoptionsbase : MonoBehaviour
                 ChoiceUI.Instance.RecordUpgrade(upgradeGroup);
         }
 
+        // 2026-06-11：玩家做出选择后消耗首轮保底资格（之前在 refresh 里消耗，
+        // 导致点刷新后保底被吃掉）
+        if (ChoiceUI.Instance != null)
+            ChoiceUI.Instance.ConsumeFirstUpgradeGuarantee();
+
         battleUI.choiceUI.SetActive(false);
         if (battleUI.TryAdvanceGachaStartupChain())
             return;

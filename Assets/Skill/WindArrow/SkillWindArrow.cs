@@ -30,7 +30,6 @@ public class SkillWindArrow : Skillbase
     private LineRenderer _circle;
     private float _lastRadius = -1f;
     private Color _lastCircleColor;
-    private float _tombProbeAccum;
 
     private void Start()
     {
@@ -104,22 +103,8 @@ public class SkillWindArrow : Skillbase
         if (player != null)
             transform.position = player.transform.position;
 
-        // 亡者领域已学习：强制把风箭锁定为半径 10 + 紫色范围圈。
-        // 主路径已在 getnewskill_TombDomain.chocieupgrade 学完时直接调用 LockToTombDomainPalette()，
-        // 这里用 0.5s 节流的兜底，避免每帧 GetComponent + 遍历 SkillList。
-        if (!IsLockedByTombDomain && player != null)
-        {
-            _tombProbeAccum += Time.deltaTime;
-            if (_tombProbeAccum >= 0.5f)
-            {
-                _tombProbeAccum = 0f;
-                Player p = player.GetComponent<Player>();
-                if (p != null && SkillTombDomain.ResolveOnPlayer(p) != null)
-                {
-                    LockToTombDomainPalette();
-                }
-            }
-        }
+        // 2026-06 改动：亡者领域不再锁定风箭的攻击范围和颜色，
+        // 移除了原有的"每 0.5s 探测亡者领域并调用 LockToTombDomainPalette()"兜底逻辑。
 
         // 半径变化时重绘
         if (!Mathf.Approximately(_lastRadius, attackRadius))
@@ -166,10 +151,29 @@ public class SkillWindArrow : Skillbase
 
     public override IEnumerator Useskill()
     {
-        CDkey = 0;
+        // === 风箭内置最低 CD = 0.1s（2026-06 修复）===
+        // 业务规则：策划 / 升级 / 词条可以把 CDtime 降到 0，但发射节流必须有最低保护，
+        // 否则每帧都会触发 Player.Update 的 CDkey>=CDtime 判定 → 每帧启动协程 → 风箭刷屏导致瞬卡死。
+        // 这里只在"实际发射环节"用 Max(CDtime, 0.1) 重置 CDkey，不去动 CDtime 本身——
+        // 升级面板上仍显示策划设定的 CDtime（包括 0），用户不会感知到字段被偷偷夹住。
+        const float WindArrowMinCD = 0.1f;
+        float effectiveCD = Mathf.Max(CDtime, WindArrowMinCD);
 
         List<Transform> targets = GetEnemiesInRange();
-        if (targets.Count == 0) yield break;
+        if (targets.Count == 0)
+        {
+            // 关键修复：没有目标时不要把 CDkey 直接清零——否则会出现"明明没打出箭但 CD 照算"，
+            // 玩家会觉得"风箭哑火"。改为只回退一小段，下一帧/下一 Tick 立刻能再尝试找目标。
+            CDkey = effectiveCD - WindArrowMinCD * 0.5f;
+            if (CDkey < 0f) CDkey = 0f;
+            yield break;
+        }
+
+        // 把 CDkey 设为「-(最低 CD - CDtime)」的等价形式：
+        //   * CDtime >= 0.1 时：effectiveCD = CDtime，CDkey = 0 → 与旧行为一致
+        //   * CDtime <  0.1 时：CDkey 被设成负值 -(0.1 - CDtime)，等 0.1s 后才会再次触发
+        // FixedUpdate 里 CDkey += dt，到 CDtime 后才会再次 >= CDtime 触发下一次 Useskill。
+        CDkey = CDtime - effectiveCD;
 
         SkillFormOfWind formOfWind = FindFormOfWindUnderSkillList();
 
@@ -211,6 +215,11 @@ public class SkillWindArrow : Skillbase
             // 亡者领域：跳过被控制为友军的敌人（风箭不应该打到自己复活出来的盟友）
             // 直接读 enemy._mindControlledFlag，比 GetComponent<MindControlled> 快
             if (en != null && en._mindControlledFlag) continue;
+            // 已占领营地：占领后 tag/layer/_mindControlledFlag 均不变（与魅惑是两套机制），
+            // 必须显式 skip，否则风箭会把自己的友方营地当敌人持续打（2026-06 修复）。
+            // 用 as Camp 比 GetComponent<Camp> 更快——Camp 继承自 enemy，en 已就是同一组件。
+            Camp camp = en as Camp;
+            if (camp != null && camp.IsCaptured) continue;
 
             float dist = Vector3.Distance(player.transform.position, e.position);
             if (dist <= attackRadius)

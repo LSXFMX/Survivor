@@ -56,10 +56,11 @@ public class WorldBossBat : BossBat
     {
         if (rolestate == state.dead) return;
 
-        // 亡者领域：先在最外层拦截。命中则不能让 base.Destroy1 之后的
-        // worldBossManager.OnWorldBossDefeated 执行——那会错误地把"被控制"当成"被击败"。
-        // _reviveAttempted 设为 true 后，base.Destroy1（→ BossBat.Destroy1）就不会再
-        // 重复调一次 hook（避免双重判定）。
+        // 2026-06-12：不管是否会被亡者领域复活，只要击败世界Boss就立即给予
+        // 局内成长和源奖励。复活检查放在之后执行。
+        worldBossManager?.OnWorldBossDefeated(faction);
+
+        // 亡者领域：复活检查。成功则 Boss 转为友军，不执行后续死亡流程。
         if (!_reviveAttempted)
         {
             _reviveAttempted = true;
@@ -74,7 +75,5 @@ public class WorldBossBat : BossBat
         battleUI = null;
         base.Destroy1();
         battleUI = savedBattleUI;
-
-        worldBossManager?.OnWorldBossDefeated(faction);
     }
 }

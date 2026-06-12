@@ -152,6 +152,9 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
         Player clonePlayer = clone.GetComponent<Player>();
         if (clonePlayer == null) { Destroy(clone); base.Execute(); return; }
 
+        // 设定分身的主体引用，使分身 AI 跟随主体移动
+        clonePlayer.cloneOwner = ownerPlayer;
+
         // —— 4.5 立即停掉分身物理推挤（防御：避免第一帧分身把主玩家撞跑） —— //
         // 背景：分身和主玩家共用同一份 Player prefab，Player.Update() 里所有 Player
         //       实例都会读 Input.GetAxis 并写 rb.velocity，于是分身和主玩家被同一套

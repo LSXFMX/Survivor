@@ -43,6 +43,19 @@ public class SkinChanger : MonoBehaviour
     // 顶行第 1 帧才能正确取到无罪的 idle 站姿。
     private const string Ur2IconPath  = "像素幸存者资源包/玩家/ur2_tomb_skin.png";
 
+    // === 打包后资源加载关键修复（2026-06）===
+    // 同 PlayerSkinOverrider：通过 Inspector 引用持有这 4 张 Texture，
+    // 让打包系统自动把它们打入 Build——否则切换存档后人物存档面板上的卡片头像在 Build 中也加载不出来。
+    [Header("人物存档卡片头像（打包必需 · 请保留 Inspector 上的引用）")]
+    [Tooltip("琪露诺站立帧。对应 Assets/像素幸存者资源包/玩家/琪诺露/闲置/1.png。")]
+    public Texture2D cirnoIconTexture;
+    [Tooltip("UR_0 风之形 行走图（取顶行第 1 帧作为头像）。")]
+    public Texture2D ur0IconTexture;
+    [Tooltip("UR_1 地狱火 行走图（取顶行第 1 帧作为头像）。")]
+    public Texture2D ur1IconTexture;
+    [Tooltip("UR_2 亡者领域 行走图（取顶行第 1 帧作为头像）。")]
+    public Texture2D ur2IconTexture;
+
     // ============== 运行时引用 ==============
     [HideInInspector] public GameObject openButtonGo;
     [HideInInspector] public GameObject panelGo;
@@ -79,10 +92,10 @@ public class SkinChanger : MonoBehaviour
         "<b><color=#FF8E70>夏无（UR · 火/血族）</color></b>\n" +
         "<color=#FFD37A>本命技能加成 · 血族血统</color>\n" +
         "  • 蝙蝠使魔数量：1 → <color=#7FFFB0>5</color>\n" +
-        "  • 吸血比例：10% → <color=#7FFFB0>20%</color>\n" +
+        "  • 自带吸血 <color=#7FFFB0>10%</color>（装备【血族之力】后提升至 <color=#7FFFB0>20%</color>）\n" +
         "<color=#FFD37A>额外特性</color>\n" +
-        "  • <color=#7FFFB0>开局自动获得</color>「火球术」\n" +
-        "<color=#A0A0A0>持续输出 + 持续回复，越打越凶——血族吸血需在好感度装备「血族之力」解锁后生效。</color>",
+        "  • <color=#7FFFB0>开局自动获得</color>【火球术】（火球 ×3）\n" +
+        "<color=#A0A0A0>持续输出 + 持续回复，越打越凶。【适合在解锁血族血统后游玩】</color>",
 
         // skinId=3 无罪（UR · 亡者领域）
         // 注意：避免使用「」全角直角引号——TMP 默认字体对它没有 fallback，会渲染成 □。
@@ -94,8 +107,7 @@ public class SkinChanger : MonoBehaviour
         "<color=#FFD37A>专属内容</color>\n" +
         "  • <color=#7FFFB0>开局自动获得</color><color=#FFB060>【风箭】</color>+<color=#FFB060>【孢子领域】</color>\n" +
         "  • <color=#FFB060>【亡者领域】被动</color>：被复活的友军小怪死亡时回复 <color=#7FFFB0>0.5%</color> 最大生命值\n" +
-        "  • 暗影岛配色——金瞳紫发的少年\n" +
-        "<color=#A0A0A0>开局风箭/孢子领域 attackRadius 双双拉到 15，已直接满足 <color=#FFB060>【亡者领域】</color> UR 进化的两项范围条件（≥15）——下一次升级池就会出现 <color=#FFB060>【学习亡者领域】</color> 选项，不依赖飓风/风之形。</color>",
+        "<color=#A0A0A0>活不过前期的乐乐角色</color>",
     };
 
     /// <summary>
@@ -120,13 +132,13 @@ public class SkinChanger : MonoBehaviour
         "<color=#FF8E70><b>血族血脉</b></color>\n" +
         "<color=#E0E0E0>蝙蝠使魔 <color=#7FFFB0>×5</color>\n" +
         "吸血 <color=#7FFFB0>+10%</color>\n" +
+        "火球 <color=#7FFFB0>×3</color>\n" +
         "开局自带<color=#FFB060>火球术</color></color>",
 
         // skinId=3 无罪
         "<color=#7FE3A0><b>亡者契约</b></color>\n" +
         "<color=#E0E0E0>开局自带<color=#FFB060>风箭</color>+<color=#FFB060>孢子领域</color>\n" +
         "风箭/孢子领域范围 <color=#7FFFB0>15</color>\n" +
-        "金瞳紫发·暗影岛配色\n" +
         "解锁亡者领域 UR 进化\n" +
         "<color=#FFB060>亡者领域</color>被动：友军死亡回 <color=#7FFFB0>0.5%</color> 血</color>",
     };
@@ -1276,33 +1288,23 @@ public class SkinChanger : MonoBehaviour
 
     private Sprite LoadSpriteForSkin(int skinId)
     {
-        string rel;
-        if (skinId == 0) rel = CirnoIconPath;
-        else if (skinId == 1) rel = Ur0IconPath;
-        else if (skinId == 2) rel = Ur1IconPath;
-        else rel = Ur2IconPath;
-        string full = Path.Combine(Application.dataPath, rel);
-        if (!File.Exists(full)) return null;
+        // 走 RuntimeAssetLoader 三层兜底：Inspector 引用 → Resources.Load → Application.dataPath（仅编辑器）
+        // 这是打包后唯一可靠的加载链路；编辑器内三条都能跑，Build 中只有第一条引用持久有效。
+        Texture2D direct;
+        string editorRel;
+        switch (skinId)
+        {
+            case 0: direct = cirnoIconTexture; editorRel = CirnoIconPath; break;
+            case 1: direct = ur0IconTexture;   editorRel = Ur0IconPath;   break;
+            case 2: direct = ur1IconTexture;   editorRel = Ur1IconPath;   break;
+            default: direct = ur2IconTexture;  editorRel = Ur2IconPath;   break;
+        }
+        var tex = RuntimeAssetLoader.LoadTexture(direct, null, editorRel);
+        if (tex == null) return null;
         try
         {
-            var bytes = File.ReadAllBytes(full);
-            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-            if (!tex.LoadImage(bytes)) return null;
-            tex.filterMode = FilterMode.Point;
-            tex.wrapMode = TextureWrapMode.Clamp;
-
             // === 经反复实验确认：ur0/ur1/ur2 三张 PNG 均为 1024×1024、**4 列 × 4 行的精灵网格**，
             //     每帧 256×256，左上角(PNG 坐标 0,0,256,256)就是该角色完整的"正面 idle"立绘。
-            //
-            //     历史曲折：
-            //       1) 起初按 4×3 切顶行 → H/3=341.33 不整除，切到错位的长条；
-            //          ur0/ur1 颜色明亮还能看见人形，ur2 黑袍 → 卡片只剩"左上角一点点"。
-            //       2) 改成 trim 透明像素边界框 → trim 出的是整张 sheet（4×4 全部 16 帧），
-            //          卡片里塞了一整面"角色阵列"，看着像贴图错乱。
-            //       3) 现在：直接 4 列 × 4 行切，取第 1 行第 1 列那一帧（cellW=W/4, cellH=H/4）。
-            //
-            //     注意 Unity Sprite 坐标 Y 朝上、tex 加载后底部是 Y=0。
-            //     "左上角第 1 帧" 在 Sprite 坐标系下对应 Rect(0, H-cellH, cellW, cellH)。
             //     琪露诺保持原行为（cirno_skin.png 是单帧立绘）。
             if (skinId == 0)
             {

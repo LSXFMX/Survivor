@@ -26,7 +26,7 @@ public class GachaUI : MonoBehaviour
     public TMP_FontAsset uiFont;
     public Vector2 infoButtonAnchoredPosition = new Vector2(145f, 0f);
     public Vector2 infoTooltipAnchoredPosition = new Vector2(-40f, -48f);
-    public Vector2 infoTooltipSize = new Vector2(760f, 340f);
+    public Vector2 infoTooltipSize = new Vector2(760f, 480f);
     public Vector2 treasureButtonAnchoredPosition = new Vector2(0f, -14f);
     public Vector2 treasureButtonSize = new Vector2(112f, 112f);
 

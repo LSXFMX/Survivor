@@ -145,6 +145,17 @@ public static class TombDomainHook
         // 与孤立的 WorldBossBase 没有继承关系——不能用 `is WorldBossBase` 来判定。
         bool isWorldBoss = (en is WorldBossBat) || (en is WorldBossMushroomMan) || (en is WorldBossBase);
 
+        // === 2026-06-12：亡者领域对关底 Boss 无效，只对世界 Boss 有效 ===
+        // 关底 Boss（BossBat / BossMushroomMan 实例但不是世界 Boss 版本）不能被复活。
+        bool isStageBoss = !isWorldBoss && ((en is BossBat) || (en is BossMushroomMan));
+        if (isStageBoss)
+        {
+            _lastSporeHitTime.Remove(en);
+            _lastAllyHitTime.Remove(en);
+            Debug.Log($"[亡者领域·复活] {en.gameObject.name} 是关底Boss，亡者领域对其无效，跳过复活");
+            return false;
+        }
+
         // === 复活：MindControlled 接管 → Boss 级特效 Spawn ===
         // ★ 顺序修复（v10.1）：必须**先** AddComponent + Setup + SetReviveFreeze(true)，**再** Spawn
         //   特效。原因：

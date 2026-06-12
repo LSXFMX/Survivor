@@ -36,6 +36,9 @@ public class title : MonoBehaviour
 
         // 测试模式按钮（左上角，玩家点击切换 god-mode 状态）
         EnsureTestModeButton();
+
+        // 内测福利按钮（左上角，测试模式按钮下方）
+        EnsureBetaRewardButton();
     }
 
     private void EnsureSkinChangerMounted()
@@ -332,6 +335,86 @@ public class title : MonoBehaviour
         bool on = TestModeManager.Instance != null && TestModeManager.Instance.Enabled;
         _testModeBtnLabel.text  = on ? "测试模式：开" : "测试模式：关";
         _testModeBtnLabel.color = on ? new Color(1f, 0.85f, 0.3f) : Color.white;
+    }
+
+    // ───────────────────────── 内测福利按钮 ─────────────────────────
+    //   点击一次给 10 源，可以无限点。
+    //   每连续点击 10 次弹出一次"魔了？"的提示。
+    private GameObject _betaRewardBtnGo;
+    private int        _betaRewardClickCount;
+
+    private void EnsureBetaRewardButton()
+    {
+        if (_betaRewardBtnGo != null)
+        {
+            _betaRewardBtnGo.SetActive(true);
+            return;
+        }
+
+        Canvas hostCanvas = FindMainMenuCanvas();
+        if (hostCanvas == null) return;
+
+        // 创建按钮（位于测试模式按钮正下方：y = -20 - 60 - 10 = -90）
+        var btnGo = new GameObject("__BetaRewardButton",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        btnGo.transform.SetParent(hostCanvas.transform, false);
+        var rt = btnGo.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(0f, 1f);
+        rt.pivot     = new Vector2(0f, 1f);
+        rt.anchoredPosition = new Vector2(20f, -90f); // 测试模式按钮下方
+        rt.sizeDelta = new Vector2(220f, 60f);
+
+        var img = btnGo.GetComponent<Image>();
+        img.color = new Color(0.18f, 0.08f, 0.28f, 0.9f); // 紫色调，区分测试模式按钮
+
+        var btn = btnGo.GetComponent<Button>();
+        var colors = btn.colors;
+        colors.normalColor      = new Color(1f, 1f, 1f, 1f);
+        colors.highlightedColor = new Color(1f, 0.85f, 1f, 1f);
+        colors.pressedColor     = new Color(0.9f, 0.7f, 1f, 1f);
+        btn.colors = colors;
+
+        // Label
+        var labelGo = new GameObject("Label",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+        labelGo.transform.SetParent(btnGo.transform, false);
+        var lrt = labelGo.GetComponent<RectTransform>();
+        lrt.anchorMin = Vector2.zero;
+        lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = Vector2.zero;
+        lrt.offsetMax = Vector2.zero;
+        var label = labelGo.GetComponent<Text>();
+        label.text      = "内测福利";
+        label.alignment = TextAnchor.MiddleCenter;
+        label.fontSize  = 24;
+        label.color     = new Color(1f, 0.9f, 0.5f); // 金色文字
+        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        if (font != null) label.font = font;
+
+        btn.onClick.AddListener(OnBetaRewardButtonClick);
+        _betaRewardBtnGo = btnGo;
+        _betaRewardClickCount = 0;
+    }
+
+    private void OnBetaRewardButtonClick()
+    {
+        AudioManager.PlaySfx(AudioManager.SfxKey.Click);
+
+        // 给 10 源
+        GachaManager.Instance?.AddYuan(10);
+        _betaRewardClickCount++;
+
+        // 每 10 次弹出"魔了？"提示
+        if (_betaRewardClickCount % 10 == 0)
+        {
+            ToastManager.Show("魔了？");
+        }
+        else
+        {
+            ToastManager.Show($"获得 10 源！（已领 {_betaRewardClickCount} 次）");
+        }
     }
 
     /// <summary>找一个挂主菜单按钮的 Canvas。优先用现有按钮的父级（保持视觉一致性）。</summary>

@@ -49,13 +49,13 @@ MonoBehaviour:
   CDkey: 3
   damage: 5
   level: 1
-  lifetime: 3
-  pass: 2
+  lifetime: 10
+  pass: 5
   speed: 8
   number: 1
   bullet: {fileID: 7777801158784857934, guid: 7cc7878a7139b9844adac655696697d0, type: 3}
   size: 1
-  interval: 0
+  interval: 0.15
   player: {fileID: 0}
   angel: 0
   isfaceenemy: 0

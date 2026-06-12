@@ -43,6 +43,19 @@ public class Player : Attribute
     // 死亡防重入：避免多个敌人同帧打死时重复触发返回主菜单协程
     private bool _isDead = false;
 
+    // ===== 分身跟随主体 =====
+    /// <summary>分身的主体引用（由 AdventurePersonalityDissolve 在 clone 激活后设定）。</summary>
+    [HideInInspector] public Player cloneOwner;
+    /// <summary>跟随速度倍率（相对自身 speed）。</summary>
+    private const float CLONE_FOLLOW_SPEED_MULT = 0.95f;
+    /// <summary>跟随偏移（出生时与主体的相对偏移方向）。</summary>
+    private Vector3 _cloneFollowOffset = new Vector3(1.5f, 0f, 0f);
+    /// <summary>跟随死区——距目标点小于该值时停止移动，避免抖动。</summary>
+    private const float CLONE_FOLLOW_DEADZONE = 0.3f;
+    /// <summary>缓存 SSR9 组件检测结果，避免每帧 GetComponent。</summary>
+    private bool _cloneSsr9Checked = false;
+    private bool _cloneSsr9Active = false;
+
     /// <summary>
     /// 主玩家死亡判定的「免疫截止时间戳」（Time.unscaledTime 基准）。
     /// 由对主玩家进行高风险物理改造（SetActive 翻转 / 大批 Instantiate / blink 等）的脚本设置，
@@ -149,24 +162,9 @@ public class Player : Attribute
         Physics.gravity = new Vector3(0, -30f, 0);
 
         // ===== 分身（tag="Clone"）物理处理 =====
-        // 背景 / 历史 bug：
-        //   分身和主玩家是同一份 Player prefab 克隆，Update() 里走同一段
-        //   `rb.velocity = new Vector3(hmove,0,vmove).normalized * speed;` —— 读全局
-        //   Input.GetAxis，于是分身和主玩家被同一套输入同时驱动。但因为分身的初始位置
-        //   与主玩家有 (1.5,0,0) 偏移，两者并不会刚好重叠：一旦主玩家被某些情景挤
-        //   到分身位置（拐弯、被敌人推、奇遇刷怪等），两份 **非 kinematic** 的
-        //   Rigidbody 互相碰撞 → 物理引擎给互相施加反作用力 → 又因为下一帧两者各自
-        //   都用 `rb.velocity = ...` 直接覆盖速度，碰撞抖动会被速度赋值"冻结"成
-        //   净位移 → 分身像被卡在主玩家身上一起被推着乱跑，玩家观感就是
-        //   "分身一直推着主角胡乱移动"。
-        //
-        // 修复：分身的 Rigidbody 改 kinematic，并把 velocity 清零；这样分身完全不
-        //       参与物理推挤，主玩家可以自由穿过它。Update() 里也会对分身跳过输入
-        //       与移动逻辑（见 Update 中的 isClone 早返回），分身就稳定地站在出生
-        //       点继续运转 SkillList（"技能塔"行为），符合策划"克隆玩家保留技能"的语义。
-        //
-        // 例外：SSR9「三清化一」分身由 ShadowCloneInvisibility 接管，它在 Awake 里
-        //       也会把自己 rb.isKinematic = true，这里再写一次幂等无副作用。
+        // 分身不通过物理引擎移动（避免与主玩家产生碰撞推挤），改为 kinematic 模式。
+        // 分身的位移由 Update 中的 AI 跟随逻辑（transform.position = MoveTowards）驱动。
+        // SSR9「三清化一」分身由 ShadowCloneInvisibility 额外接管位置，幂等无副作用。
         if (gameObject.CompareTag("Clone") && rb != null)
         {
             rb.isKinematic = true;
@@ -219,20 +217,62 @@ public class Player : Attribute
 
         if (_isDashing) return; // 冲刺中不处理普通移动
 
-        // ===== 分身（tag="Clone"）跳过输入 / 移动 / 朝向 / 冲刺 =====
-        // 历史 bug：分身和主玩家走同一份 Update —— `Input.GetAxis` 是全局的，分身会
-        // 跟主玩家同方向移动；又因为分身和主玩家的 Rigidbody 互相碰撞，会产生
-        // "分身一直推着玩家胡乱移动"的怪异表现。
-        // 修复：分身上的 Player.Update 只保留 SkillList 运转（"技能塔"），不再读
-        // 输入、不再改 velocity / scale。物理推挤已经在 Start() 里把分身 rb 设为
-        // kinematic 阻止；这里再把它的 velocity 钳零兜底（防御 ResetRunCounter 之类
-        // 外部把 rb 重新设为非 kinematic 的极端情况）。
-        // 注意：SkillList 段必须保留 —— 策划「人格解离」明文："克隆体...继承...玩家
-        // 技能列表中随机一半技能"，SSR6 还会逐帧拉满，分身的技能必须照常发射。
+        // ===== 分身（tag="Clone"）：跟随主体 + 释放技能 =====
+        // 分身不读 Input，改为 AI 跟随主体移动。Rigidbody 保持 kinematic 避免物理推挤，
+        // 位移通过 transform.position = MoveTowards 实现。
         if (gameObject.CompareTag("Clone"))
         {
             if (rb != null && !rb.isKinematic) rb.velocity = Vector3.zero;
-            // ani 状态保持上一帧；分身不会动，ismove 自然保持 false（出生即 false）
+
+            // —— 跟随主体移动 ——
+            // SSR9「三清化一」分身由 ShadowCloneInvisibility 通过父子 transform 管理位置，
+            // 此处跳过 AI 跟随，避免与 LateUpdate 的位置锁定互相冲突。
+            if (!_cloneSsr9Checked)
+            {
+                _cloneSsr9Active = GetComponent<ShadowCloneInvisibility>() != null;
+                _cloneSsr9Checked = true;
+            }
+            bool ssr9Active = _cloneSsr9Active;
+            if (!ssr9Active && cloneOwner != null)
+            {
+                Vector3 targetPos = cloneOwner.transform.position + _cloneFollowOffset;
+                targetPos.y = transform.position.y; // 保持同一水平面
+                float dist = Vector3.Distance(transform.position, targetPos);
+                if (dist > CLONE_FOLLOW_DEADZONE)
+                {
+                    float moveSpeed = Mathf.Max(speed, cloneOwner.speed) * CLONE_FOLLOW_SPEED_MULT;
+                    transform.position = Vector3.MoveTowards(transform.position, targetPos, moveSpeed * Time.deltaTime);
+                    if (ani != null) ani.SetBool("ismove", true);
+                    // 朝向：根据移动方向翻转
+                    float dx = targetPos.x - transform.position.x;
+                    if (dx > 0.01f) transform.localScale = new Vector3(1, 1, 1);
+                    else if (dx < -0.01f) transform.localScale = new Vector3(-1, 1, 1);
+                }
+                else
+                {
+                    if (ani != null) ani.SetBool("ismove", false);
+                }
+            }
+            else if (!ssr9Active && cloneOwner == null)
+            {
+                // cloneOwner 未设定时尝试自动查找主玩家
+                Transform playerlayer = transform.parent;
+                if (playerlayer != null)
+                {
+                    foreach (Transform t in playerlayer)
+                    {
+                        if (t == null || t == transform) continue;
+                        if (t.CompareTag("Player"))
+                        {
+                            cloneOwner = t.GetComponent<Player>();
+                            break;
+                        }
+                    }
+                }
+                if (ani != null) ani.SetBool("ismove", false);
+            }
+
+            // —— 技能释放（保持不变）——
             if (SkillList != null && SkillList.childCount > 0)
             {
                 foreach (Transform Skill in SkillList)
@@ -366,6 +406,29 @@ public class Player : Attribute
     // 防重入：同一局只允许触发一次
     if (_isDead) return;
     _isDead = true;
+
+    // ============== 复活拦截（R_2 读档币 / ReviveManager）==============
+    // 时序契约（必须严格保留）：
+    //   1) 主体死亡判定确认 + 防重入标志置位 后才询问复活；
+    //   2) ReviveManager 弹窗时把 timeScale 设为 0 暂停游戏，等玩家点击；
+    //   3) 玩家点「复活」：扣 1 张读档币、health 拉满、_isDead 重置为 false（反射）、
+    //      给 0.5s grace 防瞬死、恢复 timeScale —— 后续 Update 玩家继续操控。
+    //      此时本方法必须直接 return，不再走分身清场 / ReturnToMain；
+    //   4) 玩家点「放弃」：ReviveManager 协程自己调用 battleUI.ReturnToMainPublic(false)
+    //      负责返回主菜单；本方法依然要 return（避免再次启动 ReturnToMain 重复触发）。
+    //   5) 不满足复活条件（无读档币 / 本局已用过 / 不是主玩家）→ 返回 false，按原死亡流程继续。
+    //
+    // 关键：本检查必须在 _isDead = true 之后、清场分身之前执行——
+    //   - 在 _isDead 之前会被多次重入；
+    //   - 在清场分身之后再复活就来不及了（分身已被销毁，复活后场上只剩本体没问题，
+    //     但"分身被先杀"是死亡结算的一部分，应该等玩家做出最终决定再执行）。
+    if (ReviveManager.Instance != null && ReviveManager.Instance.TryConsumeReviveAndRecover(this))
+    {
+        // 复活流程已被 ReviveManager 接管：不再清场分身，不再启动 ReturnToMain。
+        // 注意：是否复活成功是 ReviveManager 协程内部异步决定的；这里只要它返回 true，
+        // 就视为"由它接管整个死亡/复活后续逻辑"，本方法立即 return。
+        return;
+    }
 
     // === Bug 修复：主体死亡 → 立刻清场分身 ===
     // 旧逻辑：主体 health<=0 时只启动 ReturnToMain 协程（先 slowMo 再暂停 Time.timeScale=0）。

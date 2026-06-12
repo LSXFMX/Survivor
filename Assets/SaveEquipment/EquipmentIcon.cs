@@ -40,6 +40,21 @@ public class EquipmentIcon : MonoBehaviour
     private void Start()    => Initialize();
     private void OnEnable() => UpdateDisplay();
 
+    /// <summary>
+    /// 【仅供 Editor / ArchiveManager 静态化工具使用】
+    /// 在不依赖运行时（Start / OnEnable）的情况下，立刻把名字/描述/howToGet/Sprite 注入到本图标。
+    ///
+    /// 使用场景：在 Unity Editor 里通过 ArchiveManager 的 ContextMenu 静态生成抽卡图标后，
+    /// 需要把"自动注入文本与 Sprite"立刻同步进 SerializedField，保存场景后这些字段就被持久化。
+    /// 否则克隆出来的 GameObject 上 equipmentName / description / howToGet / iconImage.sprite
+    /// 都还是模板内容（或空），重新打开场景或运行游戏才会被 Start 注入。
+    /// </summary>
+    public void EditorApplyForcedOverrides()
+    {
+        if (iconImage == null) iconImage = GetComponentInChildren<Image>(true);
+        ApplyForcedAchievementOverrides();
+    }
+
     private void Initialize()
     {
         if (isInitialized) return;
@@ -76,6 +91,10 @@ public class EquipmentIcon : MonoBehaviour
         // 与 SSR 8/9 同样套路。改动彻底不依赖场景手工拖拽。
         ApplyForcedGachaUrOverrides();
 
+        // R / SR 新增抽卡装备的图标 + 文本兜底（R_2 读档币 / SR_6 速度灵果）。
+        // 思路同上：场景里没手工拖图标节点也能正常显示。
+        ApplyForcedGachaRSrOverrides();
+
         // N8 通关装备 18/19/20（和平之剑/甲/心）的文本兜底。
         // 这三件图标是 ArchiveManager.EnsureClearEquipmentN8IconsExist() 在运行时
         // 用 N7 EquipmentIcon 做模板克隆出来的，初始字段都被清空，
@@ -84,7 +103,15 @@ public class EquipmentIcon : MonoBehaviour
 
         if (equipmentType != EquipmentType.AchievementEquipment) return;
 
-        if (equipmentId == 3)
+        if (equipmentId == 1)
+        {
+            equipmentName = "大手子";
+            description = "初始经验石吸取距离 +30%\n每通关一个更高的难度，额外 +5%\n" +
+                "（通关 N1 后 35%，N2 后 40%，N3 后 45%……）\n\n" +
+                "那些闪闪发光的东西，一个也别想逃。";
+            howToGet = "首次点击主页面的草";
+        }
+        else if (equipmentId == 3)
         {
             equipmentName = "钥匙剑";
             description = "解锁世界boss奖励\n\n不止可以开门，还可以让boss摆脱宿命，或许他们会感激你？";
@@ -152,15 +179,79 @@ public class EquipmentIcon : MonoBehaviour
         if (equipmentId == 10)
         {
             equipmentName = "亡者领域";
-            description = "解锁孢子领域 → 亡者领域 的技能进化路线\n\n墓园的呢喃，是给你的低语。";
+            description = "解锁孢子领域 → 亡者领域 的技能进化路线\n\n" +
+                "进化条件：已学习风箭 + 已学习孢子领域，且二者攻击范围 >= 15\n\n" +
+                "技能效果：在孢子领域范围内复活被击杀的敌人成为友军，友军小怪死亡时回复 0.5% 最大生命值\n\n" +
+                "墓园的呢喃，是给你的低语。";
             howToGet = "通关 N6 后加入卡池";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/UR/002.png");
         }
         else if (equipmentId == 9)
         {
-            // UR_1 地狱火（场景已正确手工拖图，这里二次覆盖确保统一来源，避免被未来代码意外改坏）。
+            equipmentName = "地狱火";
+            description = "解锁火球术技能进化：每轮在最近敌人头顶召唤地狱三叉戟下劈\n\n" +
+                "进化条件：风箭多重 >= 2 且 火球多重 >= 2 且 已学习火球术\n\n" +
+                "属性继承：\n" +
+                "• 攻击次数 = 风箭多重 + 火球多重\n" +
+                "• 伤害 & 冷却 = 学习瞬间继承火球术的值\n" +
+                "• 持有【不忘初心】时保留火球术，数量/伤害/冷却全部实时同步火球";
+            howToGet = "抽卡获得（N3 加入卡池）";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/UR/001.png");
         }
+    }
+
+    /// <summary>
+    /// R / SR 新增抽卡装备的文本与图标兜底。
+    ///   R_2  读档币  : equipmentType=GachaEquipment, gachaRarity=R,  equipmentId=2
+    ///   SR_6 速度灵果: equipmentType=GachaEquipment, gachaRarity=SR, equipmentId=6
+    /// 与 ApplyForcedGachaSsrOverrides / ApplyForcedGachaUrOverrides 同套路：
+    /// 场景里只要把 EquipmentIcon 放对类型/稀有度/equipmentId，名字描述图标都会被这里覆盖。
+    /// </summary>
+    private void ApplyForcedGachaRSrOverrides()
+    {
+        if (equipmentType != EquipmentType.GachaEquipment) return;
+
+        if (gachaRarity == GachaRarity.R && equipmentId == 2)
+        {
+            equipmentName = "读档币";
+            description = "死亡时可消耗 1 张原地满血复活，本局只能使用 1 次\n\n这一切，仿佛只是一场可以读档重来的梦。";
+            howToGet = "累计抽卡 200 次后加入卡池（每 20 抽追加 1 张）";
+            // 优先用挂在 GachaManager 上的静态 Sprite（走标准 Unity 资源管线，避免运行时 LoadImage 偏色）
+            if (!TrySetIconFromGachaManager(GachaRarity.R, 2))
+                SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/R/002.png");
+        }
+        else if (gachaRarity == GachaRarity.SR && equipmentId == 6)
+        {
+            equipmentName = "速度灵果";
+            description = "每件移动速度 +0.05（每累计 20 件 = +1 移速，满池 100 件 = +5）\n\n步履匆匆，无人能追。";
+            howToGet = "累计抽卡 300 次后加入卡池（共 100 个）";
+            if (!TrySetIconFromGachaManager(GachaRarity.SR, 6))
+                SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/SR/6.png");
+        }
+    }
+
+    /// <summary>
+    /// 尝试从 GachaManager 上挂载的静态 Sprite 字段取图标。
+    /// 找到则直接赋给 iconImage，返回 true；找不到（场景未配 / GachaManager 不在）返回 false 走文件路径兜底。
+    /// </summary>
+    private bool TrySetIconFromGachaManager(GachaRarity rarity, int rarityId)
+    {
+        if (iconImage == null) return false;
+        var gm = GachaManager.Instance;
+        if (gm == null) return false;
+
+        Sprite sp = null;
+        if (rarity == GachaRarity.R && rarityId == 2) sp = gm.reviveCoinIcon;
+        else if (rarity == GachaRarity.SR && rarityId == 6) sp = gm.speedFruitIcon;
+        if (sp == null) return false;
+
+        iconImage.enabled = true;
+        iconImage.material = null;
+        iconImage.sprite = sp;
+        iconImage.overrideSprite = sp;
+        iconImage.type = Image.Type.Simple;
+        iconImage.preserveAspect = true;
+        return true;
     }
 
     /// <summary>
@@ -205,14 +296,13 @@ public class EquipmentIcon : MonoBehaviour
     private void SetIconFromAssetPath(string relativeToAssets)
     {
         if (iconImage == null) return;
-        string fullPath = Path.Combine(Application.dataPath, relativeToAssets);
-        if (!File.Exists(fullPath)) return;
 
-        byte[] bytes = File.ReadAllBytes(fullPath);
-        Texture2D tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-        if (!tex.LoadImage(bytes)) return;
-        tex.filterMode = FilterMode.Point;
-        tex.wrapMode = TextureWrapMode.Clamp;
+        // 通过 RuntimeAssetLoader 走三层兜底：Inspector 引用（此处无） → Resources.Load → dataPath（仅编辑器）
+        // 编辑器内能从 Application.dataPath 直接读 Assets 下的 PNG 调试；
+        // 打包后这条路径不可用，但装备图标的主路径已经走 GachaManager 上挂的 Sprite 引用 + 装备 Inspector 字段，
+        // 这个 SetIconFromAssetPath 仅作为最后的兜底；走不到时 iconImage 静默不显示，不会 crash。
+        var tex = RuntimeAssetLoader.LoadTexture(null, null, relativeToAssets);
+        if (tex == null) return;
         Sprite forcedSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
         iconImage.enabled = true;
         iconImage.material = null;

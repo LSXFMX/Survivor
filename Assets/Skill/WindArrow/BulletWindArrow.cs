@@ -65,6 +65,10 @@ public class BulletWindArrow : Bulletbase
         if (hit == null || hit.health <= 0 || hit.rolestate == global::enemy.state.dead) return;
         // 亡者领域：风箭不打被控制为友军的目标
         if (hit.GetComponent<MindControlled>() != null) return;
+        // 已占领营地：风箭飞行途中碰到友方营地的 collider 不应触发命中（2026-06 修复）。
+        // Camp 继承自 enemy，hit 即同一组件，as 强转即可，无需再 GetComponent。
+        Camp hitCamp = hit as Camp;
+        if (hitCamp != null && hitCamp.IsCaptured) return;
 
         _impactFinished = true;
         ApplyWindArrowImpact(hit, transform.position);
@@ -157,8 +161,13 @@ public class BulletWindArrow : Bulletbase
         {
             var e = _target.GetComponent<enemy>();
             // 亡者领域：原锁定目标若已被控制为友军（玩家中途复活了它），改为就近重选，避免打到友军
+            // 已占领营地同样需要避开（2026-06 修复）：发射瞬间是敌方营地，飞行途中被占领则不再命中。
             if (e != null && e.health > 0 && e.rolestate != global::enemy.state.dead && !e._mindControlledFlag)
-                return e;
+            {
+                Camp camp = e as Camp;
+                if (camp == null || !camp.IsCaptured)
+                    return e;
+            }
         }
 
         return FindClosestLivingEnemyNear(impactPos, impactSnapRadius);
@@ -179,6 +188,9 @@ public class BulletWindArrow : Bulletbase
             if (en == null || en.health <= 0 || en.rolestate == global::enemy.state.dead) continue;
             // 亡者领域：风箭着弹后吸附敌人时，跳过友军 boss/小怪
             if (en._mindControlledFlag) continue;
+            // 已占领营地：着弹吸附就近敌人时跳过友方营地（2026-06 修复）
+            Camp camp = en as Camp;
+            if (camp != null && camp.IsCaptured) continue;
 
             Vector3 d = t.position - p;
             d.y = 0f;

@@ -24,7 +24,7 @@ using UnityEditor;
 ///
 ///   夏无（skin == 2，火/血族角色）
 ///     - 血族血统 number          1   → 5
-///     - 血族血统 lifestealRatio  0.10 → 0.20 (吸血比例提升至 20%)
+///     - 血族血统吸血：无装备004时自带10%，有装备004时提升至20%（动态计算）
 ///     - 入局自动获得「火球术」（若 SkillList 下尚未存在）
 ///
 /// 风箭子弹染色（按角色身份分流，所有皮肤共用入口 ApplySkinTintToWindArrowBullet）：
@@ -153,11 +153,21 @@ public class PlayerSkinSkillBuff : MonoBehaviour
                 break;
             case SKIN_XIAWU:
                 TryGrantFireBall();
+                // === 2026-06-12 修复：立即设置火球/风箭数值 ===
+                // 原先数值加成在 Start 协程的下一帧才执行（yield return null 后），
+                // 但 SSR「启动资金」的首轮三选一在同一帧就触发 ChoiceUI.refresh()，
+                // 导致 getnewskill_Hellfire.IsAvailableInPool() 检查时火球 number 还是默认 1，
+                // UR 进化卡永远进不了卡池。现在在 GrantInitialSkillNow() 中立即设好关键值。
+                ApplyXiaWuEarlyStats();
                 break;
             case SKIN_TOMB:
                 // 无罪：默认开局自带风箭 + 孢子领域，作为亡者领域 UR 进化的前置技能
                 TryGrantWindArrow();
                 TryGrantSporeField();
+                // === 2026-06-12 修复：立即设置风箭/孢子领域 attackRadius ===
+                // 同上原因：ApplyTombBuffStats 在下一帧才执行，启动资金的首轮三选一时
+                // attackRadius 还是 prefab 默认 10，不满足亡者领域进化门槛 >=15。
+                ApplyTombEarlyStats();
                 // 测试用：直接把「亡者领域」也发到手，跳过升级流程
                 if (grantTombDomainOnStartForTesting)
                     TryGrantTombDomain();
@@ -230,9 +240,10 @@ public class PlayerSkinSkillBuff : MonoBehaviour
         }
 
         // ============== 风箭 number（多重数量）按皮肤分流 ==============
-        // 策划意图：
+        // 策划意图（2026-06 调整）：
         //   - 南筱风：保持 prefab 默认 5（风系 UR 的"高多重"是核心强度来源）
-        //   - 夏无：     压回 3（满足地狱火进化的 RequiredWindArrowMultishot=3，且不至于压得太低导致清线乏力）
+        //   - 夏无：     压回 2（与新地狱火学习条件 RequiredWindArrowMultishot=2 持平；
+        //                 夏无强势点集中在"火球 number=3 + 进化地狱火"的火系路线，风箭仅作为辅助清线）
         //   - 琪露诺：   压回 2（基础角色，把风箭定位为弱开局 → 中后期通过升级慢慢成长）
         //   - 无罪：     压回 2（强度集中在"开局自带风箭+孢子领域+亡者领域路线"，单技能数值故意保守）
         // 仅在 level<=1（开局/刚学）时强制，避免覆盖玩家通过"风箭增加一发"升级累加的 +1。
@@ -244,7 +255,7 @@ public class PlayerSkinSkillBuff : MonoBehaviour
             switch (skin)
             {
                 case SKIN_NANXIAOFENG: numberTarget = 5; break;
-                case SKIN_XIAWU:       numberTarget = 3; break;
+                case SKIN_XIAWU:       numberTarget = 2; break;
                 case SKIN_TOMB:        numberTarget = 2; break;
                 default:               numberTarget = 2; break; // 琪露诺
             }
@@ -287,6 +298,22 @@ public class PlayerSkinSkillBuff : MonoBehaviour
         // 方法体保留是为了兼容 Start 协程的 switch 调用结构，必要时未来再加新加成回这里。
     }
 
+    /// <summary>
+    /// 对指定的血族血统技能应用夏无专属加成（number→5）。
+    /// 吸血比例由 SkillBloodline.GetEffectiveLifestealRatio() 动态计算：
+    ///   - 夏无无装备004：10%
+    ///   - 夏无有装备004：20%
+    /// 可在任意时机调用（开局 / 中途学会血族血统 / 好感度装备赠送等）。
+    /// </summary>
+    public static void ApplyXiaWuBloodlineBuff(SkillBloodline blood)
+    {
+        if (blood == null) return;
+        if (CurrentSkinIndex != SKIN_XIAWU) return;
+        blood.number = 5;
+        // lifestealRatio 不再在此处硬编码，改由 GetEffectiveLifestealRatio() 动态返回
+        Debug.Log("[UR加成·夏无] 血族血统学习时加成：number→5, 吸血比例由 GetEffectiveLifestealRatio 动态决定");
+    }
+
     /// <summary>夏无加成（仅数值部分，授予火球术已在 Start 协程同步段完成）。</summary>
     private void ApplyXiaWuBuffStats()
     {
@@ -294,27 +321,45 @@ public class PlayerSkinSkillBuff : MonoBehaviour
         SkillBloodline blood = _player.SkillList.GetComponentInChildren<SkillBloodline>(true);
         if (blood != null)
         {
-            blood.number = 5;
-            blood.lifestealRatio = 0.20f;
-            Debug.Log("[UR加成] 夏无：血族 number→5, lifestealRatio→0.20");
+            ApplyXiaWuBloodlineBuff(blood);
         }
         else
         {
-            Debug.Log("[UR加成] 夏无：玩家未持有血族血统，跳过血族加成");
+            Debug.Log("[UR加成] 夏无：玩家未持有血族血统，跳过血族加成（中途学习时会自动触发）");
         }
 
-        // 2) 风箭多重数量默认 = 3
-        //    与 getnewskill_Hellfire.RequiredWindArrowMultishot=3 配合：
-        //    夏无是"地狱火"角色，开局风箭就具备进化为地狱火的多重门槛，
-        //    只需再学习火球术即可在升级池里看到「学习地狱火」选项。
-        //    注意：风箭 prefab 默认 number=5，这里把夏无强制压回 3 而不是上调，
-        //    是为了让"非南筱风时风箭整体偏弱、需通过升级慢慢成长"的设计落实，
-        //    避免夏无在风箭路线上反而比南筱风更强（南筱风的强度集中在 prefab 默认 5 多重 + 15 范围）。
+        // 2) 风箭多重数量默认 = 2（2026-06 调整：从 3 → 2）
+        //    与 getnewskill_Hellfire 新版 RequiredWindArrowMultishot=2 配合：开局即满足风箭多重门槛。
+        //    数值压到 2（与琪露诺/无罪持平）是为了让"夏无的火系优势"主要通过
+        //    火球 number=3 + 进化地狱火来体现，而不是风箭本身。
         SkillWindArrow wa = _player.SkillList.GetComponentInChildren<SkillWindArrow>(true);
         if (wa != null)
         {
-            wa.number = 3;
-            Debug.Log("[UR加成] 夏无：风箭 number→3（满足地狱火进化多重门槛）");
+            wa.number = 2;
+            Debug.Log("[UR加成] 夏无：风箭 number→2（新版地狱火门槛=2）");
+        }
+
+        // 3) 火球术多重数量默认 = 3（2026-06 新增）
+        //    地狱火新学习条件要求火球 number>=2。夏无作为火系 UR 直接给到 3，
+        //    一进局即可在升级池里看到「学习地狱火」选项。
+        //    火球术挂 Skillbase 基类（无专属脚本），按 Skillname=="火球术" 定位。
+        //    仅 level<=1 时强制，避免覆盖玩家后续升级累加。
+        Skillbase fireball = null;
+        foreach (Transform child in _player.SkillList)
+        {
+            if (child == null) continue;
+            Skillbase sb = child.GetComponent<Skillbase>();
+            if (sb != null && sb.Skillname == "火球术") { fireball = sb; break; }
+        }
+        if (fireball != null && fireball.level <= 1)
+        {
+            int before = fireball.number;
+            fireball.number = 3;
+            Debug.Log($"[UR加成] 夏无：火球术 number {before} → 3（新版地狱火门槛=2，富余 1 给玩家『开局即学』的体验）");
+        }
+        else if (fireball == null)
+        {
+            Debug.LogWarning("[UR加成] 夏无：未找到火球术（应在 TryGrantFireBall 后存在），number=3 未生效");
         }
     }
 
@@ -346,6 +391,61 @@ public class PlayerSkinSkillBuff : MonoBehaviour
             sf.CDtime = TOMB_SPORE_FIELD_CDTIME;
             sf.CDkey  = TOMB_SPORE_FIELD_CDTIME;
             Debug.Log($"[UR加成] 无罪：孢子领域 attackRadius→{TOMB_INITIAL_ATTACK_RADIUS}, CDtime→{TOMB_SPORE_FIELD_CDTIME}");
+        }
+    }
+
+    /// <summary>
+    /// 无罪：在 GrantInitialSkillNow() 中（帧 0）立即设置风箭/孢子领域的 attackRadius，
+    /// 使得同帧触发的 ChoiceUI.refresh() → getnewskill_TombDomain.IsAvailableInPool()
+    /// 能正确检测到 attackRadius>=15，让亡者领域进化卡有机会进入首轮三选一卡池。
+    /// 与 ApplyTombBuffStats() 设置相同值，不冲突（后者在下一帧的 Start 协程中再执行一次作为兜底）。
+    /// </summary>
+    private void ApplyTombEarlyStats()
+    {
+        if (_player == null || _player.SkillList == null) return;
+        SkillWindArrow wa = _player.SkillList.GetComponentInChildren<SkillWindArrow>(true);
+        if (wa != null)
+        {
+            wa.attackRadius = TOMB_INITIAL_ATTACK_RADIUS;
+            wa.number = 2;
+            Debug.Log($"[UR加成·提前] 无罪：风箭 attackRadius→{TOMB_INITIAL_ATTACK_RADIUS}, number→2（帧0立即生效，供首轮三选一检测）");
+        }
+        SkillSporeField sf = _player.SkillList.GetComponentInChildren<SkillSporeField>(true);
+        if (sf != null)
+        {
+            sf.attackRadius = TOMB_INITIAL_ATTACK_RADIUS;
+            sf.CDtime = TOMB_SPORE_FIELD_CDTIME;
+            sf.CDkey  = TOMB_SPORE_FIELD_CDTIME;
+            Debug.Log($"[UR加成·提前] 无罪：孢子领域 attackRadius→{TOMB_INITIAL_ATTACK_RADIUS}, CDtime→{TOMB_SPORE_FIELD_CDTIME}（帧0立即生效）");
+        }
+    }
+
+    /// <summary>
+    /// 夏无：在 GrantInitialSkillNow() 中（帧 0）立即设置火球 number=3、风箭 number=2，
+    /// 使得同帧触发的 ChoiceUI.refresh() → getnewskill_Hellfire.IsAvailableInPool()
+    /// 能正确检测到 fireball.number>=2 和 wa.number>=2，让地狱火进化卡有机会进入首轮三选一卡池。
+    /// 与 ApplyXiaWuBuffStats() 设置相同值，不冲突（后者在下一帧再执行一次作为兜底）。
+    /// </summary>
+    private void ApplyXiaWuEarlyStats()
+    {
+        if (_player == null || _player.SkillList == null) return;
+        SkillWindArrow wa = _player.SkillList.GetComponentInChildren<SkillWindArrow>(true);
+        if (wa != null)
+        {
+            wa.number = 2;
+            Debug.Log("[UR加成·提前] 夏无：风箭 number→2（帧0立即生效，供首轮三选一检测）");
+        }
+        Skillbase fireball = null;
+        foreach (Transform child in _player.SkillList)
+        {
+            if (child == null) continue;
+            Skillbase sb = child.GetComponent<Skillbase>();
+            if (sb != null && sb.Skillname == "火球术") { fireball = sb; break; }
+        }
+        if (fireball != null)
+        {
+            fireball.number = 3;
+            Debug.Log("[UR加成·提前] 夏无：火球术 number→3（帧0立即生效，供首轮三选一检测）");
         }
     }
 
@@ -529,11 +629,11 @@ public class PlayerSkinSkillBuff : MonoBehaviour
         // if (sporeFieldSkill != null) Destroy(sporeFieldSkill.gameObject);
         _ = sporeFieldSkill; // 仅作为引用占位，避免编译器认为该局部变量未使用
 
-        // 风箭无论如何都保留，但锁定为亡者领域配色（紫色 + 半径 10），与正式流程一致
-        if (windArrowSkill != null) windArrowSkill.LockToTombDomainPalette();
+        // 2026-06 改动：亡者领域不再锁定风箭范围和颜色，风箭保持原状
+        // （旧逻辑：windArrowSkill.LockToTombDomainPalette()，已移除）
 
         if (_player.battleUI != null) _player.battleUI.RefreshSkill();
-        Debug.Log($"[UR加成·测试] 无罪：已直接获得亡者领域（prefab: {prefab.name}），孢子领域 / 风箭一并保留（风箭已锁紫色）");
+        Debug.Log($"[UR加成·测试] 无罪：已直接获得亡者领域（prefab: {prefab.name}），孢子领域 / 风箭一并保留");
     }
 
     private GameObject ResolveTombDomainPrefab()

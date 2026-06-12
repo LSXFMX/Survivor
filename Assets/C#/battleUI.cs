@@ -346,6 +346,8 @@ public class battleUI : MonoBehaviour
         second = 0;
         timer = 0;
         startcount = true;
+        _deathFallbackTimer = 0f;
+        _deathFallbackTriggered = false;
     }
 
     void Update()
@@ -420,6 +422,59 @@ public class battleUI : MonoBehaviour
             else
                 Click_menu();
         }
+
+        // ── 兜底：检测主体死亡但 ReturnToMain 未启动的异常状态 ──────────────
+        // 场景：某些极端竞争条件下，Player.death() 可能被提前 return（误判为分身 /
+        //       grace period / 重入 / ReviveManager 异常），导致主体 health<=0 但
+        //       ReturnToMain 没有被启动，表现为"倒计时卡住、游戏不暂停、还能操纵分身"。
+        // 方案：每帧检测 player.health <= 0 && startcount 仍为 true（说明游戏仍在计时
+        //       但死亡结算没启动），等待短暂缓冲后强制触发 ReturnToMain。
+        CheckPlayerDeathFallback();
+    }
+
+    // ── 死亡兜底逻辑 ──
+    private float _deathFallbackTimer;
+    private bool  _deathFallbackTriggered;
+    private const float DEATH_FALLBACK_DELAY = 0.5f; // 给 ReviveManager / grace period 留余量
+
+    private void CheckPlayerDeathFallback()
+    {
+        if (_deathFallbackTriggered) return;
+
+        // 前置条件：游戏正在运行中（startcount=true）且主体已经 health<=0
+        if (player == null || player.health > 0 || !startcount)
+        {
+            _deathFallbackTimer = 0f;
+            return;
+        }
+
+        // ReviveManager 正在弹窗等待玩家选择时不干预（它会暂停 timeScale）
+        if (Time.timeScale == 0f) { _deathFallbackTimer = 0f; return; }
+
+        // 累计满缓冲时间后触发
+        _deathFallbackTimer += Time.unscaledDeltaTime;
+        if (_deathFallbackTimer < DEATH_FALLBACK_DELAY) return;
+
+        // 强制触发死亡结算
+        _deathFallbackTriggered = true;
+        Debug.LogWarning("[battleUI] 兜底触发：检测到主体 health<=0 但 ReturnToMain 未启动，强制启动死亡结算");
+
+        // 清场所有分身（模拟 Player.death 中的清场逻辑）
+        if (player.transform.parent != null)
+        {
+            foreach (Transform t in player.transform.parent)
+            {
+                if (t == null || t == player.transform) continue;
+                var p = t.GetComponent<Player>();
+                if (p != null)
+                {
+                    t.gameObject.SetActive(false);
+                    Destroy(t.gameObject);
+                }
+            }
+        }
+
+        StartCoroutine(ReturnToMain(false));
     }
 
     public void ResumeTime()
@@ -895,8 +950,12 @@ public class battleUI : MonoBehaviour
 
     /// <summary>
     /// 加载当前皮肤对应的头像 Sprite。
-    /// 实现完全照搬 SkinChanger.LoadSpriteForSkin 的相对路径方案（位于 Assets/像素幸存者资源包/玩家/...），
-    /// 避免引入新的资源依赖。失败返回 null，外层会自动 disable Image。
+    /// 改造（2026-06）：原本 Application.dataPath + File.IO 在 Build 后必然失败（dataPath 不指向 Assets）。
+    /// 现在通过 RuntimeAssetLoader 三层兜底：
+    ///   1. 尝试从场景里 SkinChanger 节点上的 Inspector Texture 字段拿引用（Build 中唯一可靠路径）；
+    ///   2. 兜底走 Resources.Load（如果资源放到 Resources/）；
+    ///   3. 最后才退到旧的 dataPath 文件读取（仅 UNITY_EDITOR 有效）。
+    /// 失败返回 null，外层会自动 disable Image。
     /// </summary>
     private static Sprite LoadCharacterAvatarSprite(int skinId)
     {
@@ -916,16 +975,39 @@ public class battleUI : MonoBehaviour
             case 3:  rel = Ur2IconPath;   break;
             default: rel = CirnoIconPath; break;
         }
-        string full = System.IO.Path.Combine(Application.dataPath, rel);
-        if (!System.IO.File.Exists(full)) return null;
+
+        // 1) 尝试从场景里的 SkinChanger 拿到 Inspector 引用（最可靠）
+        Texture2D directRef = null;
+        var skinChanger = Object.FindObjectOfType<SkinChanger>();
+        if (skinChanger != null)
+        {
+            switch (skinId)
+            {
+                case 0: directRef = skinChanger.cirnoIconTexture; break;
+                case 1: directRef = skinChanger.ur0IconTexture;   break;
+                case 2: directRef = skinChanger.ur1IconTexture;   break;
+                case 3: directRef = skinChanger.ur2IconTexture;   break;
+            }
+        }
+        // 2) 也尝试从 PlayerSkinOverrider 拿（场景里通常都挂着，且 UR 三张直接绑了贴图）
+        if (directRef == null && skinId != 0)
+        {
+            var skinOverrider = Object.FindObjectOfType<PlayerSkinOverrider>();
+            if (skinOverrider != null)
+            {
+                switch (skinId)
+                {
+                    case 1: directRef = skinOverrider.ur0Texture; break;
+                    case 2: directRef = skinOverrider.ur1Texture; break;
+                    case 3: directRef = skinOverrider.ur2Texture; break;
+                }
+            }
+        }
+
+        var tex = RuntimeAssetLoader.LoadTexture(directRef, null, rel);
+        if (tex == null) return null;
         try
         {
-            byte[] bytes = System.IO.File.ReadAllBytes(full);
-            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-            if (!tex.LoadImage(bytes)) return null;
-            tex.filterMode = FilterMode.Point;
-            tex.wrapMode = TextureWrapMode.Clamp;
-
             // skinId=0 单图整张；UR 系列（1/2/3）是 4×3 网格，取顶行第 1 帧（idle 站姿）
             if (skinId == 0)
             {

@@ -111,5 +111,12 @@ InitTestScene*.unity*
 *.backup.png
 *.backup.png.meta
 
+# 场景备份文件（超过 100MB，不需要进仓库）
+*.unity.bak_*
+*.unity.bak_*.meta
+
+# 临时脚本
+tmp_*.ps1
+
 # CodeBuddy / 工作区元数据
 .codebuddy/

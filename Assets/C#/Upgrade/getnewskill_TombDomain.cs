@@ -111,10 +111,9 @@ public class getnewskill_TombDomain : getnewskill
         else if (sporeFieldSkill != null && (keepOriginal || isTombSkin))
             sporeFieldSkill.LockToTombDomainPalette();
 
-        // 风箭无论"不忘初心"是否解锁都保留（不会被亡者领域吞掉），
-        // 因此学完亡者领域后立即锁定其半径=10 + 紫色范围圈，避免后续升级再加范围。
-        if (windArrowSkill != null)
-            windArrowSkill.LockToTombDomainPalette();
+        // 2026-06 改动：进化亡者领域后不再锁定风箭的攻击范围和范围圈颜色。
+        // 风箭保持玩家当前已升级的 attackRadius 和原有圈色，后续仍可通过升级继续加范围。
+        // （旧逻辑曾在此处调用 windArrowSkill.LockToTombDomainPalette() 将风箭锁到半径10+紫色，已移除）
 
         battleUI.RefreshSkill();
         closechoice();

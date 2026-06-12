@@ -101,8 +101,11 @@ public class WorldBossBase : enemy
     {
         if (rolestate == state.dead) return;
 
-        // 亡者领域：先在最外层拦截。命中则不通知 worldBossManager（它会以为 Boss 真被击败）。
-        // _reviveAttempted 防重入：与 BossBat/BossMushroomMan 系列保持一致。
+        // 2026-06-12：不管是否会被亡者领域复活，只要击败世界Boss就立即给予
+        // 局内成长和源奖励（OnWorldBossDefeated）。复活检查放在之后执行。
+        worldBossManager?.OnWorldBossDefeated(faction);
+
+        // 亡者领域：复活检查。成功则 Boss 转为友军，不执行后续死亡流程。
         if (!_reviveAttempted)
         {
             _reviveAttempted = true;
@@ -116,17 +119,12 @@ public class WorldBossBase : enemy
         rolestate = state.dead;
 
         _ani?.SetTrigger("dead");
-        // 彩色 overlay 在世界 Boss 上几乎不会启用（Boss 体型大，多数不属于 IsMushroomEnemy 名字判定），
-        // 但保险地清一下，避免万一启用导致死亡帧不可见。
         ClearSporeMutationColor();
         foreach (var col in GetComponents<Collider>())
             col.enabled = false;
 
         if (expstone != null)
             Instantiate(expstone, transform.position, Quaternion.Euler(45, 0, 0));
-
-        // 通知世界Boss管理器
-        worldBossManager?.OnWorldBossDefeated(faction);
 
         StartCoroutine(Destroy2());
     }

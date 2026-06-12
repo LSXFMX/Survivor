@@ -38,13 +38,18 @@ public class getnewskill : Upgradeoptionsbase
     {
         if (!IsFavorUnlocked()) return false;
 
-        // 孢子领域：除了装备/好感度解锁外，还要求 N5 及以上难度。
-        if (skill != null && skill.GetComponent<SkillSporeField>() != null)
-            return IsDifficultyUnlocked(5);
-
-        // 血族血统（蝙蝠好感）：要求 N7+（与世界蝙蝠 Boss 脉络一致）。
-        if (skill != null && skill.GetComponent<SkillBloodline>() != null)
-            return IsDifficultyUnlocked(7);
+        // === 2026-06 调整：删除孢子领域 / 血族血统的关卡难度限制 ===
+        // 原本：
+        //   - 孢子领域 (SkillSporeField) 还要 N5+ 难度才进卡池；
+        //   - 血族血统 (SkillBloodline) 还要 N7+ 难度才进卡池。
+        // 现在统一改为：只要好感度门槛达成（蘑菇 / 蝙蝠社群好感 ≥ 10，由 prefab 上 favorThreshold 控制），
+        // 任何难度都能在升级卡池抽到。难度门槛被彻底解除。
+        //
+        // 如未来需要恢复某一项的难度限制，按以下模板加回即可：
+        //   if (skill != null && skill.GetComponent<SkillSporeField>() != null)
+        //       return IsDifficultyUnlocked(5);
+        //   if (skill != null && skill.GetComponent<SkillBloodline>() != null)
+        //       return IsDifficultyUnlocked(7);
 
         return true;
     }
@@ -87,7 +92,17 @@ public class getnewskill : Upgradeoptionsbase
             }
         }
 
-        Instantiate(skill.gameObject, player.SkillList);
+        GameObject newSkillObj = Instantiate(skill.gameObject, player.SkillList);
+
+        // === 夏无专属：学习血族血统时立即应用加成（number→5, lifestealRatio→0.20）===
+        // 无需等蝙蝠好感度 100 开局自带——只要夏无在任何时机通过三选一学到血族血统，
+        // 就立即享受 UR 角色加成。ApplyXiaWuBloodlineBuff 内部会检查 CurrentSkinIndex。
+        SkillBloodline newBloodline = newSkillObj.GetComponent<SkillBloodline>();
+        if (newBloodline != null)
+        {
+            PlayerSkinSkillBuff.ApplyXiaWuBloodlineBuff(newBloodline);
+        }
+
         battleUI.RefreshSkill();
         closechoice();
     }

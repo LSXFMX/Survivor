@@ -110,9 +110,32 @@ public class PlayerSkinOverrider : MonoBehaviour
 
     private int _appliedSkinIndex = -1;
 
+    // === 打包后资源加载关键修复（2026-06）：三张 UR 行走图直接通过 Inspector 引用持有 ===
+    // 之前用 Application.dataPath + File.IO 在运行时读 PNG，编辑器里 dataPath 指向 Assets/，能跑；
+    // 但 Build 后 dataPath 不再指向 Assets，PNG 也未被打包系统纳入构建——
+    // 结果：玩家切换存档（皮肤）后角色行走图始终保持初始的琪露诺，UR 三个角色全部加载失败。
+    //
+    // 现在在 Inspector 上预先把这三张 Texture2D 拖进来（场景节点已序列化好对应 GUID），
+    // BuildSkinSprites 优先读这里的引用——打包系统会因为场景对它们的引用自动把贴图打入 Build。
+    // 三个字段都为空时仍会兜底走 Resources.Load 与 Application.dataPath（仅编辑器），保持向后兼容。
+    [Header("UR 行走图（打包必需 · 请保留 Inspector 上的引用）")]
+    [Tooltip("UR_0 风之形 / 南筱风 行走图。对应 Assets/像素幸存者资源包/玩家/ur0_wind_skin.png。")]
+    public Texture2D ur0Texture;
+    [Tooltip("UR_1 地狱火 / 夏无 行走图。对应 Assets/像素幸存者资源包/玩家/ur1_fire_skin.png。")]
+    public Texture2D ur1Texture;
+    [Tooltip("UR_2 亡者领域 / 无罪 行走图。对应 Assets/像素幸存者资源包/玩家/ur2_tomb_skin.png。")]
+    public Texture2D ur2Texture;
+
+    // 旧的相对路径常量保留为编辑器兜底用（仅 UNITY_EDITOR 下 RuntimeAssetLoader 才会走这条路径）
     private const string Ur0Path = "像素幸存者资源包/玩家/ur0_wind_skin.png";
     private const string Ur1Path = "像素幸存者资源包/玩家/ur1_fire_skin.png";
     private const string Ur2Path = "像素幸存者资源包/玩家/ur2_tomb_skin.png";
+
+    // 可选：若把 PNG 拷一份到 Assets/Resources/Players/ 下，则可通过 Resources.Load 加载。
+    // 当前项目未拷贝（Inspector 引用就够了），这里的常量留作后续扩展点。
+    private const string Ur0ResourcesPath = "Players/ur0_wind_skin";
+    private const string Ur1ResourcesPath = "Players/ur1_fire_skin";
+    private const string Ur2ResourcesPath = "Players/ur2_tomb_skin";
 
     void Awake()
     {
@@ -282,11 +305,11 @@ public class PlayerSkinOverrider : MonoBehaviour
     private void ApplySkinChoice()
     {
         CacheRefs();
-        _appliedSkinIndex = skinIndex;
 
         // 默认皮肤（琪露诺）：恢复原始 controller，让原动画照常播放
         if (skinIndex == 0)
         {
+            _appliedSkinIndex = skinIndex;
             if (_animator != null && _originalController != null)
             {
                 _animator.runtimeAnimatorController = _originalController;
@@ -296,6 +319,7 @@ public class PlayerSkinOverrider : MonoBehaviour
 
         if (_animator == null || _originalController == null)
         {
+            // 不更新 _appliedSkinIndex，让下一帧 Update 仍可重试
             Debug.LogWarning("[换装] Animator 或原 controller 未就绪，无法替换 clip。");
             return;
         }
@@ -304,9 +328,24 @@ public class PlayerSkinOverrider : MonoBehaviour
         Sprite[] idleSprites, moveSprites;
         if (!BuildSkinSprites(skinIndex, out idleSprites, out moveSprites))
         {
-            Debug.LogWarning("[换装] 无法加载皮肤贴图，回退到默认皮肤。");
+            // 关键修复：加载失败时不要把 _appliedSkinIndex 设成失败的 skinIndex，否则 Update 永远不会再尝试。
+            // 同时强制回退到琪露诺，至少让玩家看到角色（而不是空白 / 残影）。
+            Debug.LogWarning("[换装] 无法加载 UR 皮肤贴图，回退到默认皮肤（琪露诺）。" +
+                             "请检查 PlayerSkinOverrider 节点 Inspector 上 ur0/ur1/ur2 Texture 字段是否已绑定。");
+            if (_animator != null && _originalController != null)
+            {
+                _animator.runtimeAnimatorController = _originalController;
+            }
+            // 把局内 skinIndex 也归零，避免 LateUpdate 继续按 UR 流程跑（_runtimeIdleSprites 是 null 会直接 return，但归零更干净）
+            skinIndex = 0;
+            _appliedSkinIndex = 0;
+            // 同步把存档里的选择改回琪露诺，避免下次进入又卡同样的死循环
+            PlayerPrefs.SetInt("SelectedSkin", 0);
             return;
         }
+
+        // 仅当 BuildSkinSprites 成功才推进 _appliedSkinIndex，避免一次失败后永远不再重试
+        _appliedSkinIndex = skinIndex;
 
         // 构造新的 AnimationClip
         // idle 时长：南筱风用 windIdleClipLength；无罪用 tombIdleClipLength；其他用 idleClipLength
@@ -373,24 +412,95 @@ public class PlayerSkinOverrider : MonoBehaviour
 #endif
     }
 
+    /// <summary>
+    /// 从源 Texture 创建一份 RGBA32、CPU readable 的副本。
+    /// 必要性：
+    ///   - Inspector 拖入的 Texture2D（场景引用）默认 isReadable=0、可能为压缩格式（DXT/ETC2 等）。
+    ///   - 后续白边剔除 / 自动 pivot 扫描需要 GetPixels32，readable=0 会抛 UnityException。
+    /// 实现：通过 RenderTexture 中转 ReadPixels，避开任何 Import 设置限制，跨平台稳定。
+    /// </summary>
+    private static Texture2D CreateReadableCopy(Texture2D src, bool linear)
+    {
+        if (src == null) return null;
+
+        // src 已经是可读且 RGBA32 → 直接用，避免无谓拷贝
+        try
+        {
+            // GetPixels32 能跑就说明 readable，直接返回
+            var test = src.GetPixels32();
+            if (test != null && test.Length == src.width * src.height && src.format == TextureFormat.RGBA32)
+            {
+                return src;
+            }
+        }
+        catch
+        {
+            // 不可读，往下走拷贝流程
+        }
+
+        int w = src.width;
+        int h = src.height;
+        if (w <= 0 || h <= 0) return null;
+
+        RenderTexture prev = RenderTexture.active;
+        RenderTexture rt = RenderTexture.GetTemporary(
+            w, h, 0,
+            RenderTextureFormat.ARGB32,
+            linear ? RenderTextureReadWrite.Linear : RenderTextureReadWrite.sRGB);
+        try
+        {
+            Graphics.Blit(src, rt);
+            RenderTexture.active = rt;
+            var dst = new Texture2D(w, h, TextureFormat.RGBA32, mipChain: false, linear: linear);
+            dst.ReadPixels(new Rect(0, 0, w, h), 0, 0, false);
+            dst.Apply(updateMipmaps: false, makeNoLongerReadable: false);
+            return dst;
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            RenderTexture.active = prev;
+            RenderTexture.ReleaseTemporary(rt);
+        }
+    }
+
     /// <summary>从精灵图加载并切割成 idle + move（每行一组完整循环）</summary>
     private bool BuildSkinSprites(int skin, out Sprite[] idle, out Sprite[] move)
     {
         idle = null;
         move = null;
 
-        string relativePath;
-        if (skin == 1) relativePath = Ur0Path;
-        else if (skin == 2) relativePath = Ur1Path;
-        else relativePath = Ur2Path;
-        string fullPath = Path.Combine(Application.dataPath, relativePath);
-        if (!File.Exists(fullPath)) return false;
+        // 三层兜底加载：Inspector 引用 → Resources.Load → Application.dataPath（仅编辑器）
+        // 这是打包后能否拿到行走图贴图的唯一关键。dataPath 在 Build 后不指向 Assets/，
+        // 中文路径在 Android 上还会因 ZIP 编码乱码——只有 Inspector 引用绝对可靠。
+        Texture2D source;
+        if (skin == 1)
+        {
+            source = RuntimeAssetLoader.LoadTexture(ur0Texture, Ur0ResourcesPath, Ur0Path);
+        }
+        else if (skin == 2)
+        {
+            source = RuntimeAssetLoader.LoadTexture(ur1Texture, Ur1ResourcesPath, Ur1Path);
+        }
+        else
+        {
+            source = RuntimeAssetLoader.LoadTexture(ur2Texture, Ur2ResourcesPath, Ur2Path);
+        }
+        if (source == null)
+        {
+            Debug.LogError($"[换装] BuildSkinSprites(skin={skin}) 找不到行走图贴图。" +
+                           $"请在 Inspector 上为 PlayerSkinOverrider 的 ur{skin - 1}Texture 字段拖入对应 PNG。");
+            return false;
+        }
 
-        byte[] bytes = File.ReadAllBytes(fullPath);
-        // linear=true：在 Linear 色彩空间下把贴图当作线性数据上传，
-        // 避免 sRGB→Linear 解码导致 alpha 抗锯齿边缘产生白色光晕（白边/白雾）
-        Texture2D tex = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false, linear: urTreatTextureAsLinear);
-        if (!tex.LoadImage(bytes)) return false;
+        // 为了像素剔除/扫描得到正确数据，所有读 Pixel 的步骤都基于一份「可读副本」。
+        // 直接传入的 Inspector Texture 在 Import 设置里通常 isReadable=0，GetPixels32 会抛 UnityException。
+        // 这里复制到一张可读的临时 Texture2D（一次性，缓存在外层调用方处由 Sprite 持有）。
+        Texture2D tex = CreateReadableCopy(source, urTreatTextureAsLinear);
+        if (tex == null) return false;
         tex.filterMode = FilterMode.Point;
         tex.wrapMode = TextureWrapMode.Clamp;
 

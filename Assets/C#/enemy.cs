@@ -193,6 +193,36 @@ public class enemy : Attribute
             _sporeMutationOverlayRenderer.enabled = false;
     }
 
+    // === 七彩蘑菇行走动画同步（2026-06 修复）===
+    // 之前现象：编辑器里七彩 / 颜色遮罩蘑菇能正常播行走帧，**打包后只显示 OnEnable 那一刻的第一帧**。
+    //
+    // 根因：
+    //   1) ApplySporeMutationColor 只在 OnEnable 调用一次（性能优化的副作用），
+    //      只在那时把 base.sprite 拷给 overlay.sprite。
+    //   2) Animator 依然在每帧改 base SpriteRenderer 的 sprite——但 base 已被 enabled=false 隐藏，
+    //      于是玩家只能看到 overlay，而 overlay.sprite 永远停在第一帧 → 静态。
+    //   3) 编辑器内为什么"看着"会动？是因为某些场景里 base 被反复启停（debug 状态 / Editor 重启 Animator）
+    //      把 sprite 偶尔刷上了，掩盖了 Bug；打包后稳定 disable，问题完整暴露。
+    //
+    // 修复：在 LateUpdate（晚于 Animator）每帧把 base 的 sprite/flipX/flipY 同步到 overlay。
+    // 仅当 overlay 启用时执行，未异变的蘑菇 / 非蘑菇敌人零开销。
+    protected virtual void LateUpdate()
+    {
+        if (_sporeMutationOverlayRenderer == null || !_sporeMutationOverlayRenderer.enabled) return;
+        if (_sporeMutationBaseRenderer == null) return;
+
+        // Animator 在 Update 末尾刷新过 base.sprite，此处 LateUpdate 拷给 overlay。
+        var baseSprite = _sporeMutationBaseRenderer.sprite;
+        if (_sporeMutationOverlayRenderer.sprite != baseSprite)
+            _sporeMutationOverlayRenderer.sprite = baseSprite;
+
+        // flipX/flipY 也跟着同步，否则朝向变了 overlay 仍朝原方向。
+        if (_sporeMutationOverlayRenderer.flipX != _sporeMutationBaseRenderer.flipX)
+            _sporeMutationOverlayRenderer.flipX = _sporeMutationBaseRenderer.flipX;
+        if (_sporeMutationOverlayRenderer.flipY != _sporeMutationBaseRenderer.flipY)
+            _sporeMutationOverlayRenderer.flipY = _sporeMutationBaseRenderer.flipY;
+    }
+
     protected virtual void OnCollisionEnter(Collision collision)
     {
         if (rolestate != state.dead)
@@ -360,6 +390,8 @@ public class enemy : Attribute
     //   → if (rolestate==dead) return 没拦住（rolestate 还没置 dead）→ 又调一次 hook。
     // 用一个一次性 flag 锁定：本次死亡只允许 hook 投一次。
     [System.NonSerialized] public bool _reviveAttempted;
+
+
 
     public virtual void Destroy1()
     {

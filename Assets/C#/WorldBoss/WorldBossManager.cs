@@ -152,9 +152,9 @@ public class WorldBossManager : MonoBehaviour
         if (entry?.factionObject != null)
             entry.factionObject.SetActive(true);
 
-        // 传送玩家
-        if (entry?.teleportTarget != null && player != null)
-            player.transform.position = entry.teleportTarget.position;
+        // 2026-06-12：删除击败后传送玩家逻辑。
+        // 原先 Boss 击败后会把玩家传送到 entry.teleportTarget 位置，
+        // 体验不佳（玩家位置突变、打断操作节奏），现在不再传送。
 
         // 弹出提示和加成
         StartCoroutine(ShowFactionUnlockToasts(faction));

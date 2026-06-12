@@ -37,6 +37,18 @@ public class ChoiceUI : MonoBehaviour
     private bool refreshCountInited;
     private int gateChallengeMaxUpgradeBonus = 0; // 门挑战本局加成，随本局重置
 
+    /// <summary>
+    /// 本局是否是玩家第一次触发升级三选一（开局第一次升级必然给学习技能卡）。
+    /// 初始为 true，**仅当玩家在首轮保底三选一中做出选择（closechoice）后**才置 false。
+    /// SSR「启动资金」触发的三选一也不算"第一次"（那是额外赠送的），仅普通升级的第一轮算。
+    ///
+    /// 2026-06-11 修复：原来在 refresh() 里立即置 false，导致玩家刷新后保底被吃掉——
+    /// 因为 click_refresh 重新调用 refresh()，此时标志已经消耗。
+    /// 现在改为：refresh() 中只读取不消耗，消耗时机延迟到 ConsumeFirstUpgradeGuarantee()，
+    /// 由 closechoice / click_skip 在玩家真正做出选择或跳过时调用。
+    /// </summary>
+    private bool _isFirstNormalUpgrade = true;
+
     private Dictionary<string, int> upgradeGroupCount = new Dictionary<string, int>();
 
     public void RecordUpgrade(string group)
@@ -143,11 +155,29 @@ public class ChoiceUI : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// 火球术的「大小」和「飞行速度」升级卡已移除（策划决定这两项对火球术无实际意义）。
+    /// 直接从卡池中永久排除。
+    /// 注：火球术没有专属脚本类，用 Skillbase.Skillname == "火球术" 识别。
+    /// </summary>
+    private bool IsFireballSizeOrSpeedUpgrade(GameObject upgradeObj)
+    {
+        if (upgradeObj == null) return false;
+        Upgradeoptionsbase opt = upgradeObj.GetComponent<Upgradeoptionsbase>();
+        if (opt == null) return false;
+        if (opt.type != Upgradeoptionsbase.Upgradetype.upgradeskill) return false;
+        if (opt.skill == null || opt.skill.Skillname != "火球术") return false;
+        // 排除大小和速度
+        return opt.skillAtr == Upgradeoptionsbase.skillAttribute.size ||
+               opt.skillAtr == Upgradeoptionsbase.skillAttribute.speed;
+    }
+
     private bool ShouldExcludeUpgrade(GameObject upgradeObj)
     {
         if (IsGroupMaxed(upgradeObj)) return true;
         if (IsCooldownReductionUseless(upgradeObj)) return true;
         if (IsSporeFieldUpgradeUselessAfterTombDomain(upgradeObj)) return true;
+        if (IsFireballSizeOrSpeedUpgrade(upgradeObj)) return true;
         return false;
     }
 
@@ -356,26 +386,63 @@ public class ChoiceUI : MonoBehaviour
             return;
         }
 
-        // 注意：之前这里有"首轮三选一必给学习卡（c1/c2/c3 全部从 learnSkillCandidates 抽）"的特殊分支，
-        // 它会导致一个严重 bug —— 如果玩家开局已自带某个基础技能（例如 UR 角色赠送的"飓风"），
-        // 该技能不会进入 learnSkillCandidates（在上方 alreadyHave 分支被排除），但它的"升级卡"
-        // 会进入 list / nonLearnSkillCandidates。首轮强制只从 learnSkillCandidates 抽，导致
-        // 飓风升级在第一轮根本不出现。"已有技能不出现学习卡"由 alreadyHave 分支已保证，
-        // 这个首轮特殊分支属于多余且有副作用，整体移除，改为始终走通用抽取流程。
-        c1 = getrandom();
-        c2 = GetSecondOrThirdChoice(c1, nonLearnSkillCandidates);
-        int safetyCount = 0;
-        while (c1 == c2 && list.Count > 1)
+        // === 首轮三选一保底：三个选项全部必出「学习新技能」卡 ===
+        // 策划意图：玩家本局的"第一次三选一"中，三个选项全部为「学习新技能」类型卡牌，
+        // 确保玩家在开局时能直接选一个新技能进行学习。
+        //
+        // "第一次三选一"定义：
+        //   - 若没有 SSR「启动资金」：第一次普通升级时的三选一。
+        //   - 若有 SSR「启动资金」（开局 3 次三选一）：赠送的第 1 轮（PendingGachaStartupChoices==3）。
+        //     第 2、第 3 轮不再保底。
+        //
+        // 条件：
+        //   1. _isFirstNormalUpgrade == true
+        //   2. 当前不是 SSR 启动资金的第 2/3 轮（第 1 轮也允许触发保底）
+        //   3. learnSkillCandidates 非空
+        // 如果学习卡池不足 3 张，则有多少用多少（不足的位置从全池随机补）。
+        battleUI bui2 = GameObject.Find("BattleUI")?.GetComponent<battleUI>();
+        int pendingStartup = bui2 != null ? bui2.PendingGachaStartupChoices : 0;
+        // 只有启动资金的第 2/3 轮（pending==2 或 1）才视为"不允许保底的启动资金轮"
+        bool isGachaStartupLaterRound = pendingStartup > 0 && pendingStartup < 3;
+        bool useFirstUpgradeGuarantee = _isFirstNormalUpgrade && !isGachaStartupLaterRound && learnSkillCandidates.Count > 0;
+        // 2026-06-11 修复：不再在 refresh() 中消耗 _isFirstNormalUpgrade。
+        // 消耗时机改为 ConsumeFirstUpgradeGuarantee()，由 closechoice / click_skip 调用。
+        // 这样玩家在首轮保底的三选一屏点「刷新」后，保底仍然生效。
+        if (useFirstUpgradeGuarantee)
         {
-            c2 = GetSecondOrThirdChoice(c1, nonLearnSkillCandidates);
-            if (++safetyCount > 100) break;
+            // 三个选项全部从学习卡池抽取（不重复）
+            List<GameObject> shuffled = new List<GameObject>(learnSkillCandidates);
+            // Fisher-Yates 洗牌
+            for (int i = shuffled.Count - 1; i > 0; i--)
+            {
+                int j = Random.Range(0, i + 1);
+                GameObject tmp = shuffled[i];
+                shuffled[i] = shuffled[j];
+                shuffled[j] = tmp;
+            }
+            c1 = shuffled[0];
+            c2 = shuffled.Count > 1 ? shuffled[1] : getrandom();
+            c3 = shuffled.Count > 2 ? shuffled[2] : getrandom();
+            Debug.Log($"[升级·三选一] 首轮保底生效（三选项全学习卡）：learnSkillCandidates={learnSkillCandidates.Count}，c1={c1.name}, c2={c2.name}, c3={c3.name}");
         }
-        c3 = GetSecondOrThirdChoice(c2, nonLearnSkillCandidates);
-        safetyCount = 0;
-        while ((c1 == c3 || c2 == c3) && list.Count > 2)
+        else
         {
+            c1 = getrandom();
+
+            c2 = GetSecondOrThirdChoice(c1, nonLearnSkillCandidates);
+            int safetyCount = 0;
+            while (c1 == c2 && list.Count > 1)
+            {
+                c2 = GetSecondOrThirdChoice(c1, nonLearnSkillCandidates);
+                if (++safetyCount > 100) break;
+            }
             c3 = GetSecondOrThirdChoice(c2, nonLearnSkillCandidates);
-            if (++safetyCount > 100) break;
+            safetyCount = 0;
+            while ((c1 == c3 || c2 == c3) && list.Count > 2)
+            {
+                c3 = GetSecondOrThirdChoice(c2, nonLearnSkillCandidates);
+                if (++safetyCount > 100) break;
+            }
         }
 
         refreshsignalchoice(choice1, c1);
@@ -416,6 +483,30 @@ public class ChoiceUI : MonoBehaviour
         return source[Random.Range(0, source.Count)];
     }
 
+    /// <summary>
+    /// 消耗首轮保底资格。由 closechoice（选择后） / click_skip（跳过后）调用。
+    /// SSR 启动资金的第 2/3 轮不消耗（因为第 1 轮已经用掉了保底资格）。
+    /// 启动资金第 1 轮（PendingGachaStartupChoices==3 进入，选完后 TryAdvance 将其减为 2）：
+    ///   此时 closechoice 先调用本方法再调用 TryAdvance，所以这里看到 pending 仍为 3 → 允许消耗。
+    ///   但实际上 TryAdvance 是在 closechoice 里本方法之后才调用的，这里看到的 pending 值取决于
+    ///   调用顺序。为确保正确，我们用"只有 pending==2 或 1 时才跳过消耗"的方式判断。
+    /// </summary>
+    public void ConsumeFirstUpgradeGuarantee()
+    {
+        if (!_isFirstNormalUpgrade) return;
+        battleUI bui = GameObject.Find("BattleUI")?.GetComponent<battleUI>();
+        int pending = bui != null ? bui.PendingGachaStartupChoices : 0;
+        // pending==3 时是启动资金第 1 轮（保底轮），允许消耗
+        // pending==2 或 1 时是启动资金第 2/3 轮，不消耗（它们本来就没触发保底）
+        // pending==0 时是正常升级轮，允许消耗
+        bool isLaterStartupRound = pending > 0 && pending < 3;
+        if (!isLaterStartupRound)
+        {
+            _isFirstNormalUpgrade = false;
+            Debug.Log("[升级·三选一] 首轮保底资格已消耗（玩家做出选择或跳过）");
+        }
+    }
+
     public void click_refresh()
     {
         if (remainRefresh <= 0) return;
@@ -441,6 +532,8 @@ public class ChoiceUI : MonoBehaviour
     public void click_skip()
     {
         AudioManager.PlaySfx(AudioManager.SfxKey.Click);
+        // 2026-06-11：跳过也消耗首轮保底资格
+        ConsumeFirstUpgradeGuarantee();
         battleUI bui = GameObject.Find("BattleUI").GetComponent<battleUI>();
         bui.choiceUI.SetActive(false);
         if (bui.TryAdvanceGachaStartupChain())

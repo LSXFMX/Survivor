@@ -37,27 +37,31 @@ public class DifficultyManager : MonoBehaviour
     //   设计目标：每个难度普通杂兵需 1-2 发清(技能)，BOSS 需玩家持续 6-12 秒输出。
     //   HP 缩放比 ATK 更激进 —— 玩家伤害膨胀很快，但玩家防御几乎不长。
     //   ATK 倍率克制（避免一击秒玩家），主要靠 HP 来拉关卡时长 / 难度。
+    // 对局时长调整（2026-06）：之前 8~15 分整体偏长，前期推进节奏太慢。
+    // 新规则——N8 锚定 13 分钟，N2~N8 反向递减 1 分（13/12/11/10/9/8/7），
+    // N1 特殊为 1 分钟（教学局，让新人快速跑完一局拿到初心者装备）。
+    // 这样总体节奏：N1 极快、N2~N4 中短局、N5~N8 仍是较长的硬核挑战，
+    // 但相比原来每个难度都少 2 分钟，整体对局时间缩短 25% 左右。
     public DifficultyConfig[] configs = new DifficultyConfig[]
     {
-        // N1：教学局，让玩家轻松通关解锁初心者三件套
-        new DifficultyConfig { label = "N1", hpMultiplier = 1.0f,  atkMultiplier = 0.9f,  minutes = 8  },
-        // N2：装上 N1 装备后，体验提升一档难度
-        new DifficultyConfig { label = "N2", hpMultiplier = 1.8f,  atkMultiplier = 1.1f,  minutes = 9  },
+        // N1：教学局，特殊处理为 1 分钟——让新玩家几乎一定能"通关"领到首套通关装备
+        new DifficultyConfig { label = "N1", hpMultiplier = 1.0f,  atkMultiplier = 0.9f,  minutes = 1  },
+        // N2：装上 N1 装备后，体验提升一档难度（短局 7 分钟）
+        new DifficultyConfig { label = "N2", hpMultiplier = 1.8f,  atkMultiplier = 1.1f,  minutes = 7  },
         // N3：标准难度，玩家 atk≈10~15，怪 HP×3 才能撑住
-        new DifficultyConfig { label = "N3", hpMultiplier = 3.0f,  atkMultiplier = 1.4f,  minutes = 10 },
+        new DifficultyConfig { label = "N3", hpMultiplier = 3.0f,  atkMultiplier = 1.4f,  minutes = 8  },
         // N4：玩家 atk≈25，伤害 3.5x，怪 HP×5
-        new DifficultyConfig { label = "N4", hpMultiplier = 5.0f,  atkMultiplier = 1.7f,  minutes = 11 },
+        new DifficultyConfig { label = "N4", hpMultiplier = 5.0f,  atkMultiplier = 1.7f,  minutes = 9  },
         // N5：玩家伤害 ~5x，怪 HP×8；ATK 提升克制（玩家 def 跟不上）
-        new DifficultyConfig { label = "N5", hpMultiplier = 8.0f,  atkMultiplier = 2.0f,  minutes = 12 },
+        new DifficultyConfig { label = "N5", hpMultiplier = 8.0f,  atkMultiplier = 2.0f,  minutes = 10 },
         // N6：解锁更多技能升级，HP×13 才有压力
-        new DifficultyConfig { label = "N6", hpMultiplier = 13.0f, atkMultiplier = 2.5f,  minutes = 13 },
+        new DifficultyConfig { label = "N6", hpMultiplier = 13.0f, atkMultiplier = 2.5f,  minutes = 11 },
         // N7：玩家伤害 ~9x，怪 HP×20
-        new DifficultyConfig { label = "N7", hpMultiplier = 20.0f, atkMultiplier = 3.0f,  minutes = 14 },
+        new DifficultyConfig { label = "N7", hpMultiplier = 20.0f, atkMultiplier = 3.0f,  minutes = 12 },
         // N8：终极挑战，玩家满配 ~10x 倍率叠奇遇加成。
-        // 原数值 HP×28 在测试中略显吃力（BOSS 持续输出 >12 秒 / 普通杂兵需要 2~3 发清），
-        // 微调到 HP×25（约 -10.7%），让 BOSS 击杀节奏回归 6~12 秒设计窗口，
-        // 普通杂兵 1~2 发清，整体强度仍是最高一档，但不至于劝退。
-        new DifficultyConfig { label = "N8", hpMultiplier = 25.0f, atkMultiplier = 3.5f,  minutes = 15 },
+        // 时长锚定 13 分钟——配合 HP×25、BOSS 击杀节奏 6~12 秒，
+        // 普通杂兵 1~2 发清，整体强度仍是最高一档但不至于劝退。
+        new DifficultyConfig { label = "N8", hpMultiplier = 25.0f, atkMultiplier = 3.5f,  minutes = 13 },
     };
 
     // 当前选中的难度索引（0=N1 … 4=N5），默认 N3
