@@ -325,7 +325,7 @@ public class EquipmentIcon : MonoBehaviour
         else if (equipmentId == 22)
         {
             equipmentName = "皮毛之甲";
-            description = "防御力＋2\n\n没有皮甲的家伙！";
+            description = "防御力＋2\n\n没有皮草的家伙！";
             howToGet = "通关N9有概率掉落";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/022.png");
         }
@@ -391,7 +391,7 @@ public class EquipmentIcon : MonoBehaviour
         else if (equipmentId == 31)
         {
             equipmentName = "暗影之甲";
-            description = "防御力＋2\n\n史莱姆的塑性制作而成暗影胸鳍胸";
+            description = "防御力＋2\n\n史莱姆的塑性制作而成哦齁齁齁";
             howToGet = "通关N12有概率掉落";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/031.png");
         }
