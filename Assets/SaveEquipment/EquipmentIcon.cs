@@ -438,6 +438,10 @@ public class EquipmentIcon : MonoBehaviour
 
         var tex = RuntimeAssetLoader.LoadTexture(null, resourcesPath, relativeToAssets);
         if (tex == null) return;
+
+        // AI 生成的图标通常带有白色/灰色实心背景（无真正 alpha），需后处理去除
+        MakeTextureTransparent(tex);
+
         Sprite forcedSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
         iconImage.enabled = true;
         iconImage.material = null;
@@ -445,6 +449,55 @@ public class EquipmentIcon : MonoBehaviour
         iconImage.overrideSprite = forcedSprite;
         iconImage.type = Image.Type.Simple;
         iconImage.preserveAspect = true;
+    }
+
+    /// <summary>
+    /// 将 Texture2D 中接近白色/灰色的低饱和度背景像素变为完全透明。
+    /// 用于修复 AI 生成的 PNG 带有实心填充背景（非真正 alpha 通道）的问题。
+    /// 算法：对每个像素计算亮度和饱和度，高亮+低饱和度判定为背景 → alpha=0。
+    /// </summary>
+    private static void MakeTextureTransparent(Texture2D tex)
+    {
+        if (tex == null) return;
+
+        // 确保纹理可读写（Resources.Load 返回的通常可读；编辑器文件读取的可读）
+        // 若不可读则跳过
+        try { var _ = tex.GetPixel(0, 0); }
+        catch (System.Exception) { return; }
+
+        var pixels = tex.GetPixels32();
+        bool modified = false;
+
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            Color32 c = pixels[i];
+
+            // 已完全透明的跳过
+            if (c.a == 0) continue;
+
+            // 计算亮度 (0~255)
+            int brightness = (c.r + c.g + c.b) / 3;
+
+            // 计算饱和度（通道最大值 - 最小值）
+            int maxCh = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
+            int minCh = Mathf.Min(c.r, Mathf.Min(c.g, c.b));
+            int saturation = maxCh - minCh;
+
+            // 判定条件：亮度 > 200（很亮） 且 饱和度 < 35（低彩/接近灰白）
+            // 这能覆盖 AI 生成的白色/浅灰色棋盘格背景，
+            // 同时保留大多数有颜色的像素（即使是浅色物体也有一定饱和度）
+            if (brightness > 200 && saturation < 35)
+            {
+                pixels[i] = new Color32(0, 0, 0, 0);
+                modified = true;
+            }
+        }
+
+        if (modified)
+        {
+            tex.SetPixels32(pixels);
+            tex.Apply(false, false); // 不更新 mipmaps，不做不必要的操作
+        }
     }
 
     private void SetupSporeMutationToggle()
