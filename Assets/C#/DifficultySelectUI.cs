@@ -15,7 +15,7 @@ public class DifficultySelectUI : MonoBehaviour
 {
     [Header("引用")]
     public title titleScript;
-    public Button[] difficultyButtons; // N1~N8
+    public Button[] difficultyButtons; // N1~N13
 
     [Header("悬停提示")]
     public GameObject tooltipPanel;
