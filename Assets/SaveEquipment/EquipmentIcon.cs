@@ -430,11 +430,13 @@ public class EquipmentIcon : MonoBehaviour
     {
         if (iconImage == null) return;
 
-        // 通过 RuntimeAssetLoader 走三层兜底：Inspector 引用（此处无） → Resources.Load → dataPath（仅编辑器）
-        // 编辑器内能从 Application.dataPath 直接读 Assets 下的 PNG 调试；
-        // 打包后这条路径不可用，但装备图标的主路径已经走 GachaManager 上挂的 Sprite 引用 + 装备 Inspector 字段，
-        // 这个 SetIconFromAssetPath 仅作为最后的兜底；走不到时 iconImage 静默不显示，不会 crash。
-        var tex = RuntimeAssetLoader.LoadTexture(null, null, relativeToAssets);
+        // 从 editorAssetsRelativePath 自动推导 resourcesRelativePath（去掉 .png 扩展名）
+        // 这样 RuntimeAssetLoader 第 2 层 Resources.Load 能命中，不再仅依赖第 3 层编辑器文件读取
+        string resourcesPath = null;
+        if (!string.IsNullOrEmpty(relativeToAssets) && relativeToAssets.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase))
+            resourcesPath = relativeToAssets.Substring(0, relativeToAssets.Length - 4);
+
+        var tex = RuntimeAssetLoader.LoadTexture(null, resourcesPath, relativeToAssets);
         if (tex == null) return;
         Sprite forcedSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
         iconImage.enabled = true;
