@@ -476,14 +476,16 @@ public class EquipmentIcon : MonoBehaviour
         var pixels = tex.GetPixels32();
 
         // ── 步骤1：采样四角 + 边缘中点，投票选出最可能的背景色 ──
-        var samplePositions = new[]
-        {
-            new[] { 0, 0 }, { w - 1, 0 }, { 0, h - 1 }, { w - 1, h - 1 }, // 四角
-            w > 4 ? new int[] { w / 2, 0 } : null,   // 上边中点
-            w > 4 ? new int[] { w / 2, h - 1 } : null, // 下边中点
-            h > 4 ? new int[] { 0, h / 2 } : null,   // 左边中点
-            h > 4 ? new int[] { w - 1, h / 2 } : null  // 右边中点
-        };
+        // 用 List<int[]> 避免 C# 6.0 不支持嵌套数组初始化器的问题
+        var samplePositions = new System.Collections.Generic.List<int[]>();
+        samplePositions.Add(new int[] { 0, 0 });
+        samplePositions.Add(new int[] { w - 1, 0 });
+        samplePositions.Add(new int[] { 0, h - 1 });
+        samplePositions.Add(new int[] { w - 1, h - 1 });
+        if (w > 4) { samplePositions.Add(new int[] { w / 2, 0 }); }
+        if (w > 4) { samplePositions.Add(new int[] { w / 2, h - 1 }); }
+        if (h > 4) { samplePositions.Add(new int[] { 0, h / 2 }); }
+        if (h > 4) { samplePositions.Add(new int[] { w - 1, h / 2 }); }
 
         // 统计各采样点的颜色，选出现频率最高的作为背景色
         Color32 bgColor = new Color32(200, 200, 200, 255); // 默认浅灰
@@ -492,7 +494,6 @@ public class EquipmentIcon : MonoBehaviour
         int bestVote = 0;
         foreach (var pos in samplePositions)
         {
-            if (pos == null) continue;
             Color32 c = pixels[pos[1] * w + pos[0]];
             if (c.a < 128) continue; // 已透明的跳过
             long key = ((long)c.r << 16) | ((long)c.g << 8) | c.b;
