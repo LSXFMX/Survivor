@@ -452,52 +452,124 @@ public class EquipmentIcon : MonoBehaviour
     }
 
     /// <summary>
-    /// 将 Texture2D 中接近白色/灰色的低饱和度背景像素变为完全透明。
-    /// 用于修复 AI 生成的 PNG 带有实心填充背景（非真正 alpha 通道）的问题。
-    /// 算法：对每个像素计算亮度和饱和度，高亮+低饱和度判定为背景 → alpha=0。
+    /// 使用边缘泛洪填充（Flood Fill）去除 Texture2D 的实心背景。
+    /// 
+    /// 算法原理：
+    /// 1. 采样四角像素确定背景颜色（多数 AI 生成的图标背景相对均匀）
+    /// 2. 从图片所有边缘像素开始，BFS 向内扩散
+    /// 3. 与背景色接近的连通区域全部设为透明（alpha=0）
+    /// 
+    /// 这是游戏开发中去除精灵图实心背景的标准方法，
+    /// 能正确处理纯色、渐变、棋盘格等各类背景，同时保留内部物体像素。
     /// </summary>
     private static void MakeTextureTransparent(Texture2D tex)
     {
         if (tex == null) return;
 
-        // 确保纹理可读写（Resources.Load 返回的通常可读；编辑器文件读取的可读）
-        // 若不可读则跳过
         try { var _ = tex.GetPixel(0, 0); }
         catch (System.Exception) { return; }
 
+        int w = tex.width;
+        int h = tex.height;
+        if (w <= 2 || h <= 2) return;
+
         var pixels = tex.GetPixels32();
-        bool modified = false;
 
-        for (int i = 0; i < pixels.Length; i++)
+        // ── 步骤1：采样四角 + 边缘中点，投票选出最可能的背景色 ──
+        var samplePositions = new[]
         {
+            new[] { 0, 0 }, { w - 1, 0 }, { 0, h - 1 }, { w - 1, h - 1 }, // 四角
+            w > 4 ? new int[] { w / 2, 0 } : null,   // 上边中点
+            w > 4 ? new int[] { w / 2, h - 1 } : null, // 下边中点
+            h > 4 ? new int[] { 0, h / 2 } : null,   // 左边中点
+            h > 4 ? new int[] { w - 1, h / 2 } : null  // 右边中点
+        };
+
+        // 统计各采样点的颜色，选出现频率最高的作为背景色
+        Color32 bgColor = new Color32(200, 200, 200, 255); // 默认浅灰
+        var colorVotes = new System.Collections.Generic.Dictionary<long, int>();
+        long bestKey = 0;
+        int bestVote = 0;
+        foreach (var pos in samplePositions)
+        {
+            if (pos == null) continue;
+            Color32 c = pixels[pos[1] * w + pos[0]];
+            if (c.a < 128) continue; // 已透明的跳过
+            long key = ((long)c.r << 16) | ((long)c.g << 8) | c.b;
+            int vote;
+            colorVotes.TryGetValue(key, out vote);
+            vote++;
+            colorVotes[key] = vote;
+            if (vote > bestVote) { bestVote = vote; bestKey = key; bgColor = c; }
+        }
+
+        // 颜色距离容差（用于判断"与背景色相近"）
+        const int TOLERANCE = 50; // 每通道允许偏差 ~20%
+
+        // ── 步骤2：从所有边缘像素开始 BFS 泛洪填充 ──
+        var visited = new bool[w * h];
+        var queue = new System.Collections.Generic.Queue<int>();
+
+        // 把所有边缘位置加入队列
+        for (int x = 0; x < w; x++)
+        {
+            EnqueueIfBackground(x, 0);
+            EnqueueIfBackground(x, h - 1);
+        }
+        for (int y = 1; y < h - 1; y++)
+        {
+            EnqueueIfBackground(0, y);
+            EnqueueIfBackground(w - 1, y);
+        }
+
+        // BFS 主循环
+        while (queue.Count > 0)
+        {
+            int idx = queue.Dequeue();
+            if (visited[idx]) continue;
+            visited[idx] = true;
+            pixels[idx] = new Color32(0, 0, 0, 0);
+
+            int px = idx % w;
+            int py = idx / w;
+
+            // 四邻域扩展
+            if (px > 0)     EnqueueIfVisited(px - 1, py, idx);
+            if (px < w - 1) EnqueueIfVisited(px + 1, py, idx);
+            if (py > 0)     EnqueueIfVisited(px, py - 1, idx);
+            if (py < h - 1)  EnqueueIfVisited(px, py + 1, idx);
+        }
+
+        // ── 应用结果 ──
+        tex.SetPixels32(pixels);
+        tex.Apply(false, false);
+
+        // ── 局部方法 ──
+        void EnqueueIfBackground(int x, int y)
+        {
+            int i = y * w + x;
+            if (visited[i]) return;
             Color32 c = pixels[i];
-
-            // 已完全透明的跳过
-            if (c.a == 0) continue;
-
-            // 计算亮度 (0~255)
-            int brightness = (c.r + c.g + c.b) / 3;
-
-            // 计算饱和度（通道最大值 - 最小值）
-            int maxCh = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
-            int minCh = Mathf.Min(c.r, Mathf.Min(c.g, c.b));
-            int saturation = maxCh - minCh;
-
-            // 判定条件：亮度 > 200（很亮） 且 饱和度 < 35（低彩/接近灰白）
-            // 这能覆盖 AI 生成的白色/浅灰色棋盘格背景，
-            // 同时保留大多数有颜色的像素（即使是浅色物体也有一定饱和度）
-            if (brightness > 200 && saturation < 35)
-            {
-                pixels[i] = new Color32(0, 0, 0, 0);
-                modified = true;
-            }
+            if (c.a == 0) { visited[i] = true; return; }
+            if (ColorDist(c, bgColor) <= TOLERANCE)
+                queue.Enqueue(i);
         }
 
-        if (modified)
+        void EnqueueIfVisited(int x, int y, int fromIdx)
         {
-            tex.SetPixels32(pixels);
-            tex.Apply(false, false); // 不更新 mipmaps，不做不必要的操作
+            int i = y * w + x;
+            if (visited[i]) return;
+            Color32 c = pixels[i];
+            if (c.a == 0) { visited[i] = true; return; }
+            if (ColorDist(c, bgColor) <= TOLERANCE)
+                queue.Enqueue(i);
         }
+    }
+
+    /// <summary>计算两个颜色的 RGB 各通道绝对差值之和（曼哈顿距离）</summary>
+    private static int ColorDist(Color32 a, Color32 b)
+    {
+        return Mathf.Abs(a.r - b.r) + Mathf.Abs(a.g - b.g) + Mathf.Abs(a.b - b.b);
     }
 
     private void SetupSporeMutationToggle()
