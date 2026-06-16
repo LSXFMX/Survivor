@@ -83,17 +83,6 @@ public class DifficultySelectUI : MonoBehaviour
 
         int totalDifficulties = DifficultyManager.Instance.configs.Length;
 
-        // 确保所有按钮 GameObject 都是本物体的直接子物体，
-        // 这样它们会跟随 DifficultySelectUI 一起被 reparent 到 OverlayLayer 上层，
-        // 避免被全屏 backdrop（raycastTarget=true）遮挡导致收不到鼠标事件。
-        for (int i = 0; i < difficultyButtons.Length; i++)
-        {
-            if (difficultyButtons[i] == null) continue;
-            var btnGO = difficultyButtons[i].gameObject;
-            if (btnGO.transform.parent != transform)
-                btnGO.transform.SetParent(transform, false);
-        }
-
         for (int i = 0; i < difficultyButtons.Length; i++)
         {
             if (difficultyButtons[i] == null) continue;
