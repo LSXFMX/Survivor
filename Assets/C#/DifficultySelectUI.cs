@@ -82,9 +82,8 @@ public class DifficultySelectUI : MonoBehaviour
         if (DifficultyManager.Instance == null) return;
 
         int totalDifficulties = DifficultyManager.Instance.configs.Length;
-        int buttonCount = Mathf.Min(difficultyButtons.Length, totalDifficulties);
 
-        for (int i = 0; i < buttonCount; i++)
+        for (int i = 0; i < difficultyButtons.Length; i++)
         {
             if (difficultyButtons[i] == null) continue;
             int idx = i;
