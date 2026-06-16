@@ -268,10 +268,10 @@ public class ClearRecordManager : MonoBehaviour
         bool alreadyUnlocked = EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, roll);
         if (alreadyUnlocked)
         {
-            int pts = PlayerPrefs.GetInt(KEY_POINTS, 0) + 250;
+            int pts = PlayerPrefs.GetInt(KEY_POINTS, 0) + 240;
             PlayerPrefs.SetInt(KEY_POINTS, pts);
             PlayerPrefs.Save();
-            ToastManager.Show($"N13通关奖励：获得250积分（当前{pts}）");
+            ToastManager.Show($"N13通关奖励：获得240积分（当前{pts}）");
         }
         else
         {

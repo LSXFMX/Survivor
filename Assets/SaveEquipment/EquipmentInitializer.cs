@@ -282,113 +282,113 @@ public class EquipmentInitializer : MonoBehaviour
         }
 
         // ── N9 通关装备（id 21-23）──────────────────────────
-        // N9 通关装备 21：勇者之剑 - 攻击力＋25
+        // N9 通关装备 21：利爪之剑 - 攻击力＋20
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 21))
         {
-            if (player != null) player.atk += 25;
-            ToastManager.Show("[装备] 勇者之剑：攻击力＋25");
+            if (player != null) player.atk += 20;
+            ToastManager.Show("[装备] 利爪之剑：攻击力＋20");
         }
 
-        // N9 通关装备 22：勇者之甲 - 生命值＋150
+        // N9 通关装备 22：皮毛之甲 - 防御力＋2
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 22))
         {
-            if (player != null) { player.healthmax += 150; player.health += 150; }
-            ToastManager.Show("[装备] 勇者之甲：生命值＋150");
+            if (player != null) player.def += 2;
+            ToastManager.Show("[装备] 皮毛之甲：防御力＋2");
         }
 
-        // N9 通关装备 23：勇者之心 - 暴击率＋3
+        // N9 通关装备 23：野兽之心 - 经验效率＋2
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 23))
         {
-            if (player != null) player.CR += 3;
-            ToastManager.Show("[装备] 勇者之心：暴击率＋3");
+            if (player != null) player.DR += 2;
+            ToastManager.Show("[装备] 野兽之心：经验效率＋2");
         }
 
         // ── N10 通关装备（id 24-26）─────────────────────────
-        // N10 通关装备 24：王者之剑 - 攻击力＋30
+        // N10 通关装备 24：月牙之剑 - 攻击力＋20
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 24))
         {
-            if (player != null) player.atk += 30;
-            ToastManager.Show("[装备] 王者之剑：攻击力＋30");
+            if (player != null) player.atk += 20;
+            ToastManager.Show("[装备] 月牙之剑：攻击力＋20");
         }
 
-        // N10 通关装备 25：王者之甲 - 生命值＋200
+        // N10 通关装备 25：月圆之甲 - 移动速度＋2
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 25))
         {
-            if (player != null) { player.healthmax += 200; player.health += 200; }
-            ToastManager.Show("[装备] 王者之甲：生命值＋200");
+            if (player != null) player.speed += 2;
+            ToastManager.Show("[装备] 月圆之甲：移动速度＋2");
         }
 
-        // N10 通关装备 26：王者之心 - 暴击伤害＋0.5
+        // N10 通关装备 26：月球之心 - 自然回血＋2
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 26))
         {
-            if (player != null) player.CD += 0.5f;
-            ToastManager.Show("[装备] 王者之心：暴击伤害＋0.5");
+            if (player != null) player.regen += 2;
+            ToastManager.Show("[装备] 月球之心：自然回血＋2");
         }
 
         // ── N11 通关装备（id 27-29）─────────────────────────
-        // N11 通关装备 27：传说之剑 - 攻击力＋35
+        // N11 通关装备 27：粘液之剑 - 攻击力＋20
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 27))
         {
-            if (player != null) player.atk += 35;
-            ToastManager.Show("[装备] 传说之剑：攻击力＋35");
+            if (player != null) player.atk += 20;
+            ToastManager.Show("[装备] 粘液之剑：攻击力＋20");
         }
 
-        // N11 通关装备 28：传说之甲 - 防御力＋2
+        // N11 通关装备 28：粘液之甲 - 生命值＋100
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 28))
         {
-            if (player != null) player.def += 2;
-            ToastManager.Show("[装备] 传说之甲：防御力＋2");
+            if (player != null) { player.healthmax += 100; player.health += 100; }
+            ToastManager.Show("[装备] 粘液之甲：生命值＋100");
         }
 
-        // N11 通关装备 29：传说之心 - 自然回血＋2
+        // N11 通关装备 29：粘液之心 - 经验效率＋2
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 29))
         {
-            if (player != null) player.regen += 2;
-            ToastManager.Show("[装备] 传说之心：自然回血＋2");
+            if (player != null) player.DR += 2;
+            ToastManager.Show("[装备] 粘液之心：经验效率＋2");
         }
 
         // ── N12 通关装备（id 30-32）─────────────────────────
-        // N12 通关装备 30：神话之剑 - 攻击力＋40
+        // N12 通关装备 30：暗影之剑 - 攻击力＋20
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 30))
         {
-            if (player != null) player.atk += 40;
-            ToastManager.Show("[装备] 神话之剑：攻击力＋40");
+            if (player != null) player.atk += 20;
+            ToastManager.Show("[装备] 暗影之剑：攻击力＋20");
         }
 
-        // N12 通关装备 31：神话之甲 - 生命值＋300
+        // N12 通关装备 31：暗影之甲 - 防御力＋2
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 31))
         {
-            if (player != null) { player.healthmax += 300; player.health += 300; }
-            ToastManager.Show("[装备] 神话之甲：生命值＋300");
+            if (player != null) player.def += 2;
+            ToastManager.Show("[装备] 暗影之甲：防御力＋2");
         }
 
-        // N12 通关装备 32：神话之心 - 闪避率＋2
+        // N12 通关装备 32：暗影之心 - 暴击伤害＋20
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 32))
         {
-            if (player != null) player.EVA += 2;
-            ToastManager.Show("[装备] 神话之心：闪避率＋2");
+            if (player != null) player.CD += 20f;
+            ToastManager.Show("[装备] 暗影之心：暴击伤害＋20");
         }
 
         // ── N13 通关装备（id 33-35）─────────────────────────
-        // N13 通关装备 33：永恒之剑 - 攻击力＋50
+        // N13 通关装备 33：龙鳞之剑 - 攻击力＋30
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 33))
         {
-            if (player != null) player.atk += 50;
-            ToastManager.Show("[装备] 永恒之剑：攻击力＋50");
+            if (player != null) player.atk += 30;
+            ToastManager.Show("[装备] 龙鳞之剑：攻击力＋30");
         }
 
-        // N13 通关装备 34：永恒之甲 - 生命值＋400
+        // N13 通关装备 34：龙鳞之甲 - 防御力＋10
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 34))
         {
-            if (player != null) { player.healthmax += 400; player.health += 400; }
-            ToastManager.Show("[装备] 永恒之甲：生命值＋400");
+            if (player != null) player.def += 10;
+            ToastManager.Show("[装备] 龙鳞之甲：防御力＋10");
         }
 
-        // N13 通关装备 35：永恒之心 - 经验效率＋5
+        // N13 通关装备 35：黄金睛 - 暴击伤害＋20
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 35))
         {
-            if (player != null) player.DR += 5;
-            ToastManager.Show("[装备] 永恒之心：经验效率＋5");
+            if (player != null) player.CD += 20f;
+            ToastManager.Show("[装备] 黄金睛：暴击伤害＋20");
         }
     }
 

@@ -77,7 +77,12 @@ public class ArchiveManager : MonoBehaviour
         if (id <= 11) return 240;  // N5
         if (id <= 14) return 300;  // N6 (id 12~14)
         if (id <= 17) return 360;  // N7 (id 15~17)
-        return 420;                // N8 (id 18~20)
+        if (id <= 20) return 420;  // N8 (id 18~20)
+        if (id <= 23) return 480;  // N9 (id 21~23)
+        if (id <= 26) return 540;  // N10 (id 24~26)
+        if (id <= 29) return 600;  // N11 (id 27~29)
+        if (id <= 32) return 660;  // N12 (id 30~32)
+        return 720;                // N13 (id 33~35)
     }
 
     // 装备容器字典
@@ -170,6 +175,11 @@ public class ArchiveManager : MonoBehaviour
         // 这里在运行时用 N7 任一 EquipmentIcon 做模板 Instantiate，文本和图标
         // 由 EquipmentIcon.ApplyForcedClearEquipmentN8Overrides 自动注入。
         EnsureClearEquipmentN8IconsExist();
+
+        // ── 同样地补全 N9~N13 通关装备 21~35（利爪/月牙/粘液/暗影/龙鳞 系列）十五个图标 ──
+        // 场景里没有这些图标，运行时用现有 ClearEquipment 图标做模板克隆，
+        // 文本和图标由 EquipmentIcon.ApplyForcedClearEquipmentN9toN13Overrides 自动注入。
+        EnsureClearEquipmentN9toN13IconsExist();
 
         foreach (var container in equipmentContainers.Values)
         {
@@ -308,6 +318,70 @@ public class ArchiveManager : MonoBehaviour
         TryCloneClearN8Icon(template, parent, 18, existingIds);
         TryCloneClearN8Icon(template, parent, 19, existingIds);
         TryCloneClearN8Icon(template, parent, 20, existingIds);
+    }
+
+    /// <summary>
+    /// 在 ClearEquipment 容器下按需补出 N9~N13 通关装备 21~35 的图标。
+    /// 已存在则跳过，幂等。模板优先选 N7/N8 EquipmentIcon，找不到则用容器内任一 ClearEquipment 图标。
+    /// 文本和图标由 EquipmentIcon.ApplyForcedClearEquipmentN9toN13Overrides 在 Initialize 时注入。
+    /// </summary>
+    private void EnsureClearEquipmentN9toN13IconsExist()
+    {
+        if (clearEquipmentContainer == null) return;
+
+        EquipmentIcon[] existing = clearEquipmentContainer.GetComponentsInChildren<EquipmentIcon>(true);
+        if (existing == null || existing.Length == 0) return;
+
+        EquipmentIcon template = null;
+        var existingIds = new HashSet<int>();
+        foreach (var icon in existing)
+        {
+            if (icon.equipmentType != EquipmentType.ClearEquipment) continue;
+            existingIds.Add(icon.equipmentId);
+            // 优先用 N7（id 15~17）或 N8（id 18~20）做模板
+            if (template == null || (icon.equipmentId >= 15 && icon.equipmentId <= 20))
+                template = icon;
+        }
+        if (template == null) return;
+
+        Transform parent = template.transform.parent != null ? template.transform.parent : clearEquipmentContainer.transform;
+
+        // N9: 21-23
+        for (int id = 21; id <= 23; id++)
+            TryCloneClearN9toN13Icon(template, parent, id, existingIds);
+        // N10: 24-26
+        for (int id = 24; id <= 26; id++)
+            TryCloneClearN9toN13Icon(template, parent, id, existingIds);
+        // N11: 27-29
+        for (int id = 27; id <= 29; id++)
+            TryCloneClearN9toN13Icon(template, parent, id, existingIds);
+        // N12: 30-32
+        for (int id = 30; id <= 32; id++)
+            TryCloneClearN9toN13Icon(template, parent, id, existingIds);
+        // N13: 33-35
+        for (int id = 33; id <= 35; id++)
+            TryCloneClearN9toN13Icon(template, parent, id, existingIds);
+    }
+
+    private static void TryCloneClearN9toN13Icon(EquipmentIcon template, Transform parent, int targetId, HashSet<int> existingIds)
+    {
+        if (existingIds.Contains(targetId)) return;
+
+        GameObject clone = Instantiate(template.gameObject, parent);
+        string diffPrefix = targetId <= 23 ? "N9" : targetId <= 26 ? "N10" : targetId <= 29 ? "N11" : targetId <= 32 ? "N12" : "N13";
+        clone.name = $"{diffPrefix}_{targetId} (auto)";
+
+        EquipmentIcon cloneIcon = clone.GetComponent<EquipmentIcon>();
+        if (cloneIcon == null) { Destroy(clone); return; }
+
+        cloneIcon.equipmentType = EquipmentType.ClearEquipment;
+        cloneIcon.equipmentId   = targetId;
+        cloneIcon.gachaRarity   = GachaRarity.R;
+        cloneIcon.equipmentName = string.Empty;
+        cloneIcon.description   = string.Empty;
+        cloneIcon.howToGet      = string.Empty;
+
+        existingIds.Add(targetId);
     }
 
     private static Transform FindChildByNameRecursive(Transform root, string name)
@@ -612,8 +686,8 @@ public class ArchiveManager : MonoBehaviour
             if (descriptionText != null)
                 descriptionText.text = lockedDescription;
 
-            // 未解锁且是通关装备 0~20（N2~N8 全部），显示积分解锁按钮
-            bool canUnlockByPoints = type == EquipmentType.ClearEquipment && id >= 0 && id <= 20;
+            // 未解锁且是通关装备 0~35（N2~N13 全部），显示积分解锁按钮
+            bool canUnlockByPoints = type == EquipmentType.ClearEquipment && id >= 0 && id <= 35;
             if (unlockByPointsButton != null)
             {
                 unlockByPointsButton.gameObject.SetActive(canUnlockByPoints);
@@ -811,10 +885,11 @@ public class ArchiveManager : MonoBehaviour
 
         int beforeCount = CountAllIconsInContainers();
 
-        // 跑三套补全逻辑——和运行时完全相同
+        // 跑四套补全逻辑——和运行时完全相同
         EnsureGachaSsrIconsExist();
         EnsureGachaRSrIconsExist();
         EnsureClearEquipmentN8IconsExist();
+        EnsureClearEquipmentN9toN13IconsExist();
 
         // 关键差异：Editor 模式下 EquipmentIcon.Start 不会触发，
         // 需要主动调用 EditorApplyForcedOverrides() 把文本/Sprite 立即写入。

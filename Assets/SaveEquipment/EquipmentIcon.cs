@@ -101,6 +101,11 @@ public class EquipmentIcon : MonoBehaviour
         // 必须在这里按 equipmentId 注入名字/描述/howToGet/Sprite。
         ApplyForcedClearEquipmentN8Overrides();
 
+        // N9~N13 通关装备 21~35（利爪/月牙/粘液/暗影/龙鳞 系列）的文本 + 图标兜底。
+        // 这十五件图标由 ArchiveManager.EnsureClearEquipmentN9toN13IconsExist() 在运行时克隆，
+        // 必须在这里按 equipmentId 注入完整信息。
+        ApplyForcedClearEquipmentN9toN13Overrides();
+
         if (equipmentType != EquipmentType.AchievementEquipment) return;
 
         if (equipmentId == 1)
@@ -290,6 +295,134 @@ public class EquipmentIcon : MonoBehaviour
             description = "经验效率＋3\n\n或许，我能为这里带来和平";
             howToGet = "通关N8有概率掉落";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/020.png");
+        }
+    }
+
+    /// <summary>
+    /// N9~N13 通关装备 21~35（利爪/月牙/粘液/暗影/龙鳞 系列）的文本 + 图标兜底。
+    /// 这十五件图标由 ArchiveManager.EnsureClearEquipmentN9toN13IconsExist() 在运行时克隆，
+    /// 必须在这里按 equipmentId 注入完整信息。
+    ///
+    /// 策划数值（与 EquipmentInitializer.ApplyClearEquipments 保持一致）：
+    ///   21 利爪之剑：攻击力+20     | 22 皮毛之甲：防御力+2      | 23 野兽之心：经验效率+2
+    ///   24 月牙之剑：攻击力+20     | 25 月圆之甲：移动速度+2    | 26 月球之心：自然回血+2
+    ///   27 粘液之剑：攻击力+20     | 28 粘液之甲：生命值+100    | 29 粘液之心：经验效率+2
+    ///   30 暗影之剑：攻击力+20     | 31 暗影之甲：防御力+2      | 32 暗影之心：暴击伤害+20
+    ///   33 龙鳞之剑：攻击力+30     | 34 龙鳞之甲：防御力+10     | 35 黄金睛：暴击伤害+20
+    /// </summary>
+    private void ApplyForcedClearEquipmentN9toN13Overrides()
+    {
+        if (equipmentType != EquipmentType.ClearEquipment) return;
+
+        // ── N9 (id 21-23) ─────────────────────────────────────
+        if (equipmentId == 21)
+        {
+            equipmentName = "利爪之剑";
+            description = "攻击力＋20\n\n为什么非要做成剑？！！";
+            howToGet = "通关N9有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/021.png");
+        }
+        else if (equipmentId == 22)
+        {
+            equipmentName = "皮毛之甲";
+            description = "防御力＋2\n\n没有皮甲的家伙！";
+            howToGet = "通关N9有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/022.png");
+        }
+        else if (equipmentId == 23)
+        {
+            equipmentName = "野兽之心";
+            description = "经验效率＋2\n\n欲望略微增加了";
+            howToGet = "通关N9有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/023.png");
+        }
+        // ── N10 (id 24-26) ────────────────────────────────────
+        else if (equipmentId == 24)
+        {
+            equipmentName = "月牙之剑";
+            description = "攻击力＋20\n\n月牙露出小尖尖";
+            howToGet = "通关N10有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/024.png");
+        }
+        else if (equipmentId == 25)
+        {
+            equipmentName = "月圆之甲";
+            description = "移动速度＋2\n\n诶哆...";
+            howToGet = "通关N10有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/025.png");
+        }
+        else if (equipmentId == 26)
+        {
+            equipmentName = "月球之心";
+            description = "自然回血＋2\n\n我也要上月球吗";
+            howToGet = "通关N10有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/026.png");
+        }
+        // ── N11 (id 27-29) ────────────────────────────────────
+        else if (equipmentId == 27)
+        {
+            equipmentName = "粘液之剑";
+            description = "攻击力＋20\n\n这批装备的名字也太好取了吧";
+            howToGet = "通关N11有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/027.png");
+        }
+        else if (equipmentId == 28)
+        {
+            equipmentName = "粘液之甲";
+            description = "生命值＋100\n\n溶解之爱…";
+            howToGet = "通关N11有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/028.png");
+        }
+        else if (equipmentId == 29)
+        {
+            equipmentName = "粘液之心";
+            description = "经验效率＋2\n\n胶粘有感觉吗";
+            howToGet = "通关N11有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/029.png");
+        }
+        // ── N12 (id 30-32) ────────────────────────────────────
+        else if (equipmentId == 30)
+        {
+            equipmentName = "暗影之剑";
+            description = "攻击力＋20\n\n物理学圣剑！";
+            howToGet = "通关N12有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/030.png");
+        }
+        else if (equipmentId == 31)
+        {
+            equipmentName = "暗影之甲";
+            description = "防御力＋2\n\n史莱姆的塑性制作而成暗影胸鳍胸";
+            howToGet = "通关N12有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/031.png");
+        }
+        else if (equipmentId == 32)
+        {
+            equipmentName = "暗影之心";
+            description = "暴击伤害＋20\n\n人形自走核弹来袭";
+            howToGet = "通关N12有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/032.png");
+        }
+        // ── N13 (id 33-35) ────────────────────────────────────
+        else if (equipmentId == 33)
+        {
+            equipmentName = "龙鳞之剑";
+            description = "攻击力＋30\n\n好帅的一柄剑";
+            howToGet = "通关N13有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/033.png");
+        }
+        else if (equipmentId == 34)
+        {
+            equipmentName = "龙鳞之甲";
+            description = "防御力＋10\n\n好帅的一套铠甲";
+            howToGet = "通关N13有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/034.png");
+        }
+        else if (equipmentId == 35)
+        {
+            equipmentName = "黄金睛";
+            description = "暴击伤害＋20\n\n感叹没有黄金瞳的照修命运吧！";
+            howToGet = "通关N13有概率掉落";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/035.png");
         }
     }
 
