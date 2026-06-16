@@ -38,13 +38,18 @@ public class ClearRecordManager : MonoBehaviour
 
         switch (label)
         {
-            case "N2": GrantN2Reward(); break;
-            case "N3": GrantN3Reward(); break;
-            case "N4": GrantN4Reward(); break;
-            case "N5": GrantN5Reward(); break;
-            case "N6": GrantN6Reward(); break;
-            case "N7": GrantN7Reward(); break;
-            case "N8": GrantN8Reward(); break;
+            case "N2":  GrantN2Reward(); break;
+            case "N3":  GrantN3Reward(); break;
+            case "N4":  GrantN4Reward(); break;
+            case "N5":  GrantN5Reward(); break;
+            case "N6":  GrantN6Reward(); break;
+            case "N7":  GrantN7Reward(); break;
+            case "N8":  GrantN8Reward(); break;
+            case "N9":  GrantN9Reward(); break;
+            case "N10": GrantN10Reward(); break;
+            case "N11": GrantN11Reward(); break;
+            case "N12": GrantN12Reward(); break;
+            case "N13": GrantN13Reward(); break;
             // N1 无通关装备奖励
         }
     }
@@ -180,6 +185,101 @@ public class ClearRecordManager : MonoBehaviour
         }
     }
 
+    private void GrantN9Reward()
+    {
+        if (EquipmentSystem.Instance == null) return;
+        int roll = Random.Range(21, 24); // id 21/22/23
+        bool alreadyUnlocked = EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, roll);
+        if (alreadyUnlocked)
+        {
+            int pts = PlayerPrefs.GetInt(KEY_POINTS, 0) + 160;
+            PlayerPrefs.SetInt(KEY_POINTS, pts);
+            PlayerPrefs.Save();
+            ToastManager.Show($"N9通关奖励：获得160积分（当前{pts}）");
+        }
+        else
+        {
+            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.ClearEquipment, roll);
+            ToastManager.Show($"N9通关奖励：解锁通关装备{roll}号！");
+        }
+    }
+
+    private void GrantN10Reward()
+    {
+        if (EquipmentSystem.Instance == null) return;
+        int roll = Random.Range(24, 27); // id 24/25/26
+        bool alreadyUnlocked = EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, roll);
+        if (alreadyUnlocked)
+        {
+            int pts = PlayerPrefs.GetInt(KEY_POINTS, 0) + 180;
+            PlayerPrefs.SetInt(KEY_POINTS, pts);
+            PlayerPrefs.Save();
+            ToastManager.Show($"N10通关奖励：获得180积分（当前{pts}）");
+        }
+        else
+        {
+            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.ClearEquipment, roll);
+            ToastManager.Show($"N10通关奖励：解锁通关装备{roll}号！");
+        }
+    }
+
+    private void GrantN11Reward()
+    {
+        if (EquipmentSystem.Instance == null) return;
+        int roll = Random.Range(27, 30); // id 27/28/29
+        bool alreadyUnlocked = EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, roll);
+        if (alreadyUnlocked)
+        {
+            int pts = PlayerPrefs.GetInt(KEY_POINTS, 0) + 200;
+            PlayerPrefs.SetInt(KEY_POINTS, pts);
+            PlayerPrefs.Save();
+            ToastManager.Show($"N11通关奖励：获得200积分（当前{pts}）");
+        }
+        else
+        {
+            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.ClearEquipment, roll);
+            ToastManager.Show($"N11通关奖励：解锁通关装备{roll}号！");
+        }
+    }
+
+    private void GrantN12Reward()
+    {
+        if (EquipmentSystem.Instance == null) return;
+        int roll = Random.Range(30, 33); // id 30/31/32
+        bool alreadyUnlocked = EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, roll);
+        if (alreadyUnlocked)
+        {
+            int pts = PlayerPrefs.GetInt(KEY_POINTS, 0) + 220;
+            PlayerPrefs.SetInt(KEY_POINTS, pts);
+            PlayerPrefs.Save();
+            ToastManager.Show($"N12通关奖励：获得220积分（当前{pts}）");
+        }
+        else
+        {
+            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.ClearEquipment, roll);
+            ToastManager.Show($"N12通关奖励：解锁通关装备{roll}号！");
+        }
+    }
+
+    private void GrantN13Reward()
+    {
+        if (EquipmentSystem.Instance == null) return;
+        int roll = Random.Range(33, 36); // id 33/34/35
+        bool alreadyUnlocked = EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, roll);
+        if (alreadyUnlocked)
+        {
+            int pts = PlayerPrefs.GetInt(KEY_POINTS, 0) + 250;
+            PlayerPrefs.SetInt(KEY_POINTS, pts);
+            PlayerPrefs.Save();
+            ToastManager.Show($"N13通关奖励：获得250积分（当前{pts}）");
+        }
+        else
+        {
+            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.ClearEquipment, roll);
+            ToastManager.Show($"N13通关奖励：解锁通关装备{roll}号！");
+        }
+    }
+
     /// <summary>获取通关装备积分</summary>
     public int GetEquipmentPoints() => PlayerPrefs.GetInt(KEY_POINTS, 0);
 
@@ -198,7 +298,7 @@ public class ClearRecordManager : MonoBehaviour
     /// <summary>删除存档时清除所有通关记录和积分</summary>
     public void DeleteAllRecords()
     {
-        string[] labels = { "N1", "N2", "N3", "N4", "N5" ,"N6" ,"N7" ,"N8"};
+        string[] labels = { "N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8", "N9", "N10", "N11", "N12", "N13" };
         foreach (var label in labels)
             PlayerPrefs.DeleteKey(KEY_PREFIX + label);
         PlayerPrefs.DeleteKey(KEY_POINTS);

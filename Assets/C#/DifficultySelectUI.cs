@@ -31,7 +31,12 @@ public class DifficultySelectUI : MonoBehaviour
         "开放门挑战",               // N5
         "蘑菇Boss × 2",            // N6
         "蝙蝠社群Boss登场",         // N7
-        "解锁世界Boss", // N8
+        "解锁世界Boss",             // N8
+        "新增N9通关装备",           // N9
+        "新增N10通关装备",          // N10
+        "新增N11通关装备",          // N11
+        "新增N12通关装备",          // N12
+        "终极难度·新增N13通关装备", // N13
     };
 
     // OverlayLayer 化的运行时占位
@@ -76,14 +81,17 @@ public class DifficultySelectUI : MonoBehaviour
 
         if (DifficultyManager.Instance == null) return;
 
+        int totalDifficulties = DifficultyManager.Instance.configs.Length;
+
         for (int i = 0; i < difficultyButtons.Length; i++)
         {
             if (difficultyButtons[i] == null) continue;
             int idx = i;
             var btn = difficultyButtons[i];
 
+            // N1 默认解锁；其余需要通关前一个难度
             bool unlocked = i == 0 || (ClearRecordManager.Instance != null &&
-                i < DifficultyManager.Instance.configs.Length &&
+                i < totalDifficulties &&
                 ClearRecordManager.Instance.GetClearCount(
                     DifficultyManager.Instance.configs[i - 1].label) > 0);
             btn.interactable = unlocked;
@@ -161,7 +169,9 @@ public class DifficultySelectUI : MonoBehaviour
     private void ShowTooltip(int index)
     {
         if (tooltipPanel == null || DifficultyManager.Instance == null) return;
-        if (index >= DifficultyManager.Instance.configs.Length) return;
+
+        int total = DifficultyManager.Instance.configs.Length;
+        if (index >= total) return;
 
         var cfg = DifficultyManager.Instance.configs[index];
         int clearCount = ClearRecordManager.Instance != null
@@ -169,6 +179,7 @@ public class DifficultySelectUI : MonoBehaviour
             : 0;
 
         bool unlocked = index == 0 || (ClearRecordManager.Instance != null &&
+            index < total &&
             ClearRecordManager.Instance.GetClearCount(
                 DifficultyManager.Instance.configs[index - 1].label) > 0);
 
