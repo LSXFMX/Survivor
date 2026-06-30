@@ -295,6 +295,13 @@ public class ClearRecordManager : MonoBehaviour
     /// <summary>获取指定难度通关次数</summary>
     public int GetClearCount(string label) => PlayerPrefs.GetInt(KEY_PREFIX + label, 0);
 
+    /// <summary>直接设置指定难度的通关次数（测试模式用）</summary>
+    public void SetClearCount(string label, int count)
+    {
+        PlayerPrefs.SetInt(KEY_PREFIX + label, count);
+        Debug.Log($"[通关记录] SetClearCount: {label} = {count}");
+    }
+
     /// <summary>删除存档时清除所有通关记录和积分</summary>
     public void DeleteAllRecords()
     {

@@ -61,7 +61,7 @@ public class EquipmentSystem : MonoBehaviour
         // 枚举所有类型 × id 0~29，覆盖所有可能的 key
         foreach (EquipmentType type in System.Enum.GetValues(typeof(EquipmentType)))
         {
-            for (int id = 0; id < 30; id++)
+            for (int id = 0; id < 36; id++) // N13 通关装备 id 最高到 35
             {
                 string key = Key(type, id);
                 if (PlayerPrefs.HasKey(key))

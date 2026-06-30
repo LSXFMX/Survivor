@@ -91,6 +91,23 @@ public class DifficultyManager : MonoBehaviour
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
         DontDestroyOnLoad(gameObject);
+
+        // 修复：场景序列化数据可能只有8个条目（旧版本），运行时自动扩展到13个
+        if (configs != null && configs.Length < 13)
+        {
+            int oldLen = configs.Length;
+            var expanded = new DifficultyConfig[13];
+            for (int i = 0; i < oldLen; i++)
+                expanded[i] = configs[i];
+            // 填充缺失的 N9~N13 默认值
+            expanded[8]  = new DifficultyConfig { label = "N9",  hpMultiplier = 32.0f, atkMultiplier = 4.0f, minutes = 14 };
+            expanded[9]  = new DifficultyConfig { label = "N10", hpMultiplier = 41.0f, atkMultiplier = 4.5f, minutes = 15 };
+            expanded[10] = new DifficultyConfig { label = "N11", hpMultiplier = 52.0f, atkMultiplier = 5.0f, minutes = 16 };
+            expanded[11] = new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.5f, minutes = 17 };
+            expanded[12] = new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 6.0f, minutes = 18 };
+            configs = expanded;
+            Debug.LogWarning($"[难度管理] 场景 configs 只有 {oldLen} 个条目，已自动扩展到 13 个（N1-N13）");
+        }
     }
 
     public void SetDifficulty(int index)

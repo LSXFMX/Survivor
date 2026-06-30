@@ -324,9 +324,39 @@ public class title : MonoBehaviour
         var mgr = TestModeManager.EnsureInstance();
         mgr.Toggle();
         RefreshTestModeButtonLabel();
-        ToastManager.Show(mgr.Enabled
-            ? "[测试模式] 已开启：下一次进入战斗时玩家 HP/ATK = 99999"
-            : "[测试模式] 已关闭：玩家数值恢复正常");
+
+        // 测试模式开启时，同时解锁所有难度（通过 ClearRecordManager 正规途径写入）
+        if (mgr.Enabled)
+        {
+            // 将 N1~N12 的通关次数都设为 1，使 N2~N13 全部解锁
+            if (ClearRecordManager.Instance != null)
+            {
+                for (int i = 1; i <= 12; i++)
+                    ClearRecordManager.Instance.SetClearCount("N" + i, 1);
+                PlayerPrefs.Save();
+                Debug.Log("[测试模式] 已通过 ClearRecordManager 解锁 N1~N12");
+            }
+            else
+            {
+                // 兜底：直接写 PlayerPrefs
+                for (int i = 1; i <= 12; i++)
+                    PlayerPrefs.SetInt("ClearCount_N" + i, 1);
+                PlayerPrefs.Save();
+            }
+
+            // 如果难度选择面板已打开，强制刷新（重新执行 OnEnable）
+            if (difficultySelectUI != null && difficultySelectUI.activeInHierarchy)
+            {
+                difficultySelectUI.SetActive(false);
+                difficultySelectUI.SetActive(true);
+            }
+
+            ToastManager.Show("[测试模式] 已开启：玩家 HP/ATK=99999，所有难度已解锁");
+        }
+        else
+        {
+            ToastManager.Show("[测试模式] 已关闭：玩家数值恢复正常（难度解锁状态保留）");
+        }
     }
 
     private void RefreshTestModeButtonLabel()

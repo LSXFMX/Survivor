@@ -47,17 +47,9 @@ public class DifficultySelectUI : MonoBehaviour
     void OnEnable()
     {
         // ============ 关键：彻底解决"关卡选择被压在主菜单下层 / 看起来歪在屏幕底部"的层级问题 ============
-        // 项目里有多个嵌套 Canvas（外层"Canvas" → 子 Canvas"标题UI"），sub-Canvas 在同 SortingOrder 下
-        // 默认会画在父 Canvas 内的兄弟 Image 之上 —— DifficultyPanel 作为父 Canvas 的兄弟 Image，
-        // 怎么改 sibling 顺序都会被"标题UI"sub-Canvas 整个盖住，表现为"红色横幅 + 主菜单按钮在最上面"。
-        //
-        // 解决：把整个 DifficultySelectUI 这个 GameObject **reparent** 到一个**场景根级**、
-        // SortingOrder=10000 的 OverlayCanvas 下（UIOverlayLayer 自动创建），完全脱离原 Canvas 层级，
-        // 这是唯一能确定性"画在所有 UI 之上"的方案。
         Transform overlay = UIOverlayLayer.Get();
         if (overlay != null && transform.parent != overlay)
         {
-            // 首次 enable：记录原父节点，OnDisable 时还原（避免对场景结构产生持久副作用）
             if (_originalParent == null)
             {
                 _originalParent = transform.parent;
@@ -67,9 +59,6 @@ public class DifficultySelectUI : MonoBehaviour
             transform.SetAsLastSibling();
         }
 
-        // 额外：原 DifficultyPanel 自带的白色 alpha=0.392 半透明背景**根本盖不住主菜单**，
-        // 所以这里**额外**动态创建一个全屏黑色 0.6 alpha 的 backdrop 作为遮罩，
-        // 挂在 OverlayLayer 下、且位于本 panel 之前（先绘制 → 在底）。
         EnsureRuntimeBackdrop(overlay);
 
         if (tooltipPanel != null)
@@ -83,24 +72,138 @@ public class DifficultySelectUI : MonoBehaviour
 
         int totalDifficulties = DifficultyManager.Instance.configs.Length;
 
-        for (int i = 0; i < difficultyButtons.Length; i++)
+        // 关键修复：确保数组大小与配置一致，自动绑定 Inspector 中未拖入的按钮
+        EnsureButtonArraySize(totalDifficulties);
+
+        // 用 totalDifficulties 作为循环边界，防止 difficultyButtons 数组长度 > configs.Length 时越界
+        for (int i = 0; i < totalDifficulties; i++)
         {
+            // 防御性检查：如果 configs 数组长度异常，直接报错并退出
+            if (i >= DifficultyManager.Instance.configs.Length)
+            {
+                Debug.LogError($"[难度选择] 严重：configs 数组长度为 {DifficultyManager.Instance.configs.Length}，但循环到 i={i}！请在 Inspector 中重置 DifficultyManager 组件。");
+                break;
+            }
+
             if (difficultyButtons[i] == null) continue;
             int idx = i;
             var btn = difficultyButtons[i];
 
-            // N1 默认解锁；其余需要通关前一个难度
-            bool unlocked = i == 0 || (ClearRecordManager.Instance != null &&
-                i < totalDifficulties &&
-                ClearRecordManager.Instance.GetClearCount(
-                    DifficultyManager.Instance.configs[i - 1].label) > 0);
-            btn.interactable = unlocked;
+            // 统一用 IsButtonUnlocked 判断，并在日志里输出诊断信息
+            bool unlocked = IsButtonUnlocked(i);
+            Debug.Log($"[难度选择] 按钮[{idx}]{DifficultyManager.Instance.configs[idx].label} " +
+                $"unlocked={unlocked} " +
+                (idx > 0 ? $"(检查 key=ClearCount_{DifficultyManager.Instance.configs[idx - 1].label}, " +
+                    $"值={ClearRecordManager.Instance?.GetClearCount(DifficultyManager.Instance.configs[idx - 1].label)})" : ""));
+
+            // 所有按钮必须 interactable=true，否则 EventTrigger 的 PointerEnter 事件被屏蔽
+            btn.interactable = true;
+            ApplyLockedVisual(btn, unlocked);
 
             btn.onClick.RemoveAllListeners();
-            btn.onClick.AddListener(() => OnSelectDifficulty(idx));
+            btn.onClick.AddListener(() =>
+            {
+                if (!IsButtonUnlocked(idx))
+                {
+                    string prevLabel = DifficultyManager.Instance.configs[idx - 1].label;
+                    ToastManager.Show($"请先通关 {prevLabel} 解锁该难度！");
+                    return;
+                }
+                OnSelectDifficulty(idx);
+            });
 
             SetupTooltipTrigger(btn.gameObject, idx);
         }
+    }
+
+    /// <summary>
+    /// 确保 difficultyButtons 数组大小与 configs 一致。
+    /// 遍历所有子对象（含深层、含 Clone 后缀），按名称匹配自动绑定。
+    /// </summary>
+    private void EnsureButtonArraySize(int total)
+    {
+        // 1) 扩展数组
+        if (difficultyButtons == null || difficultyButtons.Length < total)
+        {
+            Button[] newArray = new Button[total];
+            int copyLen = Mathf.Min(difficultyButtons != null ? difficultyButtons.Length : 0, total);
+            for (int i = 0; i < copyLen; i++)
+                newArray[i] = difficultyButtons[i];
+            difficultyButtons = newArray;
+        }
+
+        // 2) 按 configs 顺序，递归查找每个未绑定的按钮
+        for (int i = 0; i < total; i++)
+        {
+            if (difficultyButtons[i] != null) continue;
+
+            string label = DifficultyManager.Instance.configs[i].label;
+            // 递归查找：去除 "(Clone)" 后缀后比较名称
+            Button found = FindChildButtonByName(transform, label);
+            if (found != null)
+            {
+                difficultyButtons[i] = found;
+                Debug.Log($"[难度选择] 自动绑定按钮 [{i}] '{label}'");
+            }
+            else
+            {
+                Debug.LogWarning($"[难度选择] 未找到按钮 '{label}'（已递归搜索所有子对象）");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 递归在 parent 的所有子对象中查找名称匹配的 Button。
+    /// 比较时自动去除 "(Clone)" 后缀。
+    /// </summary>
+    private Button FindChildButtonByName(Transform parent, string name)
+    {
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform child = parent.GetChild(i);
+            string childName = child.name.Replace("(Clone)", "").Trim();
+            if (childName == name)
+            {
+                var btn = child.GetComponent<Button>();
+                if (btn != null) return btn;
+            }
+            // 递归查找孙对象
+            Button found = FindChildButtonByName(child, name);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 判断指定难度是否已解锁（独立方法，供 onClick 回调使用）。
+    /// </summary>
+    private bool IsButtonUnlocked(int index)
+    {
+        if (index == 0) return true;
+        if (ClearRecordManager.Instance == null) return false;
+        int total = DifficultyManager.Instance.configs.Length;
+        if (index >= total) return false;
+        return ClearRecordManager.Instance.GetClearCount(
+            DifficultyManager.Instance.configs[index - 1].label) > 0;
+    }
+
+    /// <summary>
+    /// 设置按钮视觉状态：未解锁时变灰，解锁时恢复正常颜色。
+    /// 遍历按钮及子对象所有 Image 组件统一设置。
+    /// </summary>
+    private void ApplyLockedVisual(Button btn, bool unlocked)
+    {
+        Color targetColor = unlocked ? Color.white : new Color(0.4f, 0.4f, 0.4f, 0.5f);
+
+        // 按钮自身的 Image / targetGraphic
+        var selfImg = btn.GetComponent<Image>();
+        if (selfImg != null) selfImg.color = targetColor;
+        if (btn.targetGraphic != null && btn.targetGraphic != selfImg as UnityEngine.UI.Graphic)
+            btn.targetGraphic.color = targetColor;
+
+        // 子对象中的 Image（图标等）
+        foreach (var img in btn.GetComponentsInChildren<Image>(true))
+            if (img != selfImg) img.color = targetColor;
     }
 
     /// <summary>
@@ -123,16 +226,15 @@ public class DifficultySelectUI : MonoBehaviour
 
             var img = _runtimeBackdrop.AddComponent<Image>();
             img.color = new Color(0f, 0f, 0f, 0.6f);
-            img.raycastTarget = true; // 吞掉点击，防止穿透到下层主菜单按钮
+            // 关键修复：遮罩只做视觉效果，raycastTarget=false 不阻挡射线，
+            // 这样按钮点击事件才能正常穿透到 DifficultyPanel 的按钮上
+            img.raycastTarget = false;
 
-            // Button 双保险吞事件
-            var btn = _runtimeBackdrop.AddComponent<Button>();
-            btn.targetGraphic = img;
-            btn.transition = Selectable.Transition.None;
+            // 不再给遮罩加 Button 组件，避免它拦截所有点击
         }
         _runtimeBackdrop.SetActive(true);
-        // backdrop 必须画在本 panel 之前（更早绘制 → 在下层）→ 先把 backdrop 设到末位再把自己设到末位
-        _runtimeBackdrop.transform.SetAsLastSibling();
+        // backdrop 放最底层（先绘制），面板放最顶层（后绘制）
+        _runtimeBackdrop.transform.SetAsFirstSibling();
         transform.SetAsLastSibling();
     }
 
@@ -178,10 +280,8 @@ public class DifficultySelectUI : MonoBehaviour
             ? ClearRecordManager.Instance.GetClearCount(cfg.label)
             : 0;
 
-        bool unlocked = index == 0 || (ClearRecordManager.Instance != null &&
-            index < total &&
-            ClearRecordManager.Instance.GetClearCount(
-                DifficultyManager.Instance.configs[index - 1].label) > 0);
+        // 统一用 IsButtonUnlocked 判断，避免散落多处逻辑不一致
+        bool unlocked = IsButtonUnlocked(index);
 
         string feature = index < FeatureDescriptions.Length ? FeatureDescriptions[index] : "";
 
