@@ -453,19 +453,16 @@ public class EquipmentIcon : MonoBehaviour
 
     /// <summary>
     /// 使用边缘泛洪填充（Flood Fill）去除 Texture2D 的实心背景。
-    /// 
-    /// 算法原理：
-    /// 1. 采样四角像素确定背景颜色（多数 AI 生成的图标背景相对均匀）
-    /// 2. 从图片所有边缘像素开始，BFS 向内扩散
-    /// 3. 与背景色接近的连通区域全部设为透明（alpha=0）
-    /// 
-    /// 这是游戏开发中去除精灵图实心背景的标准方法，
-    /// 能正确处理纯色、渐变、棋盘格等各类背景，同时保留内部物体像素。
+    ///
+    /// 改进点（相比初版）：
+    /// 1. 采样全部边缘像素（不只是四角），用颜色直方图选出前 N 个最频背景色候选
+    /// 2. BFS 时只要与任一候选背景色距离 ≤ TOLERANCE 就去除，正确处理棋盘格/渐变背景
+    /// 3. TOLERANCE 提升到 80，覆盖 AI 生成图的色差
+    /// 4. 二次扫描：对已被去背的区域做"洞填充"（去除物体内部被背景色包围的残留像素）
     /// </summary>
     private static void MakeTextureTransparent(Texture2D tex)
     {
         if (tex == null) return;
-
         try { var _ = tex.GetPixel(0, 0); }
         catch (System.Exception) { return; }
 
@@ -475,52 +472,70 @@ public class EquipmentIcon : MonoBehaviour
 
         var pixels = tex.GetPixels32();
 
-        // ── 步骤1：采样四角 + 边缘中点，投票选出最可能的背景色 ──
-        // 用 List<int[]> 避免 C# 6.0 不支持嵌套数组初始化器的问题
-        var samplePositions = new System.Collections.Generic.List<int[]>();
-        samplePositions.Add(new int[] { 0, 0 });
-        samplePositions.Add(new int[] { w - 1, 0 });
-        samplePositions.Add(new int[] { 0, h - 1 });
-        samplePositions.Add(new int[] { w - 1, h - 1 });
-        if (w > 4) { samplePositions.Add(new int[] { w / 2, 0 }); }
-        if (w > 4) { samplePositions.Add(new int[] { w / 2, h - 1 }); }
-        if (h > 4) { samplePositions.Add(new int[] { 0, h / 2 }); }
-        if (h > 4) { samplePositions.Add(new int[] { w - 1, h / 2 }); }
+        // ── 步骤1：采样全部边缘像素，建立颜色直方图 ──
+        var hist = new System.Collections.Generic.Dictionary<long, int>();
+        var histColor = new System.Collections.Generic.Dictionary<long, Color32>();
 
-        // 统计各采样点的颜色，选出现频率最高的作为背景色
-        Color32 bgColor = new Color32(200, 200, 200, 255); // 默认浅灰
-        var colorVotes = new System.Collections.Generic.Dictionary<long, int>();
-        long bestKey = 0;
-        int bestVote = 0;
-        foreach (var pos in samplePositions)
+        // 用 lambda 代替本地函数（C# 6.0 兼容）
+        System.Action<Color32> addToHist = (c) =>
         {
-            Color32 c = pixels[pos[1] * w + pos[0]];
-            if (c.a < 128) continue; // 已透明的跳过
-            long key = ((long)c.r << 16) | ((long)c.g << 8) | c.b;
-            int vote;
-            colorVotes.TryGetValue(key, out vote);
-            vote++;
-            colorVotes[key] = vote;
-            if (vote > bestVote) { bestVote = vote; bestKey = key; bgColor = c; }
-        }
+            if (c.a < 128) return;
+            long key = ((long)(c.r / 8) << 16) | ((long)(c.g / 8) << 8) | (c.b / 8);
+            int v; hist.TryGetValue(key, out v); v++;
+            hist[key] = v;
+            if (!histColor.ContainsKey(key)) histColor[key] = c;
+        };
 
-        // 颜色距离容差（用于判断"与背景色相近"）
-        const int TOLERANCE = 50; // 每通道允许偏差 ~20%
-
-        // ── 步骤2：从所有边缘像素开始 BFS 泛洪填充 ──
-        var visited = new bool[w * h];
-        var queue = new System.Collections.Generic.Queue<int>();
-
-        // 把所有边缘位置加入队列
         for (int x = 0; x < w; x++)
         {
-            EnqueueIfBackground(x, 0);
-            EnqueueIfBackground(x, h - 1);
+            addToHist(pixels[0 * w + x]);
+            addToHist(pixels[(h - 1) * w + x]);
         }
         for (int y = 1; y < h - 1; y++)
         {
-            EnqueueIfBackground(0, y);
-            EnqueueIfBackground(w - 1, y);
+            addToHist(pixels[y * w + 0]);
+            addToHist(pixels[y * w + (w - 1)]);
+        }
+
+        if (hist.Count == 0)
+        {
+            tex.SetPixels32(pixels);
+            tex.Apply(false, false);
+            return;
+        }
+
+        var sorted = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<long, int>>(hist);
+        sorted.Sort((a, b) => b.Value.CompareTo(a.Value));
+        int candidateCount = System.Math.Min(4, sorted.Count);
+        var bgCandidates = new Color32[candidateCount];
+        for (int i = 0; i < candidateCount; i++)
+            bgCandidates[i] = histColor[sorted[i].Key];
+
+        // ── 步骤2：从所有边缘像素开始 BFS 泛洪填充 ──
+        const int TOLERANCE = 80;
+        var visited = new bool[w * h];
+        var queue = new System.Collections.Generic.Queue<int>();
+
+        // 用 lambda 代替 TryEnqueueEdge / TryEnqueueNeighbor（C# 6.0 兼容）
+        System.Action<int, int> tryEnqueue = (ex, ey) =>
+        {
+            int i = ey * w + ex;
+            if (visited[i]) return;
+            Color32 c = pixels[i];
+            if (c.a == 0) { visited[i] = true; return; }
+            if (MatchesAnyBg(c, bgCandidates, TOLERANCE))
+                queue.Enqueue(i);
+        };
+
+        for (int x = 0; x < w; x++)
+        {
+            tryEnqueue(x, 0);
+            tryEnqueue(x, h - 1);
+        }
+        for (int y = 1; y < h - 1; y++)
+        {
+            tryEnqueue(0, y);
+            tryEnqueue(w - 1, y);
         }
 
         // BFS 主循环
@@ -534,37 +549,75 @@ public class EquipmentIcon : MonoBehaviour
             int px = idx % w;
             int py = idx / w;
 
-            // 四邻域扩展
-            if (px > 0)     EnqueueIfVisited(px - 1, py, idx);
-            if (px < w - 1) EnqueueIfVisited(px + 1, py, idx);
-            if (py > 0)     EnqueueIfVisited(px, py - 1, idx);
-            if (py < h - 1)  EnqueueIfVisited(px, py + 1, idx);
+            if (px > 0)     tryEnqueue(px - 1, py);
+            if (px < w - 1) tryEnqueue(px + 1, py);
+            if (py > 0)     tryEnqueue(px, py - 1);
+            if (py < h - 1)  tryEnqueue(px, py + 1);
         }
+
+        // ── 步骤3：洞填充 ──
+        FillInternalHoles(pixels, visited, w, h, bgCandidates, TOLERANCE);
 
         // ── 应用结果 ──
         tex.SetPixels32(pixels);
         tex.Apply(false, false);
+    }
 
-        // ── 局部方法 ──
-        void EnqueueIfBackground(int x, int y)
+    /// <summary>
+    /// 填充已被去背像素包围的内部"洞"——扫描线算法：
+    /// 对每一行，在两个已去背像素之间的区域，若像素颜色接近背景候选则也设为透明。
+    /// </summary>
+    private static void FillInternalHoles(Color32[] pixels, bool[] visited, int w, int h,
+        Color32[] bgCandidates, int tolerance)
+    {
+        for (int y = 1; y < h - 1; y++)
         {
-            int i = y * w + x;
-            if (visited[i]) return;
-            Color32 c = pixels[i];
-            if (c.a == 0) { visited[i] = true; return; }
-            if (ColorDist(c, bgColor) <= TOLERANCE)
-                queue.Enqueue(i);
+            int rowStart = -1;
+            for (int x = 0; x < w; x++)
+            {
+                int idx = y * w + x;
+                if (visited[idx] || pixels[idx].a == 0)
+                {
+                    if (rowStart >= 0)
+                    {
+                        int holeLen = x - rowStart;
+                        if (holeLen >= 3)
+                        {
+                            bool shouldFill = false;
+                            for (int kx = rowStart; kx < x && !shouldFill; kx++)
+                            {
+                                if (MatchesAnyBg(pixels[y * w + kx], bgCandidates, tolerance))
+                                    shouldFill = true;
+                            }
+                            if (shouldFill)
+                            {
+                                for (int kx = rowStart; kx < x; kx++)
+                                {
+                                    int kIdx = y * w + kx;
+                                    if (!visited[kIdx] && MatchesAnyBg(pixels[kIdx], bgCandidates, tolerance))
+                                    {
+                                        visited[kIdx] = true;
+                                        pixels[kIdx] = new Color32(0, 0, 0, 0);
+                                    }
+                                }
+                            }
+                        }
+                        rowStart = -1;
+                    }
+                }
+                else
+                {
+                    if (rowStart < 0) rowStart = x;
+                }
+            }
         }
+    }
 
-        void EnqueueIfVisited(int x, int y, int fromIdx)
-        {
-            int i = y * w + x;
-            if (visited[i]) return;
-            Color32 c = pixels[i];
-            if (c.a == 0) { visited[i] = true; return; }
-            if (ColorDist(c, bgColor) <= TOLERANCE)
-                queue.Enqueue(i);
-        }
+    private static bool MatchesAnyBg(Color32 c, Color32[] candidates, int tolerance)
+    {
+        for (int i = 0; i < candidates.Length; i++)
+            if (ColorDist(c, candidates[i]) <= tolerance) return true;
+        return false;
     }
 
     /// <summary>计算两个颜色的 RGB 各通道绝对差值之和（曼哈顿距离）</summary>
