@@ -43,6 +43,9 @@ public class Player : Attribute
     [HideInInspector] public bool dashInvincibleUnlocked = false;
     [HideInInspector] public bool dashPhaseUnlocked = false;
 
+    /// <summary>被抓取/定身时置 true，屏蔽玩家的移动与冲刺（供 WolfBoss 撕咬处决等定身演出使用）。</summary>
+    [HideInInspector] public bool movementLocked = false;
+
     // 自然回血计时
     private float _regenTimer = 0f;
     // 死亡防重入：避免多个敌人同帧打死时重复触发返回主菜单协程
@@ -221,6 +224,14 @@ public class Player : Attribute
         if (_dashCDTimer > 0f) _dashCDTimer -= Time.deltaTime;
 
         if (_isDashing) return; // 冲刺中不处理普通移动
+
+        // 被抓取/定身：清零移动，屏蔽移动与冲刺（撕咬处决等定身演出）
+        if (movementLocked)
+        {
+            if (rb != null && !rb.isKinematic) rb.velocity = Vector3.zero;
+            if (ani != null) ani.SetBool("ismove", false);
+            return;
+        }
 
         // ===== 分身（tag="Clone"）：跟随主体 + 释放技能 =====
         // 分身不读 Input，改为 AI 跟随主体移动。Rigidbody 保持 kinematic 避免物理推挤，

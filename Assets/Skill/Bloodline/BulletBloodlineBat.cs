@@ -598,7 +598,11 @@ public class BulletBloodlineBat : Bulletbase
         if (e == null || player == null) return;
 
         if (e.EVA > Random.value * 100f)
+        {
+            // 敌人闪避成功：在敌人位置弹青蓝色 Miss
+            MissNumber.Show(e.atknumber, e.transform.position);
             return;
+        }
 
         // 伤害公式：技能基础伤害 × (1 + 攻击力 × 0.1)，再走暴击与防御
         float finaldamage = damage * (1f + player.atk * 0.1f);

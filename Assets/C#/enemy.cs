@@ -240,7 +240,12 @@ public class enemy : Attribute
 
                     // 玩家闪避判定
                     float evaRoll = UnityEngine.Random.value * 100;
-                    if (Player.EVA > evaRoll) return;
+                    if (Player.EVA > evaRoll)
+                    {
+                        // 玩家闪避成功：在玩家位置弹青蓝色 Miss
+                        MissNumber.Show(atknumber, collision.transform.position);
+                        return;
+                    }
 
                     // 按玩家防御减伤，至少 1 点
                     int dmg = Mathf.Max(1, (int)(atk - Player.def));

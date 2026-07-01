@@ -82,7 +82,12 @@ public class BulletHellTrident : MonoBehaviour
         if (_targetEnemy.health <= 0 || _targetEnemy.rolestate == global::enemy.state.dead) return;
 
         float evaRoll = UnityEngine.Random.value * 100f;
-        if (_targetEnemy.EVA > evaRoll) return;
+        if (_targetEnemy.EVA > evaRoll)
+        {
+            // 敌人闪避成功：在敌人位置弹青蓝色 Miss
+            MissNumber.Show(_targetEnemy.atknumber, _targetEnemy.transform.position);
+            return;
+        }
 
         float finalDamage = _damage + (_playerAttr != null ? _playerAttr.atk : 0f);
         bool isCrit = false;

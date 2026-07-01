@@ -129,6 +129,8 @@ public class BulletWindArrow : Bulletbase
         if (e.EVA > UnityEngine.Random.value * 100f)
         {
             if (SkillFormOfWind.DebugTrace) Debug.Log("[风箭HitTarget-2] 目标闪避");
+            // 敌人闪避成功：在敌人位置弹青蓝色 Miss
+            MissNumber.Show(e.atknumber, e.transform.position);
             return;
         }
 

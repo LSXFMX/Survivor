@@ -39,6 +39,9 @@ public class title : MonoBehaviour
 
         // 内测福利按钮（左上角，测试模式按钮下方）
         EnsureBetaRewardButton();
+
+        // 测试按钮：一键把所有副本时间设为 1 分钟
+        EnsureOneMinuteButton();
     }
 
     private void EnsureSkinChangerMounted()
@@ -444,6 +447,74 @@ public class title : MonoBehaviour
         else
         {
             ToastManager.Show($"获得 10 源！（已领 {_betaRewardClickCount} 次）");
+        }
+    }
+
+    // ───────────────────────── 测试：副本时间设为 1 分钟 ─────────────────────────
+    private GameObject _oneMinBtnGo;
+
+    private void EnsureOneMinuteButton()
+    {
+        if (_oneMinBtnGo != null) { _oneMinBtnGo.SetActive(true); return; }
+
+        Canvas hostCanvas = FindMainMenuCanvas();
+        if (hostCanvas == null) return;
+
+        // 位于内测福利按钮下方：y = -90 - 60 - 10 = -160
+        var btnGo = new GameObject("__OneMinuteButton",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        btnGo.transform.SetParent(hostCanvas.transform, false);
+        var rt = btnGo.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(0f, 1f);
+        rt.pivot     = new Vector2(0f, 1f);
+        rt.anchoredPosition = new Vector2(20f, -160f);
+        rt.sizeDelta = new Vector2(220f, 60f);
+
+        var img = btnGo.GetComponent<Image>();
+        img.color = new Color(0.28f, 0.08f, 0.10f, 0.9f); // 深红调，区分其它测试按钮
+
+        var btn = btnGo.GetComponent<Button>();
+        var colors = btn.colors;
+        colors.normalColor      = new Color(1f, 1f, 1f, 1f);
+        colors.highlightedColor = new Color(1f, 0.8f, 0.8f, 1f);
+        colors.pressedColor     = new Color(1f, 0.6f, 0.6f, 1f);
+        btn.colors = colors;
+
+        var labelGo = new GameObject("Label",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+        labelGo.transform.SetParent(btnGo.transform, false);
+        var lrt = labelGo.GetComponent<RectTransform>();
+        lrt.anchorMin = Vector2.zero;
+        lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = Vector2.zero;
+        lrt.offsetMax = Vector2.zero;
+        var label = labelGo.GetComponent<Text>();
+        label.text      = "副本时间=1分钟";
+        label.alignment = TextAnchor.MiddleCenter;
+        label.fontSize  = 20;
+        label.color     = new Color(1f, 0.85f, 0.5f);
+        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        if (font != null) label.font = font;
+
+        btn.onClick.AddListener(OnOneMinuteButtonClick);
+        _oneMinBtnGo = btnGo;
+    }
+
+    private void OnOneMinuteButtonClick()
+    {
+        AudioManager.PlaySfx(AudioManager.SfxKey.Click);
+        if (DifficultyManager.Instance != null && DifficultyManager.Instance.configs != null)
+        {
+            var cfgs = DifficultyManager.Instance.configs;
+            for (int i = 0; i < cfgs.Length; i++)
+                cfgs[i].minutes = 1;
+            ToastManager.Show("[测试] 所有副本时间已设为 1 分钟");
+        }
+        else
+        {
+            ToastManager.Show("[测试] 未找到 DifficultyManager");
         }
     }
 

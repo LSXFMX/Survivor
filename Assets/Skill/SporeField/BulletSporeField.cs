@@ -116,6 +116,11 @@ public class BulletSporeField : MonoBehaviour
                     targetEnemy.Destroy1();
                 }
             }
+            else
+            {
+                // 敌人闪避成功：在敌人位置弹青蓝色 Miss
+                MissNumber.Show(targetEnemy.atknumber, targetEnemy.transform.position);
+            }
         }
 
         Destroy(gameObject);

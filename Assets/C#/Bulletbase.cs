@@ -64,6 +64,8 @@ public class Bulletbase : MonoBehaviour
             float evaRoll = UnityEngine.Random.value * 100;
             if (enemy.EVA > evaRoll)
             {
+                // 敌人闪避成功：在敌人位置弹青蓝色 Miss
+                MissNumber.Show(enemy.atknumber, enemy.transform.position);
                 // 闪避成功，不造成伤害，但仍消耗穿透
                 pass -= 1;
                 if (pass < 0) Destroy();

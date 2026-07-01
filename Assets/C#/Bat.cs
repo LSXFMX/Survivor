@@ -236,7 +236,12 @@ public class Bat : enemy
         if (player == null || player.health <= 0) return;
 
         float evaRoll = UnityEngine.Random.value * 100f;
-        if (player.EVA > evaRoll) return;
+        if (player.EVA > evaRoll)
+        {
+            // 玩家闪避成功：在玩家位置弹青蓝色 Miss
+            MissNumber.Show(atknumber, other.transform.position);
+            return;
+        }
 
         _hitThisDive = true;
         player.health -= (int)atk;
