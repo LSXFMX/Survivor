@@ -436,10 +436,14 @@ public class WolfBoss : enemy
         }
     }
 
-    // ── 狼形冲刺（锁定方向直线冲锋，可被玩家躲开；固定 +30% 移速；不顶推玩家）──
+    // ── 狼形冲刺（3 段式：每段重新锁定玩家方向后直线冲，段内不追踪）──
     // 【健壮性】try/finally 保证无论如何都恢复 EVA、碰撞盒、复位 busy、回到 WolfWalk，绝不卡死。
     private IEnumerator DashDriftRoutine()
     {
+        const int   SEGMENTS     = 3;
+        const float SEG_DURATION = 1.2f;   // 每段时长
+        const float SEG_DIST_MAX = 14f;    // 每段最大冲刺距离
+
         busy = true;
         float baseEVA = EVA;
         try
@@ -447,7 +451,6 @@ public class WolfBoss : enemy
             PlayAnim("WolfRun");
 
             // 起跳：把 Y 抬高（基于玩家地面向上），随后由 LateUpdate 的模拟重力自然落回地面。
-            // 即便进入冲刺前 Y 有任何异常，也会被"抬高→落地"流程纠正，绝不掉出地图或回出生点。
             if (groundYSet)
             {
                 Vector3 up = transform.position;
@@ -456,43 +459,40 @@ public class WolfBoss : enemy
                 _vy = 0f;
             }
 
-            // 冲刺方向在开始时一次性锁定（朝玩家当前位置），之后不再追踪 →
-            // 玩家可以侧身躲开，而不是被"直挺挺地黏着追"。
-            Vector3 dir = Vector3.right;
-            float startDist = 6f;
-            if (role != null)
-            {
-                Vector3 dd = role.transform.position - transform.position; dd.y = 0;
-                startDist = dd.magnitude;
-                if (dd.sqrMagnitude > 0.01f) dir = dd.normalized;
-            }
-
             // 冲刺期间实体碰撞盒切 Trigger：Boss 从玩家身上穿过而不物理顶推玩家。
-            // 伤害仍由 DashTouchDamage 的距离判定负责（命中一次给一次击退，不会推着玩家满地跑）。
             if (_bodyCol != null) _bodyCol.isTrigger = true;
 
-            float spd       = wolfWalkSpeed * 1.3f;   // 固定 +30% 移速（不再动态加速）
-            float chargeDist = startDist + 4f;         // 冲到玩家原位再多冲 4 单位即止（不会无限狂奔）
-            float traveled   = 0f;
-            float t          = 0f;
+            float spd = wolfWalkSpeed * 1.3f;  // 固定 +30% 移速
             dashHitCd = 0f;
-            EVA = Mathf.RoundToInt(baseEVA + 40f);     // 冲刺全程高闪避
+            EVA = Mathf.RoundToInt(baseEVA + 40f); // 冲刺全程高闪避
 
-            while (t < dashDuration && traveled < chargeDist && phase == Phase.Wolf)
+            for (int seg = 0; seg < SEGMENTS && phase == Phase.Wolf; seg++)
             {
-                float dt = Time.fixedDeltaTime;
-                t += dt;
+                // 每段开始时，朝玩家当前最新位置重新锁定方向（段内直线冲、不追踪）
+                Vector3 dir = Vector3.right;
+                if (role != null)
+                {
+                    Vector3 dd = role.transform.position - transform.position; dd.y = 0;
+                    if (dd.sqrMagnitude > 0.01f) dir = dd.normalized;
+                }
 
-                // 直线冲锋，只改 XZ（Y 交给 LateUpdate 模拟重力）；方向锁定不追踪，玩家可躲
-                float step = spd * dt;
-                transform.position += dir * step;
-                traveled += step;
-                FaceByDirX(dir.x);
+                float traveled = 0f;
+                float elapsed  = 0f;
+                while (elapsed < SEG_DURATION && traveled < SEG_DIST_MAX && phase == Phase.Wolf)
+                {
+                    float dt = Time.fixedDeltaTime;
+                    elapsed  += dt;
 
-                if (dashHitCd > 0f) dashHitCd -= dt;
-                else DashTouchDamage();
+                    float step = spd * dt;
+                    transform.position += dir * step;
+                    traveled += step;
+                    FaceByDirX(dir.x);
 
-                yield return new WaitForFixedUpdate();
+                    if (dashHitCd > 0f) dashHitCd -= dt;
+                    else DashTouchDamage();
+
+                    yield return new WaitForFixedUpdate();
+                }
             }
         }
         finally
