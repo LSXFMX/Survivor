@@ -71,6 +71,7 @@ public class WolfBoss : enemy
 
     private float dmgCooldown  = 0f;
     private float dashHitCd    = 0f;
+    private float busyWatchdog = 0f; // busy 卡死看门狗（协程异常/timeScale=0复活弹窗等极端情况兜底）
 
     // ── 生命周期 ──
     protected new void OnEnable()
@@ -140,7 +141,27 @@ public class WolfBoss : enemy
     {
         if (phase == Phase.Dead) return;
         if (GetComponent<MindControlled>() != null) return;
-        if (busy) return;
+
+        if (busy)
+        {
+            // 看门狗：技能协程正常最长耗时 < 7s（TransformRoutine 最长约 6.75s）。
+            // 若因玩家死亡弹出复活UI（Time.timeScale=0 冻住 WaitForSeconds）或引用失效异常
+            // 导致协程卡死超过阈值，强制复位，避免 Boss 永久卡在原地不动（X/Y/Z 全部冻结）。
+            busyWatchdog += Time.fixedDeltaTime;
+            if (busyWatchdog > 9f)
+            {
+                StopAllCoroutines();
+                busy = false;
+                invincible = false;
+                busyWatchdog = 0f;
+                if (anim != null) anim.speed = 1f;
+                SetPlayersMovementLocked(false);
+                curAnim = ""; // 强制 PlayAnim 重新播放，避免卡在冻结帧
+                PlayAnim(phase == Phase.Human ? "HumanWalk" : "WolfWalk");
+            }
+            return;
+        }
+        busyWatchdog = 0f;
 
         if (role == null) { getrole(); return; }
         FaceTarget();
@@ -214,6 +235,9 @@ public class WolfBoss : enemy
     }
 
     // ── 半血：抓取处决 → 变身 ──
+    // 【健壮性】try/finally 保证：即便中途异常/中断，也一定收敛到合法的 Wolf 状态
+    //（phase=Wolf、解除无敌、解锁玩家、恢复 anim.speed、busy 复位），
+    // 绝不会把 phase 永久卡在 Transforming 导致 Boss 冻结不动。
     private IEnumerator TransformRoutine()
     {
         if (phase != Phase.Human) yield break;
@@ -222,217 +246,242 @@ public class WolfBoss : enemy
         invincible = true;
         lockedHealth = health;
 
-        // 1) 瞬移到玩家身旁（y 锁在地面）
-        getrole();
-        if (role != null)
+        try
         {
-            Vector3 pp = role.transform.position;
-            float side = (transform.position.x <= pp.x) ? -1.6f : 1.6f;
-            transform.position = new Vector3(pp.x + side, groundY, pp.z);
-            FaceTarget();
+            // 1) 瞬移到玩家身旁（y 锁在地面）
+            getrole();
+            if (role != null)
+            {
+                Vector3 pp = role.transform.position;
+                float side = (transform.position.x <= pp.x) ? -1.6f : 1.6f;
+                transform.position = new Vector3(pp.x + side, groundY, pp.z);
+                FaceTarget();
+            }
+
+            // 2) 播放抓取第一帧 → 短暂可见后定格 → 限制玩家移动（让玩家意识到被抓住）
+            Sca = humanScale;
+            PlayAnim("Transform");
+            yield return new WaitForSeconds(0.25f); // 先让玩家看到 Boss 瞬移过来 + 抓取姿态
+            if (anim != null) anim.speed = 0f;      // 冻结在抓取帧
+            SetPlayersMovementLocked(true);
+            yield return new WaitForSeconds(2f);    // 停顿 2 秒让玩家充分意识到被抓取
+
+            // 3) 撕咬一爪：全屏利爪特效 + 造成玩家现有生命值 10% 的处决伤害
+            WolfClawScreenFx.Show(clawScreenFrames);
+            SpawnClawFx(role != null ? role.transform.position : transform.position);
+            ExecutionBiteByCurrentHp(0.10f);
+            yield return new WaitForSeconds(0.6f);
+
+            // 4) 解除定身，继续播放变身动画
+            SetPlayersMovementLocked(false);
+            if (anim != null) anim.speed = 1f; // 从抓取首帧继续播完变身
+            yield return new WaitForSeconds(0.9f);
+
+            float remain = Mathf.Max(0f, transformInvincibleTime - 0.9f);
+            yield return new WaitForSeconds(remain);
         }
-
-        // 2) 播放抓取第一帧 → 短暂可见后定格 → 限制玩家移动（让玩家意识到被抓住）
-        Sca = humanScale;
-        PlayAnim("Transform");
-        yield return new WaitForSeconds(0.25f); // 先让玩家看到 Boss 瞬移过来 + 抓取姿态
-        if (anim != null) anim.speed = 0f;      // 冻结在抓取帧
-        SetPlayersMovementLocked(true);
-        yield return new WaitForSeconds(2f);    // 停顿 2 秒让玩家充分意识到被抓取
-
-        // 3) 撕咬一爪：全屏利爪特效 + 造成玩家现有生命值 10% 的处决伤害
-        WolfClawScreenFx.Show(clawScreenFrames);
-        SpawnClawFx(role != null ? role.transform.position : transform.position);
-        ExecutionBiteByCurrentHp(0.10f);
-        yield return new WaitForSeconds(0.6f);
-
-        // 4) 解除定身，继续播放变身动画
-        SetPlayersMovementLocked(false);
-        if (anim != null) anim.speed = 1f; // 从抓取首帧继续播完变身
-        yield return new WaitForSeconds(0.9f);
-
-        // 5) 完成变身：缩放×2、回血 10%、锁 y 到地面
-        Sca = wolfScale;
-        Vector3 vp = transform.position; vp.y = groundY;
-        transform.position = vp;
-        transform.localScale = new Vector3(Sca, Sca, Sca);
-        health = Mathf.Min(healthmax, health + Mathf.RoundToInt(healthmax * 0.1f));
-        lockedHealth = health;
-        phase = Phase.Wolf;
-        PlayAnim("WolfWalk");
-
-        float remain = Mathf.Max(0f, transformInvincibleTime - 0.9f);
-        yield return new WaitForSeconds(remain);
-        invincible = false;
-        busy = false;
-        // 变身后错开各技能初始 CD，避免同时触发
-        cdQuake = 1.5f; cdPounce = 3f; cdDash = 4.5f; skillGap = 1f;
+        finally
+        {
+            // 完成变身并复位所有状态（正常/异常都执行，保证收敛到 Wolf）
+            Sca = wolfScale;
+            Vector3 vp = transform.position; vp.y = groundY;
+            transform.position = vp;
+            transform.localScale = new Vector3(Sca, Sca, Sca);
+            health = Mathf.Min(healthmax, health + Mathf.RoundToInt(healthmax * 0.1f));
+            lockedHealth = health;
+            phase = Phase.Wolf;
+            if (anim != null) anim.speed = 1f;
+            SetPlayersMovementLocked(false);
+            PlayAnim("WolfWalk");
+            invincible = false;
+            busy = false;
+            // 变身后错开各技能初始 CD，避免同时触发
+            cdQuake = 1.5f; cdPounce = 3f; cdDash = 4.5f; skillGap = 1f;
+        }
     }
 
     // ── 狼形扑击处决（两段式）──
-    //   第一段：冲刺撞击（快速冲向玩家）
-    //   第二段：命中则 Boss 与玩家同时定身停顿 → 播放抓取动画 → 出伤害 → 解除束缚
+    //   第一段：冲刺撞击（快速冲向玩家，途中实时判定命中）
+    //   第二段：命中则 Boss 与玩家同时定身停顿 → 撕咬（全屏利爪 + 伤害）→ 同时解除束缚
     //           未命中则直接结束
+    //
+    // 【健壮性】整个协程包在 try/finally，无论中途任何一步抛异常（如玩家在等待期间被销毁、
+    // 复活弹窗把 timeScale 归零等），finally 都保证 busy 复位、玩家解锁、回到 WolfWalk，
+    // 绝不会把 Boss 永久卡死在原地（此前"Z 固定不动/浮空"的真正根因就是这里卡死后 FixedUpdate
+    // 里的 MoveToward 再也执行不到，导致 X/Z 全部冻结）。
     private IEnumerator PounceRoutine()
     {
         busy = true;
-
-        Vector3 toT = ((role != null ? role.transform.position : transform.position) - transform.position);
-        toT.y = 0; toT = toT.sqrMagnitude > 0.01f ? toT.normalized : Vector3.right;
-        FaceTarget();
-
-        // 前摇：后退蓄力
-        PlayAnim("WolfRun");
-        float t = 0f;
-        while (t < 0.6f)
+        Transform lockedPlayer = null; // 记录被定身的玩家，finally 里保底解锁
+        try
         {
-            t += Time.fixedDeltaTime;
-            Vector3 bp = transform.position - toT * wolfRunSpeed * 0.3f * Time.fixedDeltaTime;
-            bp.y = groundY;
-            transform.position = bp;
-            yield return new WaitForFixedUpdate();
-        }
+            Vector3 toT = ((role != null ? role.transform.position : transform.position) - transform.position);
+            toT.y = 0; toT = toT.sqrMagnitude > 0.01f ? toT.normalized : Vector3.right;
+            FaceTarget();
 
-        // 悬停紧张
-        yield return new WaitForSeconds(0.18f);
-
-        // ═══ 第一段：冲刺撞击 ═══
-        Vector3 pounceTarget = role != null ? role.transform.position : transform.position + toT * 8f;
-        Vector3 dir = (pounceTarget - transform.position); dir.y = 0;
-        dir = dir.sqrMagnitude > 0.01f ? dir.normalized : toT;
-        PlayAnim("Pounce");
-        t = 0f;
-        Player hitPlayer = null;
-        Transform hitTf = null;
-        while (t < 0.45f && hitPlayer == null)
-        {
-            t += Time.fixedDeltaTime;
-            Vector3 fp = transform.position + dir * wolfRunSpeed * 1.15f * Time.fixedDeltaTime;
-            fp.y = groundY;
-            transform.position = fp;
-            // 冲刺途中实时检查是否撞到玩家
-            if (playerlayer != null)
+            // 前摇：后退蓄力
+            PlayAnim("WolfRun");
+            float t = 0f;
+            while (t < 0.6f)
             {
-                foreach (Transform p in playerlayer)
-                {
-                    var pl = p.GetComponent<Player>();
-                    if (pl == null || pl.health <= 0) continue;
-                    if (Vector3.Distance(p.position, transform.position) <= pounceRange)
-                    { hitPlayer = pl; hitTf = p; break; }
-                }
+                t += Time.fixedDeltaTime;
+                Vector3 bp = transform.position - toT * wolfRunSpeed * 0.3f * Time.fixedDeltaTime;
+                bp.y = groundY;
+                transform.position = bp;
+                yield return new WaitForFixedUpdate();
             }
-            yield return new WaitForFixedUpdate();
-        }
 
-        if (hitPlayer == null)
+            // 悬停紧张
+            yield return new WaitForSeconds(0.18f);
+
+            // ═══ 第一段：冲刺撞击 ═══
+            Vector3 pounceTarget = role != null ? role.transform.position : transform.position + toT * 8f;
+            Vector3 dir = (pounceTarget - transform.position); dir.y = 0;
+            dir = dir.sqrMagnitude > 0.01f ? dir.normalized : toT;
+            PlayAnim("Pounce");
+            t = 0f;
+            Player hitPlayer = null;
+            Transform hitTf = null;
+            while (t < 0.45f && hitPlayer == null)
+            {
+                t += Time.fixedDeltaTime;
+                Vector3 fp = transform.position + dir * wolfRunSpeed * 1.15f * Time.fixedDeltaTime;
+                fp.y = groundY;
+                transform.position = fp;
+                // 冲刺途中实时检查是否撞到玩家
+                if (playerlayer != null)
+                {
+                    foreach (Transform p in playerlayer)
+                    {
+                        var pl = p.GetComponent<Player>();
+                        if (pl == null || pl.health <= 0) continue;
+                        if (Vector3.Distance(p.position, transform.position) <= pounceRange)
+                        { hitPlayer = pl; hitTf = p; break; }
+                    }
+                }
+                yield return new WaitForFixedUpdate();
+            }
+
+            // 扑空：直接结束（finally 收尾）
+            if (hitPlayer == null)
+            {
+                yield return new WaitForSeconds(0.2f);
+                yield break;
+            }
+
+            // ═══ 第二段：抓取处决（Boss 与玩家同时定身）═══
+            hitPlayer.movementLocked = true;
+            lockedPlayer = hitTf;
+            // Boss 贴到玩家侧旁形成"咬住"视觉
+            Vector3 pp = hitTf.position;
+            float side = (transform.position.x <= pp.x) ? -1.2f : 1.2f;
+            transform.position = new Vector3(pp.x + side, groundY, pp.z);
+            FaceTarget();
+
+            // 定身停顿：让玩家意识到被抓住
+            yield return new WaitForSeconds(0.8f);
+
+            // 撕咬一爪：全屏利爪 + 结算伤害（全程判空，玩家可能已在等待中被销毁）
+            WolfClawScreenFx.Show(clawScreenFrames);
+            if (hitTf != null) SpawnClawFx(hitTf.position);
+            if (hitPlayer != null && hitTf != null && hitPlayer.health > 0)
+            {
+                int d = Mathf.Max(1, Mathf.RoundToInt(atk * 3f) - (int)hitPlayer.def);
+                hitPlayer.health -= d;
+                ShowDamageNumber(hitTf.position, d);
+                WolfLifesteal(d);
+                hitPlayer.startturnred();
+                Vector3 kb = (hitTf.position - transform.position); kb.y = 0;
+                if (kb.sqrMagnitude > 0.01f) hitTf.position += kb.normalized * 4f;
+                if (hitPlayer.health <= 0) hitPlayer.death();
+            }
+
+            // 处决后继续定身一小段（让玩家看到撕咬后果）
+            yield return new WaitForSeconds(0.6f);
+        }
+        finally
         {
-            // 扑空：无事发生
-            yield return new WaitForSeconds(0.2f);
+            // 无论正常结束还是异常/中断：解锁玩家、复位状态、回到行走
+            if (lockedPlayer != null)
+            {
+                var pl = lockedPlayer.GetComponent<Player>();
+                if (pl != null) pl.movementLocked = false;
+            }
+            if (anim != null) anim.speed = 1f;
             PlayAnim("WolfWalk");
             busy = false;
-            yield break;
         }
-
-        // ═══ 第二段：抓取处决（Boss 与玩家同时定身，停顿感受被抓住）═══
-        hitPlayer.movementLocked = true;
-        // 让 Boss 站到玩家旁（稍前一点）以便"咬住"视觉
-        Vector3 pp = hitTf.position;
-        float side = (transform.position.x <= pp.x) ? -1.2f : 1.2f;
-        transform.position = new Vector3(pp.x + side, groundY, pp.z);
-        FaceTarget();
-
-        // 定身停顿：让玩家意识到自己被抓住了
-        yield return new WaitForSeconds(0.8f);
-
-        // 撕咬一爪：全屏利爪 + 结算伤害
-        WolfClawScreenFx.Show(clawScreenFrames);
-        SpawnClawFx(hitTf.position);
-        if (hitPlayer != null && hitPlayer.health > 0)
-        {
-            int d = Mathf.Max(1, Mathf.RoundToInt(atk * 3f) - (int)hitPlayer.def);
-            hitPlayer.health -= d;
-            ShowDamageNumber(hitTf.position, d);
-            WolfLifesteal(d);
-            hitPlayer.startturnred();
-            Vector3 kb = (hitTf.position - transform.position); kb.y = 0;
-            if (kb.sqrMagnitude > 0.01f) hitTf.position += kb.normalized * 4f;
-            if (hitPlayer.health <= 0) hitPlayer.death();
-        }
-
-        // 处决后继续定身一小段（让玩家看到撕咬后果）
-        yield return new WaitForSeconds(0.6f);
-
-        // ═══ 同时解除双方束缚 ═══
-        if (hitPlayer != null) hitPlayer.movementLocked = false;
-        PlayAnim("WolfWalk");
-        busy = false;
     }
 
     // ── 狼形四脚冲刺漂移（朝玩家猛冲 + 惯性漂移感、从慢到快、按移速提升闪避、不飞出地图、不闪现） ──
+    // 【健壮性】try/finally 保证无论如何都恢复 EVA、复位 busy、回到 WolfWalk，绝不卡死。
     private IEnumerator DashDriftRoutine()
     {
         busy = true;
-        PlayAnim("WolfRun");
-
-        // 初始方向直冲玩家
-        Vector3 dir = Vector3.right;
-        if (role != null)
-        {
-            Vector3 dd = role.transform.position - transform.position; dd.y = 0;
-            if (dd.sqrMagnitude > 0.01f) dir = dd.normalized;
-        }
         float baseEVA = EVA;
-        float spd      = wolfRunSpeed * 0.2f;   // 起步更慢
-        float maxSpeed = wolfRunSpeed * 0.55f;  // 最高速度减半（避免闪现）
-        float accel    = wolfRunSpeed * 0.08f;
-        float t        = 0f;
-        dashHitCd = 0f;
-        float mapX = 28f, mapZ = 28f;
-
-        while (t < dashDuration && phase == Phase.Wolf)
+        try
         {
-            float dt = Time.fixedDeltaTime;
-            t += dt;
+            PlayAnim("WolfRun");
 
-            // 逐步加速
-            spd = Mathf.Min(maxSpeed, spd + accel * dt);
-
-            // 距离玩家近时自动减速（不会冲过头）
+            // 初始方向直冲玩家
+            Vector3 dir = Vector3.right;
             if (role != null)
             {
-                Vector3 toP = (role.transform.position - transform.position); toP.y = 0;
-                float d = toP.magnitude;
-                if (d < 4f) spd = Mathf.Min(spd, wolfRunSpeed * 0.15f);
+                Vector3 dd = role.transform.position - transform.position; dd.y = 0;
+                if (dd.sqrMagnitude > 0.01f) dir = dd.normalized;
             }
+            float spd      = wolfRunSpeed * 0.2f;   // 起步慢，体现加速
+            float maxSpeed = wolfRunSpeed * 0.55f;  // 上限减半，避免闪现
+            float accel    = wolfRunSpeed * 0.08f;
+            float t        = 0f;
+            dashHitCd = 0f;
+            float mapX = 28f, mapZ = 28f;
 
-            // 方向缓慢追向玩家（避免方向突变导致闪现感）
-            if (role != null)
+            while (t < dashDuration && phase == Phase.Wolf)
             {
-                Vector3 want = (role.transform.position - transform.position); want.y = 0;
-                if (want.sqrMagnitude > 0.01f)
+                float dt = Time.fixedDeltaTime;
+                t += dt;
+
+                // 逐步加速
+                spd = Mathf.Min(maxSpeed, spd + accel * dt);
+
+                // 逼近玩家时自动减速（不会冲过头）
+                if (role != null)
                 {
-                    dir = Vector3.Slerp(dir, want.normalized, 1.0f * dt).normalized;
+                    Vector3 toP = (role.transform.position - transform.position); toP.y = 0;
+                    if (toP.magnitude < 4f) spd = Mathf.Min(spd, wolfRunSpeed * 0.15f);
                 }
+
+                // 方向持续朝玩家追（含 X 与 Z 两个方向，确保纵深也能逼近，而非只左右横跑）
+                if (role != null)
+                {
+                    Vector3 want = (role.transform.position - transform.position); want.y = 0;
+                    if (want.sqrMagnitude > 0.01f)
+                        dir = Vector3.Slerp(dir, want.normalized, 1.0f * dt).normalized;
+                }
+
+                Vector3 newPos = transform.position + dir * spd * dt;
+                newPos.x = Mathf.Clamp(newPos.x, -mapX, mapX);
+                newPos.z = Mathf.Clamp(newPos.z, -mapZ, mapZ);
+                newPos.y = groundY;
+                transform.position = newPos;
+                FaceByDirX(dir.x);
+
+                float ratio = Mathf.InverseLerp(wolfRunSpeed * 0.2f, maxSpeed, spd);
+                EVA = Mathf.RoundToInt(baseEVA + 50f * ratio);
+
+                if (dashHitCd > 0f) dashHitCd -= dt;
+                else DashTouchDamage();
+
+                yield return new WaitForFixedUpdate();
             }
-            Vector3 newPos = transform.position + dir * spd * dt;
-            newPos.x = Mathf.Clamp(newPos.x, -mapX, mapX);
-            newPos.z = Mathf.Clamp(newPos.z, -mapZ, mapZ);
-            newPos.y = groundY;
-            transform.position = newPos;
-            FaceByDirX(dir.x);
-
-            float ratio = Mathf.InverseLerp(wolfRunSpeed * 0.2f, maxSpeed, spd);
-            EVA = Mathf.RoundToInt(baseEVA + 50f * ratio);
-
-            if (dashHitCd > 0f) dashHitCd -= dt;
-            else DashTouchDamage();
-
-            yield return new WaitForFixedUpdate();
         }
-
-        EVA = Mathf.RoundToInt(baseEVA);
-        PlayAnim("WolfWalk");
-        busy = false;
+        finally
+        {
+            EVA = Mathf.RoundToInt(baseEVA);
+            PlayAnim("WolfWalk");
+            busy = false;
+        }
     }
 
     private void DashTouchDamage()
