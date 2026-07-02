@@ -20,9 +20,6 @@ public class Spawnpoint : MonoBehaviour
     [Header("N11+ 史莱姆社群")]
     public GameObject slimePrefab; // 拖入史莱姆 prefab，N11~N13 自动加入刷怪池
 
-    [Header("N10 狼人社群Boss")]
-    public GameObject wolfBossPrefab; // 拖入狼人Boss prefab，进入 N10 时开局生成一只
-
     void Start()
     {
         if (DifficultyManager.Instance == null) return;
@@ -42,13 +39,6 @@ public class Spawnpoint : MonoBehaviour
         if (slimePrefab != null &&
             (label == "N11" || label == "N12" || label == "N13"))
             enemy.Add(slimePrefab);
-
-        // N10：开局生成一只狼人社群Boss（一次性，不进刷怪池，避免刷出多只）
-        if (wolfBossPrefab != null && label == "N10")
-        {
-            Vector3 pos = transform.childCount > 0 ? transform.GetChild(0).position : transform.position;
-            Instantiate(wolfBossPrefab, pos, Quaternion.Euler(45, 0, 0), enemylayer);
-        }
     }
 
     void FixedUpdate()

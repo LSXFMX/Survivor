@@ -26,13 +26,15 @@ public class battleUI : MonoBehaviour
     public AdventureUI adventureUI;
 
     [Header("Boss")]
-    public GameObject bossPrefab;       // 蘑菇人Boss（N2~N6）
-    public GameObject batBossPrefab;    // 蝙蝠Boss（N7~N13）
+    public GameObject bossPrefab;       // 蘑菇人Boss（N2~N5、N9、N12、N13）
+    public GameObject batBossPrefab;    // 蝙蝠Boss（N7~N8）
+    public GameObject wolfBossPrefab;   // 狼人社群Boss（N10~N11）
     public Transform bossSpawnPoint;
     public Transform enemylayer;
     private bool bossSpawned = false;
     private BossMushroomMan spawnedBoss = null;
     private BossBat spawnedBatBoss = null;
+    private WolfBoss spawnedWolfBoss = null;
     private int _doubleBossRemain = 0;
 
     [Header("胜利/失败")]
@@ -660,6 +662,8 @@ public class battleUI : MonoBehaviour
             case "N6": return "两头巨蘑同时坍塌。";
             case "N7": return "蝙蝠社群随首领一同陨落。";
             case "N8": return "你已是世界的征服者。";
+            case "N10": return "狼人社群的首领轰然倒下。";
+            case "N11": return "狼人与月光的契约就此瓦解。";
             default:   return "再次通关，强度++";
         }
     }
@@ -668,7 +672,8 @@ public class battleUI : MonoBehaviour
     {
         string label = DifficultyManager.Instance != null ? DifficultyManager.Instance.Current.label : "N2";
 
-        // N7/N8 生成蝙蝠Boss，N6 生成双蘑菇人Boss，其余生成单蘑菇人Boss
+        // N10/N11 生成狼人社群Boss，N7/N8 生成蝙蝠Boss，N6 生成双蘑菇人Boss，其余生成单蘑菇人Boss
+        bool isWolfBoss   = label == "N10" || label == "N11";
         bool isBatBoss    = label == "N7" || label == "N8";
         bool isDoubleBoss = label == "N6";
 
@@ -677,7 +682,17 @@ public class battleUI : MonoBehaviour
         bossTimer   = BOSS_TIME_LIMIT;
         startcount  = false;
 
-        if (isBatBoss)
+        if (isWolfBoss)
+        {
+            if (wolfBossPrefab == null) return;
+            Vector3 pos = GetBossSpawnPos(0, 1);
+            GameObject obj = Instantiate(wolfBossPrefab, pos, Quaternion.Euler(45, 0, 0),
+                enemylayer != null ? enemylayer : null);
+            spawnedWolfBoss = obj.GetComponent<WolfBoss>();
+            if (spawnedWolfBoss != null) spawnedWolfBoss.battleUI = this;
+            Debug.Log("[Boss] 狼人社群Boss已生成");
+        }
+        else if (isBatBoss)
         {
             if (batBossPrefab == null) return;
             Vector3 pos = GetBossSpawnPos(0, 1);

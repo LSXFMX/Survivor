@@ -51,6 +51,9 @@ public class WolfBoss : enemy
     public GameObject clawFxPrefab;      // 世界空间能量狼爪特效
     public Sprite[]   clawScreenFrames;  // 全屏利爪特效帧（ClawFx1~4）
 
+    [Header("Boss UI")]
+    [HideInInspector] public battleUI battleUI; // 由 battleUI.SpawnBoss() 赋值；死亡时调用 OnBossDefeated 触发胜利
+
     private enum Phase { Human, Transforming, Wolf, Dead }
     private Phase phase = Phase.Human;
 
@@ -651,6 +654,7 @@ public class WolfBoss : enemy
         busy = true;
         StopAllCoroutines();
         SetPlayersMovementLocked(false); // 防止死亡时玩家仍被定身
+        battleUI?.OnBossDefeated();      // 作为关底Boss：死亡即触发胜利结算
         PlayAnim("Death");
         foreach (var col in GetComponents<Collider>()) col.enabled = false;
         if (expstone != null) Instantiate(expstone, transform.position, Quaternion.Euler(45, 0, 0));
