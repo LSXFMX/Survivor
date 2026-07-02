@@ -19,7 +19,7 @@ using TMPro;
 /// 狼形态（黑毛红光）—— 技能状态机「CD 就绪则随机释放」，busy 保证互斥不冲突：
 ///   · 能量狼爪震地攻击
 ///   · 四脚扑击处决——后退蓄力后猛扑；扑空无事，扑中则抓取处决（撕咬一爪 + 全屏利爪）
-///   · 四脚高速冲刺漂移——来回加速冲刺、难以转向，按移速动态提升闪避（最高 +50）
+///   · 四脚冲刺——锁定方向直线冲锋（可被玩家躲开、不顶推玩家），固定 +30% 移速、冲刺全程高闪避
 ///   · 常驻 1% 全能吸血
 ///
 /// 死亡：播放死亡动画后销毁。
@@ -56,6 +56,7 @@ public class WolfBoss : enemy
 
     private Animator  anim;
     private SpriteRenderer _sr;
+    private Collider  _bodyCol;             // 实体碰撞盒（冲刺时临时切 Trigger，避免顶推玩家）
     private float groundY;          // 地面 Y（从玩家所在平面采样，而非出生点高空）
     private bool  groundYSet = false;
     private float _vy = 0f;                 // 竖直速度（脚本模拟重力用）
@@ -83,6 +84,10 @@ public class WolfBoss : enemy
         playerlayer = GameObject.Find("playerlayer")?.transform;
         anim = GetComponent<Animator>();
         _sr  = GetComponent<SpriteRenderer>();
+        // 缓存"实体（非 Trigger 且启用）"碰撞盒，冲刺时临时切 Trigger 让 Boss 穿过玩家而不顶推
+        _bodyCol = null;
+        foreach (var c in GetComponents<Collider>())
+            if (c.enabled && !c.isTrigger) { _bodyCol = c; break; }
 
         if (DifficultyManager.Instance != null)
         {
@@ -431,8 +436,8 @@ public class WolfBoss : enemy
         }
     }
 
-    // ── 狼形四脚冲刺漂移（朝玩家猛冲 + 惯性漂移感、从慢到快、按移速提升闪避、不飞出地图、不闪现） ──
-    // 【健壮性】try/finally 保证无论如何都恢复 EVA、复位 busy、回到 WolfWalk，绝不卡死。
+    // ── 狼形冲刺（锁定方向直线冲锋，可被玩家躲开；固定 +30% 移速；不顶推玩家）──
+    // 【健壮性】try/finally 保证无论如何都恢复 EVA、碰撞盒、复位 busy、回到 WolfWalk，绝不卡死。
     private IEnumerator DashDriftRoutine()
     {
         busy = true;
@@ -442,7 +447,7 @@ public class WolfBoss : enemy
             PlayAnim("WolfRun");
 
             // 起跳：把 Y 抬高（基于玩家地面向上），随后由 LateUpdate 的模拟重力自然落回地面。
-            // 这样即便进入冲刺前 Y 有任何异常，也会被"抬高→落地"流程纠正，绝不掉出地图或回出生点。
+            // 即便进入冲刺前 Y 有任何异常，也会被"抬高→落地"流程纠正，绝不掉出地图或回出生点。
             if (groundYSet)
             {
                 Vector3 up = transform.position;
@@ -451,45 +456,38 @@ public class WolfBoss : enemy
                 _vy = 0f;
             }
 
-            // 初始方向直冲玩家
+            // 冲刺方向在开始时一次性锁定（朝玩家当前位置），之后不再追踪 →
+            // 玩家可以侧身躲开，而不是被"直挺挺地黏着追"。
             Vector3 dir = Vector3.right;
+            float startDist = 6f;
             if (role != null)
             {
                 Vector3 dd = role.transform.position - transform.position; dd.y = 0;
+                startDist = dd.magnitude;
                 if (dd.sqrMagnitude > 0.01f) dir = dd.normalized;
             }
-            float minSpeed = wolfRunSpeed * 0.12f;  // 起步很慢
-            float maxSpeed = wolfRunSpeed * 1.5f;    // 峰值 = 原奔跑速度的 1.5 倍
-            float ramp     = dashDuration;           // 用整段时长把速度从慢加到峰值
-            float t        = 0f;
-            dashHitCd = 0f;
 
-            while (t < dashDuration && phase == Phase.Wolf)
+            // 冲刺期间实体碰撞盒切 Trigger：Boss 从玩家身上穿过而不物理顶推玩家。
+            // 伤害仍由 DashTouchDamage 的距离判定负责（命中一次给一次击退，不会推着玩家满地跑）。
+            if (_bodyCol != null) _bodyCol.isTrigger = true;
+
+            float spd       = wolfWalkSpeed * 1.3f;   // 固定 +30% 移速（不再动态加速）
+            float chargeDist = startDist + 4f;         // 冲到玩家原位再多冲 4 单位即止（不会无限狂奔）
+            float traveled   = 0f;
+            float t          = 0f;
+            dashHitCd = 0f;
+            EVA = Mathf.RoundToInt(baseEVA + 40f);     // 冲刺全程高闪避
+
+            while (t < dashDuration && traveled < chargeDist && phase == Phase.Wolf)
             {
                 float dt = Time.fixedDeltaTime;
                 t += dt;
 
-                // 加速度递增：速度沿 t² 曲线上升 → 每秒的增量越来越大（不是一上来就高速）
-                float k     = Mathf.Clamp01(t / ramp);
-                float curve = k * k;
-                float spd   = Mathf.Lerp(minSpeed, maxSpeed, curve);
-
-                // 方向持续朝玩家追（含 X 与 Z，确保纵深也能逼近，而非只左右横跑）
-                if (role != null)
-                {
-                    Vector3 want = (role.transform.position - transform.position); want.y = 0;
-                    if (want.sqrMagnitude > 0.01f)
-                        dir = Vector3.Slerp(dir, want.normalized, 1.2f * dt).normalized;
-                }
-
-                // 只改 XZ（dir.y=0，Y 由 LateUpdate 的模拟重力管理）；不做世界边界钳制，
-                // 靠"朝玩家 Slerp 追击"自然留在场内，避免错误的边界假设把 Boss 拽向角落/出生点。
-                Vector3 newPos = transform.position + dir * spd * dt;
-                transform.position = newPos;
+                // 直线冲锋，只改 XZ（Y 交给 LateUpdate 模拟重力）；方向锁定不追踪，玩家可躲
+                float step = spd * dt;
+                transform.position += dir * step;
+                traveled += step;
                 FaceByDirX(dir.x);
-
-                // 闪避随加速曲线上升：峰值（达到 1.5x 速度）时 EVA 达到顶峰 +50
-                EVA = Mathf.RoundToInt(baseEVA + 50f * curve);
 
                 if (dashHitCd > 0f) dashHitCd -= dt;
                 else DashTouchDamage();
@@ -499,6 +497,7 @@ public class WolfBoss : enemy
         }
         finally
         {
+            if (_bodyCol != null) _bodyCol.isTrigger = false; // 恢复实体碰撞
             EVA = Mathf.RoundToInt(baseEVA);
             PlayAnim("WolfWalk");
             busy = false;
