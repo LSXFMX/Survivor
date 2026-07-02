@@ -69,9 +69,21 @@ public class WorldBossManager : MonoBehaviour
         if (enemylayer == null)
             enemylayer = GameObject.Find("enemylayer")?.transform;
 
+        // 当前难度数值（用于按社群过滤出现条件）
+        int currentN = 7;
+        if (DifficultyManager.Instance != null)
+        {
+            string lbl = DifficultyManager.Instance.Current.label;
+            if (lbl.StartsWith("N") && int.TryParse(lbl.Substring(1), out int nn))
+                currentN = nn;
+        }
+
         foreach (var entry in worldBossEntries)
         {
             if (entry.bossPrefab == null || entry.spawnPoint == null) continue;
+
+            // 按社群设定最低出现难度：蘑菇 N7+，蝙蝠 N10+
+            if (entry.faction == FactionType.Bat && currentN < 10) continue;
 
             GameObject obj = Instantiate(entry.bossPrefab,
                 entry.spawnPoint.position,
