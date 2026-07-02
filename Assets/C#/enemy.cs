@@ -444,7 +444,35 @@ public class enemy : Attribute
     }
     public IEnumerator Destroy2()
     {
-        yield return new WaitForSeconds(2f);
+        // 变红 + 倒下（Z 轴旋转 90°）的通用死亡演出。
+        // 对于没有专用死亡精灵/动画的敌人（如狼人小怪、史莱姆），不再只是"定格站着 2 秒后消失"，
+        // 而是有一个视觉上可辨识的倒地效果。
+        // 蘑菇人（Shoom）等有正经死亡动画的敌人跳过此效果。
+        if (!IsMushroomEnemy())
+        {
+            SpriteRenderer sr = _cachedSpriteRenderer;
+            if (sr == null) sr = GetComponent<SpriteRenderer>();
+
+            // 变红
+            if (sr != null && red != null) sr.material = red;
+
+            // 倒下：绕 Z 轴从 0° 旋转到 90°（侧倒），时长 0.6s
+            Vector3 startEuler = transform.localEulerAngles;
+            float fallDuration  = 0.6f;
+            float fallElapsed   = 0f;
+            while (fallElapsed < fallDuration)
+            {
+                fallElapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(fallElapsed / fallDuration);
+                transform.localEulerAngles = new Vector3(startEuler.x, startEuler.y, Mathf.Lerp(0f, 90f, t));
+                yield return null;
+            }
+        }
+
+        // 剩余时间保持倒下姿态
+        float remain = 2f - 0.6f;
+        if (remain > 0f) yield return new WaitForSeconds(remain);
+
         Destroy(gameObject);
     }
 }
