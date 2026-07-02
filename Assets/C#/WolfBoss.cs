@@ -58,6 +58,9 @@ public class WolfBoss : enemy
     private SpriteRenderer _sr;
     private float groundY;          // 地面 Y（从玩家所在平面采样，而非出生点高空）
     private bool  groundYSet = false;
+    private float _vy = 0f;                 // 竖直速度（脚本模拟重力用）
+    private const float GRAVITY = 45f;      // 模拟重力加速度
+    private const float DASH_LIFT = 2.2f;   // 冲刺起跳抬高的高度（基于地面向上）
     private bool  busy       = false; // 技能演出中，暂停常规移动/选技能
     private bool  invincible = false;
     private int   lockedHealth;
@@ -127,12 +130,18 @@ public class WolfBoss : enemy
             groundY = role.transform.position.y;
             groundYSet = true;
         }
-        // 锁 Y 到地面：Boss 是 Kinematic（不受重力、不会隧穿/下坠），
-        // 唯一的 Y 来源就是这里——始终与玩家同一水平面，既不悬空也不遁地。
+
+        // 脚本模拟重力：始终把 Boss 竖直方向拉向地面（玩家所在平面），落到地面即停。
+        // 好处：① 不依赖场景地板碰撞体；② Kinematic 不会被物理冲量弹飞/隧穿；
+        //       ③ 永不悬空、永不遁地；④ 冲刺起跳抬高后能自然落回，绝不返回出生点（只动 Y，不碰 XZ）。
         if (groundYSet)
         {
             Vector3 pp = transform.position;
-            if (Mathf.Abs(pp.y - groundY) > 0.001f) { pp.y = groundY; transform.position = pp; }
+            _vy -= GRAVITY * Time.deltaTime;
+            float ny = pp.y + _vy * Time.deltaTime;
+            if (ny <= groundY) { ny = groundY; _vy = 0f; } // 落地
+            pp.y = ny;
+            transform.position = pp;
         }
     }
 
@@ -432,6 +441,16 @@ public class WolfBoss : enemy
         {
             PlayAnim("WolfRun");
 
+            // 起跳：把 Y 抬高（基于玩家地面向上），随后由 LateUpdate 的模拟重力自然落回地面。
+            // 这样即便进入冲刺前 Y 有任何异常，也会被"抬高→落地"流程纠正，绝不掉出地图或回出生点。
+            if (groundYSet)
+            {
+                Vector3 up = transform.position;
+                up.y = groundY + DASH_LIFT;
+                transform.position = up;
+                _vy = 0f;
+            }
+
             // 初始方向直冲玩家
             Vector3 dir = Vector3.right;
             if (role != null)
@@ -444,7 +463,6 @@ public class WolfBoss : enemy
             float ramp     = dashDuration;           // 用整段时长把速度从慢加到峰值
             float t        = 0f;
             dashHitCd = 0f;
-            float mapX = 28f, mapZ = 28f;
 
             while (t < dashDuration && phase == Phase.Wolf)
             {
@@ -464,10 +482,9 @@ public class WolfBoss : enemy
                         dir = Vector3.Slerp(dir, want.normalized, 1.2f * dt).normalized;
                 }
 
+                // 只改 XZ（dir.y=0，Y 由 LateUpdate 的模拟重力管理）；不做世界边界钳制，
+                // 靠"朝玩家 Slerp 追击"自然留在场内，避免错误的边界假设把 Boss 拽向角落/出生点。
                 Vector3 newPos = transform.position + dir * spd * dt;
-                newPos.x = Mathf.Clamp(newPos.x, -mapX, mapX);
-                newPos.z = Mathf.Clamp(newPos.z, -mapZ, mapZ);
-                // 不改 Y（dir.y=0，newPos.y 已等于当前 Y），Y 由 LateUpdate 锁到地面
                 transform.position = newPos;
                 FaceByDirX(dir.x);
 
