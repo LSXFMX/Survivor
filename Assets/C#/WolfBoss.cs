@@ -56,7 +56,6 @@ public class WolfBoss : enemy
 
     private Animator  anim;
     private SpriteRenderer _sr;
-    private float     groundY;    // 出生时的 y，防止掉地板
     private bool  busy       = false; // 技能演出中，暂停常规移动/选技能
     private bool  invincible = false;
     private int   lockedHealth;
@@ -79,7 +78,6 @@ public class WolfBoss : enemy
         playerlayer = GameObject.Find("playerlayer")?.transform;
         anim = GetComponent<Animator>();
         _sr  = GetComponent<SpriteRenderer>();
-        groundY = transform.position.y;
 
         if (DifficultyManager.Instance != null)
         {
@@ -119,9 +117,8 @@ public class WolfBoss : enemy
     {
         base.LateUpdate();
         if (invincible) health = lockedHealth;
-        // 强制锁 y——任何地方改动了 transform.position.y 都会被覆盖回地面
-        Vector3 pp = transform.position;
-        if (Mathf.Abs(pp.y - groundY) > 0.01f) { pp.y = groundY; transform.position = pp; }
+        // 注意：不再锁 Y！Y 完全交给物理引擎（开重力、非 Kinematic），
+        // Boss 出生后自然下落到地面，和其他小怪一致——彻底解决"悬空移动/不受重力"。
     }
 
     private void FaceTarget()
@@ -254,7 +251,7 @@ public class WolfBoss : enemy
             {
                 Vector3 pp = role.transform.position;
                 float side = (transform.position.x <= pp.x) ? -1.6f : 1.6f;
-                transform.position = new Vector3(pp.x + side, groundY, pp.z);
+                transform.position = new Vector3(pp.x + side, transform.position.y, pp.z);
                 FaceTarget();
             }
 
@@ -284,8 +281,6 @@ public class WolfBoss : enemy
         {
             // 完成变身并复位所有状态（正常/异常都执行，保证收敛到 Wolf）
             Sca = wolfScale;
-            Vector3 vp = transform.position; vp.y = groundY;
-            transform.position = vp;
             transform.localScale = new Vector3(Sca, Sca, Sca);
             health = Mathf.Min(healthmax, health + Mathf.RoundToInt(healthmax * 0.1f));
             lockedHealth = health;
@@ -326,8 +321,7 @@ public class WolfBoss : enemy
             {
                 t += Time.fixedDeltaTime;
                 Vector3 bp = transform.position - toT * wolfRunSpeed * 0.3f * Time.fixedDeltaTime;
-                bp.y = groundY;
-                transform.position = bp;
+                transform.position = bp; // 只改 XZ（toT.y=0），Y 交给重力
                 yield return new WaitForFixedUpdate();
             }
 
@@ -346,8 +340,7 @@ public class WolfBoss : enemy
             {
                 t += Time.fixedDeltaTime;
                 Vector3 fp = transform.position + dir * wolfRunSpeed * 1.15f * Time.fixedDeltaTime;
-                fp.y = groundY;
-                transform.position = fp;
+                transform.position = fp; // 只改 XZ（dir.y=0），Y 交给重力
                 // 冲刺途中实时检查是否撞到玩家
                 if (playerlayer != null)
                 {
@@ -375,7 +368,7 @@ public class WolfBoss : enemy
             // Boss 贴到玩家侧旁形成"咬住"视觉
             Vector3 pp = hitTf.position;
             float side = (transform.position.x <= pp.x) ? -1.2f : 1.2f;
-            transform.position = new Vector3(pp.x + side, groundY, pp.z);
+            transform.position = new Vector3(pp.x + side, transform.position.y, pp.z);
             FaceTarget();
 
             // 定身停顿：让玩家意识到被抓住
@@ -463,7 +456,7 @@ public class WolfBoss : enemy
                 Vector3 newPos = transform.position + dir * spd * dt;
                 newPos.x = Mathf.Clamp(newPos.x, -mapX, mapX);
                 newPos.z = Mathf.Clamp(newPos.z, -mapZ, mapZ);
-                newPos.y = groundY;
+                // 不改 Y（dir.y=0，newPos.y 已等于当前 Y），Y 交给重力
                 transform.position = newPos;
                 FaceByDirX(dir.x);
 
