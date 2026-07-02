@@ -278,10 +278,10 @@ public class WolfBoss : enemy
             SetPlayersMovementLocked(true);
             yield return new WaitForSeconds(2f);    // 停顿 2 秒让玩家充分意识到被抓取
 
-            // 3) 撕咬一爪：全屏利爪特效 + 造成玩家现有生命值 10% 的处决伤害
+            // 3) 撕咬一爪：全屏利爪特效 + 造成玩家最大生命值 10% 的处决伤害
             WolfClawScreenFx.Show(clawScreenFrames);
             SpawnClawFx(role != null ? role.transform.position : transform.position);
-            ExecutionBiteByCurrentHp(0.10f);
+            ExecutionBiteByMaxHp(0.10f);
             yield return new WaitForSeconds(0.6f);
 
             // 4) 解除定身，继续播放变身动画
@@ -394,7 +394,8 @@ public class WolfBoss : enemy
             if (hitTf != null) SpawnClawFx(hitTf.position);
             if (hitPlayer != null && hitTf != null && hitPlayer.health > 0)
             {
-                int d = Mathf.Max(1, Mathf.RoundToInt(atk * 3f) - (int)hitPlayer.def);
+                // 处决伤害：玩家「最大生命值」10% 的固定伤害（与半血变身处决一致，已被抓住无视防御）
+                int d = Mathf.Max(1, Mathf.RoundToInt(hitPlayer.healthmax * 0.10f));
                 hitPlayer.health -= d;
                 ShowDamageNumber(hitTf.position, d);
                 WolfLifesteal(d);
@@ -438,9 +439,9 @@ public class WolfBoss : enemy
                 Vector3 dd = role.transform.position - transform.position; dd.y = 0;
                 if (dd.sqrMagnitude > 0.01f) dir = dd.normalized;
             }
-            float spd      = wolfRunSpeed * 0.2f;   // 起步慢，体现加速
-            float maxSpeed = wolfRunSpeed * 0.55f;  // 上限减半，避免闪现
-            float accel    = wolfRunSpeed * 0.08f;
+            float minSpeed = wolfRunSpeed * 0.12f;  // 起步很慢
+            float maxSpeed = wolfRunSpeed * 1.5f;    // 峰值 = 原奔跑速度的 1.5 倍
+            float ramp     = dashDuration;           // 用整段时长把速度从慢加到峰值
             float t        = 0f;
             dashHitCd = 0f;
             float mapX = 28f, mapZ = 28f;
@@ -450,33 +451,28 @@ public class WolfBoss : enemy
                 float dt = Time.fixedDeltaTime;
                 t += dt;
 
-                // 逐步加速
-                spd = Mathf.Min(maxSpeed, spd + accel * dt);
+                // 加速度递增：速度沿 t² 曲线上升 → 每秒的增量越来越大（不是一上来就高速）
+                float k     = Mathf.Clamp01(t / ramp);
+                float curve = k * k;
+                float spd   = Mathf.Lerp(minSpeed, maxSpeed, curve);
 
-                // 逼近玩家时自动减速（不会冲过头）
-                if (role != null)
-                {
-                    Vector3 toP = (role.transform.position - transform.position); toP.y = 0;
-                    if (toP.magnitude < 4f) spd = Mathf.Min(spd, wolfRunSpeed * 0.15f);
-                }
-
-                // 方向持续朝玩家追（含 X 与 Z 两个方向，确保纵深也能逼近，而非只左右横跑）
+                // 方向持续朝玩家追（含 X 与 Z，确保纵深也能逼近，而非只左右横跑）
                 if (role != null)
                 {
                     Vector3 want = (role.transform.position - transform.position); want.y = 0;
                     if (want.sqrMagnitude > 0.01f)
-                        dir = Vector3.Slerp(dir, want.normalized, 1.0f * dt).normalized;
+                        dir = Vector3.Slerp(dir, want.normalized, 1.2f * dt).normalized;
                 }
 
                 Vector3 newPos = transform.position + dir * spd * dt;
                 newPos.x = Mathf.Clamp(newPos.x, -mapX, mapX);
                 newPos.z = Mathf.Clamp(newPos.z, -mapZ, mapZ);
-                // 不改 Y（dir.y=0，newPos.y 已等于当前 Y），Y 交给重力
+                // 不改 Y（dir.y=0，newPos.y 已等于当前 Y），Y 由 LateUpdate 锁到地面
                 transform.position = newPos;
                 FaceByDirX(dir.x);
 
-                float ratio = Mathf.InverseLerp(wolfRunSpeed * 0.2f, maxSpeed, spd);
-                EVA = Mathf.RoundToInt(baseEVA + 50f * ratio);
+                // 闪避随加速曲线上升：峰值（达到 1.5x 速度）时 EVA 达到顶峰 +50
+                EVA = Mathf.RoundToInt(baseEVA + 50f * curve);
 
                 if (dashHitCd > 0f) dashHitCd -= dt;
                 else DashTouchDamage();
@@ -541,15 +537,15 @@ public class WolfBoss : enemy
         if (pl != null) pl.movementLocked = false;
     }
 
-    // 处决一击：固定造成玩家「现有生命值」的百分比伤害（无视防御与闪避——已被抓住）
-    private void ExecutionBiteByCurrentHp(float pct)
+    // 处决一击：固定造成玩家「最大生命值」的百分比伤害（无视防御与闪避——已被抓住）
+    private void ExecutionBiteByMaxHp(float pct)
     {
         if (playerlayer == null) return;
         foreach (Transform p in playerlayer)
         {
             var pl = p.GetComponent<Player>();
             if (pl == null || pl.health <= 0) continue;
-            int d = Mathf.Max(1, Mathf.RoundToInt(pl.health * pct));
+            int d = Mathf.Max(1, Mathf.RoundToInt(pl.healthmax * pct));
             pl.health -= d;
             ShowDamageNumber(p.position, d);
             pl.startturnred();
