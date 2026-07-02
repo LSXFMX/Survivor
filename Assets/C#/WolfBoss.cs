@@ -29,7 +29,7 @@ public class WolfBoss : enemy
 {
     [Header("体型")]
     public float humanScale = 4f;
-    public float wolfScale  = 5f;   // 变身后缩放（新素材较大，降为 5）
+    public float wolfScale  = 6.5f; // 狼形态缩放（新素材较大，当前 1.3× 倍率）
 
     [Header("速度")]
     public float humanSpeed    = 4f;

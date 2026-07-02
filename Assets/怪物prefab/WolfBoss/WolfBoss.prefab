@@ -147,7 +147,7 @@ MonoBehaviour:
   expstone: {fileID: 7733258394847694891, guid: 2a634f41aed7e5a43bc79c0cd73c4360,
     type: 3}
   humanScale: 4
-  wolfScale: 5
+  wolfScale: 6.5
   humanSpeed: 4
   wolfWalkSpeed: 5
   wolfRunSpeed: 22
