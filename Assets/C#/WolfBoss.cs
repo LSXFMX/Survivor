@@ -56,6 +56,8 @@ public class WolfBoss : enemy
 
     private Animator  anim;
     private SpriteRenderer _sr;
+    private float groundY;          // 地面 Y（从玩家所在平面采样，而非出生点高空）
+    private bool  groundYSet = false;
     private bool  busy       = false; // 技能演出中，暂停常规移动/选技能
     private bool  invincible = false;
     private int   lockedHealth;
@@ -117,8 +119,21 @@ public class WolfBoss : enemy
     {
         base.LateUpdate();
         if (invincible) health = lockedHealth;
-        // 注意：不再锁 Y！Y 完全交给物理引擎（开重力、非 Kinematic），
-        // Boss 出生后自然下落到地面，和其他小怪一致——彻底解决"悬空移动/不受重力"。
+
+        // 地面 Y 基准：从玩家所在平面采样（玩家永远站在正确地面上）。
+        // 不用出生点的 Y——出生点在高空(y≈2.43)，用它会让 Boss 悬空。
+        if (role != null)
+        {
+            groundY = role.transform.position.y;
+            groundYSet = true;
+        }
+        // 锁 Y 到地面：Boss 是 Kinematic（不受重力、不会隧穿/下坠），
+        // 唯一的 Y 来源就是这里——始终与玩家同一水平面，既不悬空也不遁地。
+        if (groundYSet)
+        {
+            Vector3 pp = transform.position;
+            if (Mathf.Abs(pp.y - groundY) > 0.001f) { pp.y = groundY; transform.position = pp; }
+        }
     }
 
     private void FaceTarget()
@@ -251,7 +266,7 @@ public class WolfBoss : enemy
             {
                 Vector3 pp = role.transform.position;
                 float side = (transform.position.x <= pp.x) ? -1.6f : 1.6f;
-                transform.position = new Vector3(pp.x + side, transform.position.y, pp.z);
+                transform.position = new Vector3(pp.x + side, pp.y, pp.z); // 用玩家的 Y（地面）
                 FaceTarget();
             }
 
@@ -368,7 +383,7 @@ public class WolfBoss : enemy
             // Boss 贴到玩家侧旁形成"咬住"视觉
             Vector3 pp = hitTf.position;
             float side = (transform.position.x <= pp.x) ? -1.2f : 1.2f;
-            transform.position = new Vector3(pp.x + side, transform.position.y, pp.z);
+            transform.position = new Vector3(pp.x + side, pp.y, pp.z); // 用玩家的 Y（地面）
             FaceTarget();
 
             // 定身停顿：让玩家意识到被抓住
