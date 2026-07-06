@@ -26,15 +26,17 @@ public class battleUI : MonoBehaviour
     public AdventureUI adventureUI;
 
     [Header("Boss")]
-    public GameObject bossPrefab;       // 蘑菇人Boss（N2~N5、N9、N12、N13）
+    public GameObject bossPrefab;       // 蘑菇人Boss（N2~N5、N9、N13）
     public GameObject batBossPrefab;    // 蝙蝠Boss（N7~N8）
     public GameObject wolfBossPrefab;   // 狼人社群Boss（N10~N11）
+    public GameObject slimeBossPrefab;  // 史莱姆社群Boss（N12）
     public Transform bossSpawnPoint;
     public Transform enemylayer;
     private bool bossSpawned = false;
     private BossMushroomMan spawnedBoss = null;
     private BossBat spawnedBatBoss = null;
     private WolfBoss spawnedWolfBoss = null;
+    private SlimeBoss spawnedSlimeBoss = null;
     private int _doubleBossRemain = 0;
 
     [Header("胜利/失败")]
@@ -102,6 +104,9 @@ public class battleUI : MonoBehaviour
 
         // 角色头像 + 玩家升级进度 UI（运行时构造，无需场景拖拽）
         EnsureCharacterPanel();
+
+        // N12 开局生成史莱姆社群Boss方便测试（延迟1帧确保场景初始化完成）
+        StartCoroutine(SpawnN12DebugBossNextFrame());
     }
 
     /// <summary>从 speedButtonText 父级自动取 Button，避免新增字段 / 修改场景。</summary>
@@ -207,6 +212,26 @@ public class battleUI : MonoBehaviour
     {
         yield return null;
         starttime();
+    }
+
+    /// <summary>N12 测试用：延迟1帧开局生成史莱姆Boss（不受 Spawnpoint 序列化问题影响）</summary>
+    private IEnumerator SpawnN12DebugBossNextFrame()
+    {
+        yield return null;
+        yield return null; // 双帧保险，确保 enemylayer / DifficultyManager 均就绪
+        if (DifficultyManager.Instance == null) yield break;
+        if (DifficultyManager.Instance.Current.label != "N12") yield break;
+        GameObject prefab = slimeBossPrefab != null ? slimeBossPrefab
+                          : Resources.Load<GameObject>("WorldBoss/SlimeBoss");
+        if (prefab == null) { Debug.LogWarning("[SlimeBoss Debug] 找不到史莱姆Boss prefab（Resources/WorldBoss/SlimeBoss）"); yield break; }
+
+        Vector3 pos = bossSpawnPoint != null ? bossSpawnPoint.position
+                    : (player != null ? player.transform.position + Vector3.right * 5f : Vector3.zero);
+        var obj = Instantiate(prefab, pos, Quaternion.Euler(45, 0, 0),
+            enemylayer != null ? enemylayer : null);
+        var boss = obj.GetComponent<SlimeBoss>();
+        if (boss != null) boss.battleUI = this;
+        Debug.Log("[SlimeBoss] N12 开局测试Boss已生成（battleUI）");
     }
 
     public void RefreshSkill()
@@ -664,6 +689,7 @@ public class battleUI : MonoBehaviour
             case "N8": return "你已是世界的征服者。";
             case "N10": return "狼人社群的首领轰然倒下。";
             case "N11": return "狼人与月光的契约就此瓦解。";
+            case "N12": return "史莱姆巨龙塑形失败，王冠坠地。";
             default:   return "再次通关，强度++";
         }
     }
@@ -672,7 +698,8 @@ public class battleUI : MonoBehaviour
     {
         string label = DifficultyManager.Instance != null ? DifficultyManager.Instance.Current.label : "N2";
 
-        // N10/N11 生成狼人社群Boss，N7/N8 生成蝙蝠Boss，N6 生成双蘑菇人Boss，其余生成单蘑菇人Boss
+        // N12 生成史莱姆社群Boss，N10/N11 生成狼人社群Boss，N7/N8 生成蝙蝠Boss，N6 生成双蘑菇人Boss，其余生成单蘑菇人Boss
+        bool isSlimeBoss  = label == "N12";
         bool isWolfBoss   = label == "N10" || label == "N11";
         bool isBatBoss    = label == "N7" || label == "N8";
         bool isDoubleBoss = label == "N6";
@@ -682,7 +709,19 @@ public class battleUI : MonoBehaviour
         bossTimer   = BOSS_TIME_LIMIT;
         startcount  = false;
 
-        if (isWolfBoss)
+        if (isSlimeBoss)
+        {
+            GameObject prefab = slimeBossPrefab != null ? slimeBossPrefab
+                              : Resources.Load<GameObject>("WorldBoss/SlimeBoss");
+            if (prefab == null) { Debug.LogWarning("[Boss] 史莱姆Boss prefab 缺失（Resources/WorldBoss/SlimeBoss）"); return; }
+            Vector3 pos = GetBossSpawnPos(0, 1);
+            GameObject obj = Instantiate(prefab, pos, Quaternion.Euler(45, 0, 0),
+                enemylayer != null ? enemylayer : null);
+            spawnedSlimeBoss = obj.GetComponent<SlimeBoss>();
+            if (spawnedSlimeBoss != null) spawnedSlimeBoss.battleUI = this;
+            Debug.Log("[Boss] 史莱姆社群Boss已生成");
+        }
+        else if (isWolfBoss)
         {
             if (wolfBossPrefab == null) return;
             Vector3 pos = GetBossSpawnPos(0, 1);

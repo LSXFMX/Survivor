@@ -20,8 +20,15 @@ public class Spawnpoint : MonoBehaviour
     [Header("N11+ 史莱姆社群")]
     public GameObject slimePrefab; // 拖入史莱姆 prefab，N11~N13 自动加入刷怪池
 
+    [Header("N12 史莱姆社群Boss（测试用）")]
+    public GameObject slimeBossPrefab; // 拖入史莱姆Boss prefab，N12 开局生成一只供测试
+
     void Start()
     {
+        // 兜底：场景用外部脚本写入的 slimeBossPrefab 可能因 Unity 序列化缓存未命中为 null，
+        // 优先从同场景的 battleUI 组件复制引用（battleUI 一定存在且已正确序列化）。
+        if (slimeBossPrefab == null && b != null) slimeBossPrefab = b.slimeBossPrefab;
+
         if (DifficultyManager.Instance == null) return;
         string label = DifficultyManager.Instance.Current.label;
 
@@ -39,6 +46,16 @@ public class Spawnpoint : MonoBehaviour
         if (slimePrefab != null &&
             (label == "N11" || label == "N12" || label == "N13"))
             enemy.Add(slimePrefab);
+
+        // N12 开局生成一只史莱姆社群Boss（测试用）
+        if (slimeBossPrefab != null && label == "N12")
+        {
+            Vector3 pos = transform.childCount > 0 ? transform.GetChild(0).position : transform.position;
+            var obj = Instantiate(slimeBossPrefab, pos, Quaternion.Euler(45, 0, 0), enemylayer);
+            var boss = obj.GetComponent<SlimeBoss>();
+            if (boss != null && b != null) boss.battleUI = b;
+            Debug.Log("[Spawn] N12 开局已生成史莱姆社群Boss（测试模式）");
+        }
     }
 
     void FixedUpdate()

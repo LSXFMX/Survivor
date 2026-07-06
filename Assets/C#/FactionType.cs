@@ -6,4 +6,5 @@ public enum FactionType
 {
     Mushroom,   // 蘑菇社群
     Bat,        // 蝙蝠社群
+    Slime,      // 史莱姆社群
 }

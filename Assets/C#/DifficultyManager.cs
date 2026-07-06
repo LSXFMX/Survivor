@@ -45,9 +45,8 @@ public class DifficultyManager : MonoBehaviour
     // 对局时长调整（2026-06）：之前 8~15 分整体偏长，前期推进节奏太慢。
     // 新规则——N8 锚定 13 分钟，N2~N8 反向递减 1 分（13/12/11/10/9/8/7），
     // N1 特殊为 1 分钟（教学局，让新人快速跑完一局拿到初心者装备），
-    // N9~N13 正向递增 1 分（14/15/16/17/18）。
-    // 这样总体节奏：N1 极快、N2~N4 中短局、N5~N8 硬核挑战、
-    // N9~N13 超长局（终极挑战）。
+    // N9~N13 统一 13 分钟（高阶挑战，与 N8 对齐）。
+    // 这样总体节奏：N1 极快、N2~N4 中短局、N5~N13 硬核挑战。
     public DifficultyConfig[] configs = new DifficultyConfig[]
     {
         // N1：教学局，特殊处理为 1 分钟——让新玩家几乎一定能"通关"领到首套通关装备
@@ -68,17 +67,17 @@ public class DifficultyManager : MonoBehaviour
         // 时长锚定 13 分钟——配合 HP×25、BOSS 击杀节奏 6~12 秒，
         // 普通杂兵 1~2 发清，整体强度仍是最高一档但不至于劝退。
         new DifficultyConfig { label = "N8", hpMultiplier = 25.0f, atkMultiplier = 3.5f,  minutes = 13 },
-        // N9：更高挑战，HP×32，ATK×4.0，14 分钟
-        new DifficultyConfig { label = "N9",  hpMultiplier = 32.0f, atkMultiplier = 4.0f,  minutes = 14 },
-        // N10：更高挑战，HP×41，ATK×4.5，15 分钟
-        new DifficultyConfig { label = "N10", hpMultiplier = 41.0f, atkMultiplier = 4.5f,  minutes = 15 },
-        // N11：更高挑战，HP×52，ATK×5.0，16 分钟
-        new DifficultyConfig { label = "N11", hpMultiplier = 52.0f, atkMultiplier = 5.0f,  minutes = 16 },
-        // N12：更高挑战，HP×65，ATK×5.5，17 分钟
-        new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.5f,  minutes = 17 },
-        // N13：终极挑战，HP×80，ATK×6.0，18 分钟
+        // N9：更高挑战，HP×32，ATK×4.0，13 分钟
+        new DifficultyConfig { label = "N9",  hpMultiplier = 32.0f, atkMultiplier = 4.0f,  minutes = 13 },
+        // N10：更高挑战，HP×41，ATK×4.5，13 分钟
+        new DifficultyConfig { label = "N10", hpMultiplier = 41.0f, atkMultiplier = 4.5f,  minutes = 13 },
+        // N11：更高挑战，HP×52，ATK×5.0，13 分钟
+        new DifficultyConfig { label = "N11", hpMultiplier = 52.0f, atkMultiplier = 5.0f,  minutes = 13 },
+        // N12：更高挑战，HP×65，ATK×5.5，13 分钟
+        new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.5f,  minutes = 13 },
+        // N13：终极挑战，HP×80，ATK×6.0，13 分钟
         // 玩家满配 ~20x 倍率，怪 HP×80 才能撑住
-        new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 6.0f,  minutes = 18 },
+        new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 6.0f,  minutes = 13 },
     };
 
     // 当前选中的难度索引（0=N1 … 4=N5），默认 N3
@@ -100,11 +99,11 @@ public class DifficultyManager : MonoBehaviour
             for (int i = 0; i < oldLen; i++)
                 expanded[i] = configs[i];
             // 填充缺失的 N9~N13 默认值
-            expanded[8]  = new DifficultyConfig { label = "N9",  hpMultiplier = 32.0f, atkMultiplier = 4.0f, minutes = 14 };
-            expanded[9]  = new DifficultyConfig { label = "N10", hpMultiplier = 41.0f, atkMultiplier = 4.5f, minutes = 15 };
-            expanded[10] = new DifficultyConfig { label = "N11", hpMultiplier = 52.0f, atkMultiplier = 5.0f, minutes = 16 };
-            expanded[11] = new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.5f, minutes = 17 };
-            expanded[12] = new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 6.0f, minutes = 18 };
+            expanded[8]  = new DifficultyConfig { label = "N9",  hpMultiplier = 32.0f, atkMultiplier = 4.0f, minutes = 13 };
+            expanded[9]  = new DifficultyConfig { label = "N10", hpMultiplier = 41.0f, atkMultiplier = 4.5f, minutes = 13 };
+            expanded[10] = new DifficultyConfig { label = "N11", hpMultiplier = 52.0f, atkMultiplier = 5.0f, minutes = 13 };
+            expanded[11] = new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.5f, minutes = 13 };
+            expanded[12] = new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 6.0f, minutes = 13 };
             configs = expanded;
             Debug.LogWarning($"[难度管理] 场景 configs 只有 {oldLen} 个条目，已自动扩展到 13 个（N1-N13）");
         }

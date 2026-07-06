@@ -41,8 +41,8 @@ public class EquipmentInitializer : MonoBehaviour
         {
             player.healthmax = 99999;
             player.health    = 99999;
-            player.atk       = 99999f;
-            ToastManager.Show("[测试模式] 玩家 HP / ATK 已设为 99999");
+            player.atk       = 800f;
+            ToastManager.Show("[测试模式] 玩家 HP 99999 / ATK 800");
             Debug.Log("[TestMode] 已将玩家 healthmax/health/atk 全部覆写为 99999。");
 
             // 测试模式起手赠送 10000 源木，便于联调奇遇/门挑战触发条件。

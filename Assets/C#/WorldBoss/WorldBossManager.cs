@@ -45,6 +45,10 @@ public class WorldBossManager : MonoBehaviour
 
     void Start()
     {
+        // 自动补齐 蝙蝠 / 史莱姆 世界Boss 条目（按场景中社群对象名查找 + 从 Resources 加载预制体）。
+        // 这样即使 Inspector 未手动绑定、或场景外部修改被 Unity 覆盖，也能稳定生成世界Boss。
+        EnsureAutoEntries();
+
         // 所有社群对象初始隐藏
         foreach (var entry in worldBossEntries)
             if (entry.factionObject != null)
@@ -52,6 +56,47 @@ public class WorldBossManager : MonoBehaviour
 
         if (!ShouldSpawnWorldBoss()) return;
         SpawnAllWorldBosses();
+    }
+
+    /// <summary>
+    /// 为 蝙蝠 / 史莱姆 社群自动补一条世界Boss条目（若 Inspector 未配置）。
+    /// - 按名称在场景中查找社群对象（"蝙蝠社群" / "史莱姆社群"）；
+    /// - 从 Resources/WorldBoss/ 加载对应世界Boss预制体；
+    /// - 以社群对象位置作为生成点。
+    /// 蘑菇社群已在 Inspector 绑定，跳过。
+    /// </summary>
+    private void EnsureAutoEntries()
+    {
+        TryAutoAddEntry(FactionType.Bat,   "蝙蝠社群",   "WorldBoss/BatBossWorld");
+        TryAutoAddEntry(FactionType.Slime, "史莱姆社群", "WorldBoss/SlimeBossWorld");
+    }
+
+    private void TryAutoAddEntry(FactionType faction, string factionObjectName, string resourcePath)
+    {
+        // 已存在该社群条目则不重复添加
+        if (worldBossEntries.Exists(e => e.faction == faction && e.bossPrefab != null)) return;
+
+        GameObject prefab = Resources.Load<GameObject>(resourcePath);
+        if (prefab == null)
+        {
+            Debug.LogWarning($"[WorldBoss] 自动补条目失败：找不到预制体 Resources/{resourcePath}");
+            return;
+        }
+
+        GameObject factionObj = GameObject.Find(factionObjectName);
+        Transform spawn = factionObj != null ? factionObj.transform : null;
+
+        // 复用已有的同社群条目（可能只配了 spawnPoint/factionObject 没配 prefab），否则新建
+        WorldBossEntry entry = worldBossEntries.Find(e => e.faction == faction);
+        if (entry == null)
+        {
+            entry = new WorldBossEntry { faction = faction };
+            worldBossEntries.Add(entry);
+        }
+        if (entry.bossPrefab == null)    entry.bossPrefab    = prefab;
+        if (entry.factionObject == null) entry.factionObject = factionObj;
+        if (entry.spawnPoint == null)    entry.spawnPoint    = spawn;
+        Debug.Log($"[WorldBoss] 已自动补齐 {faction} 世界Boss条目（prefab={prefab.name}, 社群={(factionObj != null ? factionObj.name : "未找到")}）");
     }
 
     private bool ShouldSpawnWorldBoss()
@@ -80,13 +125,22 @@ public class WorldBossManager : MonoBehaviour
 
         foreach (var entry in worldBossEntries)
         {
-            if (entry.bossPrefab == null || entry.spawnPoint == null) continue;
+            if (entry.bossPrefab == null) continue;
 
-            // 按社群设定最低出现难度：蘑菇 N7+，蝙蝠 N10+
-            if (entry.faction == FactionType.Bat && currentN < 10) continue;
+            // 按社群设定最低出现难度：蘑菇 N7+，蝙蝠 N10+，史莱姆 N11+
+            if (entry.faction == FactionType.Bat   && currentN < 10) continue;
+            if (entry.faction == FactionType.Slime && currentN < 11) continue;
+
+            // 生成位置：优先 spawnPoint，其次社群对象位置，最后玩家附近兜底
+            Vector3 spawnPos;
+            if (entry.spawnPoint != null) spawnPos = entry.spawnPoint.position;
+            else if (entry.factionObject != null) spawnPos = entry.factionObject.transform.position;
+            else spawnPos = (player != null)
+                          ? player.transform.position + new Vector3(12f, 0f, 12f)
+                          : new Vector3(20f, 0f, 20f);
 
             GameObject obj = Instantiate(entry.bossPrefab,
-                entry.spawnPoint.position,
+                spawnPos,
                 Quaternion.Euler(45, 0, 0),
                 enemylayer); // 生成在 enemylayer 下
 
@@ -105,11 +159,14 @@ public class WorldBossManager : MonoBehaviour
                 wbBat.worldBossManager = this;
             }
 
+            var wbSlime = obj.GetComponent<WorldBossSlime>();
+            if (wbSlime != null)
+            {
+                wbSlime.faction          = entry.faction;
+                wbSlime.worldBossManager = this;
+            }
+
             // 头顶血条：在此处统一挂载，确保所有世界Boss都能显示（v9 关键修复）
-            // 原因：WorldBossMushroomMan/WorldBossBat 继承自 BossMushroomMan/BossBat，
-            // 不是 WorldBossBase 的子类，所以 WorldBossBase.OnEnable 里的 AddComponent
-            // 永远不会被触发——这正是 v1~v8 血条始终未出现的根因。
-            // 现在改为：实例化后立即 AddComponent，与脚本继承链完全解耦。
             if (obj.GetComponent<WorldBossHealthBar>() == null)
                 obj.AddComponent<WorldBossHealthBar>();
 

@@ -34,8 +34,8 @@ public class PlayerSkinOverrider : MonoBehaviour
     public float windIdleClipLength = 1.6f;
     [Tooltip("南筱风待机是否删掉第 0 帧（正面图）。")]
     public bool windIdleDropFirstFrame = true;
-    [Tooltip("南筱风走路总时长（秒）。7 帧建议 0.7~0.85；4 帧建议 0.45~0.55；8 帧建议 0.8~1.0。")]
-    public float windMoveClipLength = 0.85f;
+    [Tooltip("南筱风走路总时长（秒）。7 帧建议 0.7~0.85；4 帧建议 0.45~0.55；8 帧建议 0.8~1.0。\n原 0.85s 在 7 帧下 ≈ 8.2fps，跑动时观感偏快像原地踏步，调到 1.1s ≈ 6.4fps 后节奏更稳。")]
+    public float windMoveClipLength = 1.1f;
     [Tooltip("南筱风走路播放方案：\n  0 = 7 帧顺序（默认，按图集自然顺序）：取走路 8 帧的前 7 帧（去掉最后一帧）——\n      [中行 4 帧 + 底行 3 帧]，对应 PNG 中视觉上 idle 之后的前 7 张。\n  1 = Row1 钟摆（4 帧）：仅用中行的 [0,1,2,1]，走路幅度大但只有 4 帧节奏快。\n  2 = Row0 钟摆（4 帧）：仅用底行的 [0,1,2,1]，幅度小看着稳。\n  3 = 8 帧交错钟摆（旧默认）：从两行 4 帧里挑左右脚交替的 8 帧组成钟摆型步态，观感对称但末尾有顿挫。")]
     [Range(0, 3)]
     public int windWalkSequenceMode = 0;
