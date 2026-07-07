@@ -105,7 +105,7 @@ public class skillupgrade : Upgradeoptionsbase
 
             switch (attr)
             {
-                case skillAttribute.CDtime:    s.CDtime    += scaledValue; break;
+                case skillAttribute.CDtime:    s.CDtime    += value; break; // CD与本体相同，不缩放
                 case skillAttribute.damage:    s.damage    += Mathf.RoundToInt(scaledValue); break;
                 case skillAttribute.lifetime:  s.lifetime  += scaledValue; break;
                 case skillAttribute.pass:      s.pass      += Mathf.RoundToInt(scaledValue); break;

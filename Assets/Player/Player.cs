@@ -60,6 +60,8 @@ public class Player : Attribute
     private Vector3 _cloneFollowOffset = new Vector3(1.5f, 0f, 0f);
     /// <summary>跟随死区——距目标点小于该值时停止移动，避免抖动。</summary>
     private const float CLONE_FOLLOW_DEADZONE = 0.3f;
+    /// <summary>分身模型缩放比例：1=原大小，0.7=70%（一化三清专属）。</summary>
+    [System.NonSerialized] public float modelScale = 1f;
     /// <summary>缓存 SSR9 组件检测结果，避免每帧 GetComponent。</summary>
     private bool _cloneSsr9Checked = false;
     private bool _cloneSsr9Active = false;
@@ -261,8 +263,8 @@ public class Player : Attribute
                     if (ani != null) ani.SetBool("ismove", true);
                     // 朝向：根据移动方向翻转
                     float dx = targetPos.x - transform.position.x;
-                    if (dx > 0.01f) transform.localScale = new Vector3(1, 1, 1);
-                    else if (dx < -0.01f) transform.localScale = new Vector3(-1, 1, 1);
+                    if (dx > 0.01f) transform.localScale = new Vector3(modelScale, modelScale, modelScale);
+                    else if (dx < -0.01f) transform.localScale = new Vector3(-modelScale, modelScale, modelScale);
                 }
                 else
                 {
@@ -312,9 +314,9 @@ public class Player : Attribute
         if (hmove == 0 && vmove == 0)
             ani.SetBool("ismove", false);
         if (hmove > 0)
-            transform.localScale = new Vector3(1, 1, 1);
+            transform.localScale = new Vector3(modelScale, modelScale, modelScale);
         if (hmove < 0)
-            transform.localScale = new Vector3(-1, 1, 1);
+            transform.localScale = new Vector3(-modelScale, modelScale, modelScale);
 
         // 冲刺触发：已解锁 + 有移动输入 + 按空格 + CD 结束
         if (dashUnlocked && _dashCDTimer <= 0f &&

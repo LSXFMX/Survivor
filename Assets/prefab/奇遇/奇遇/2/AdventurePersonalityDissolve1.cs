@@ -176,6 +176,8 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
         }
 
         // —— 5. 属性继承（策划：30% 属性；SSR6 解锁后 MushroomShadowCloneSync 逐帧同步本体 30%）—— //
+        // 分身大小缩小到本体的 70%，视觉上与本体形成明显区分
+        clonePlayer.modelScale = 0.7f;
         // 血量：上限与主体同步为"对半"，当前血量取主体当前的 30%（与策划"30% 属性"一致）。
         clonePlayer.healthmax = mainHalfHpMax;
         clonePlayer.health    = Mathf.Clamp(Mathf.RoundToInt(mainHalfHp * ATTRIBUTE_INHERIT_RATIO),
@@ -264,7 +266,7 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
                             Skillbase ownerSkill = FindSkillByName(ownerPlayer.SkillList, sb.Skillname);
                             if (ownerSkill != null)
                             {
-                                sb.CDtime    = ownerSkill.CDtime    * 0.3f;
+                                sb.CDtime    = ownerSkill.CDtime;       // 冷却时间与本体相同
                                 sb.damage    = Mathf.RoundToInt(ownerSkill.damage * 0.3f);
                                 sb.lifetime  = ownerSkill.lifetime  * 0.3f;
                                 sb.pass      = Mathf.RoundToInt(ownerSkill.pass * 0.3f);
