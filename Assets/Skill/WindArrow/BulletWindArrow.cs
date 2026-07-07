@@ -149,6 +149,7 @@ public class BulletWindArrow : Bulletbase
         if (DamageNumberSettings.Visible)
         {
             GameObject num = Instantiate(e.atknumber, hitTransform.position, default);
+            num.transform.localScale *= DamageNumberSettings.SizeScale;
             var txt = num.transform.GetChild(0).GetComponent<TMPro.TextMeshProUGUI>();
             txt.text = ((int)finaldamage).ToString();
             if (isCrit) txt.color = new Color32(255, 215, 0, 255);

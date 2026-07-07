@@ -26,6 +26,7 @@ public static class MissNumber
         if (atknumberPrefab == null) return;
 
         GameObject number = Object.Instantiate(atknumberPrefab, pos, Quaternion.identity);
+        number.transform.localScale *= DamageNumberSettings.SizeScale;
         // 兼容既有伤害数字预制体结构：TextMeshProUGUI 挂在第 0 个子物体
         if (number.transform.childCount > 0)
         {

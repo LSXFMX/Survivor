@@ -620,6 +620,7 @@ public class BulletBloodlineBat : Bulletbase
         if (e.atknumber != null && DamageNumberSettings.Visible)
         {
             GameObject num = Instantiate(e.atknumber, e.transform.position, default);
+            num.transform.localScale *= DamageNumberSettings.SizeScale;
             var txt = num.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
             if (txt != null)
             {

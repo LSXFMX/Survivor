@@ -610,6 +610,7 @@ public class WolfBoss : enemy
         if (DamageNumberSettings.Visible && atknumber != null)
         {
             GameObject n = Instantiate(atknumber, pos, default);
+            n.transform.localScale *= DamageNumberSettings.SizeScale;
             n.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = d.ToString();
         }
     }

@@ -104,6 +104,7 @@ public class BulletHellTrident : MonoBehaviour
         if (_targetEnemy.atknumber != null && DamageNumberSettings.Visible)
         {
             GameObject num = Instantiate(_targetEnemy.atknumber, _targetEnemy.transform.position, Quaternion.identity);
+            num.transform.localScale *= DamageNumberSettings.SizeScale;
             var txt = num.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
             txt.text = ((int)finalDamage).ToString();
             if (isCrit) txt.color = new Color32(255, 215, 0, 255);

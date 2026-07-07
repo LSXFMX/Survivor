@@ -98,6 +98,7 @@ public class BulletSporeField : MonoBehaviour
                         targetEnemy.atknumber,
                         targetEnemy.transform.position,
                         Quaternion.identity);
+                    num.transform.localScale *= DamageNumberSettings.SizeScale;
                     var txt = num.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
                     txt.text = dealt.ToString();
                     if (isCrit) txt.color = new Color32(255, 215, 0, 255);

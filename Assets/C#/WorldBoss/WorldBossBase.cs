@@ -128,6 +128,7 @@ public class WorldBossBase : enemy
         if (DamageNumberSettings.Visible)
         {
             GameObject number = Instantiate(atknumber, collision.transform.position, default);
+            number.transform.localScale *= DamageNumberSettings.SizeScale;
             number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = dmg.ToString();
         }
         AudioManager.PlaySfx(AudioManager.SfxKey.Hit);

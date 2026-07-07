@@ -302,6 +302,7 @@ public class MushroomBabyPet : MonoBehaviour
             if (e.atknumber != null && DamageNumberSettings.Visible)
             {
                 GameObject number = Instantiate(e.atknumber, t.position, Quaternion.identity);
+                number.transform.localScale *= DamageNumberSettings.SizeScale;
                 var text = number.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
                 if (text != null) text.text = popDamage.ToString();
             }

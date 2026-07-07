@@ -258,6 +258,7 @@ public class Bat : enemy
         if (atknumber != null && DamageNumberSettings.Visible)
         {
             GameObject number = Instantiate(atknumber, other.transform.position, Quaternion.identity);
+            number.transform.localScale *= DamageNumberSettings.SizeScale;
             number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = atk.ToString();
         }
 

@@ -100,6 +100,7 @@ public class SlimeBossProjectile : MonoBehaviour
         EnsureAtkNumber();
         if (_atknumber == null) return;
         GameObject n = Instantiate(_atknumber, pos, default);
+        n.transform.localScale *= DamageNumberSettings.SizeScale;
         n.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = dmg.ToString();
     }
 

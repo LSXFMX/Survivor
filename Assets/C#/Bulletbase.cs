@@ -94,6 +94,7 @@ public class Bulletbase : MonoBehaviour
             {
                 GameObject atknumber = enemy.atknumber;
                 GameObject number = Instantiate(atknumber, enemy.transform.position, default);
+                number.transform.localScale *= DamageNumberSettings.SizeScale;
                 var txt = number.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
                 txt.text = dealt.ToString();
                 if (isCrit) txt.color = new Color32(255, 215, 0, 255);
