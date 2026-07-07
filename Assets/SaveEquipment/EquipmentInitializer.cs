@@ -780,8 +780,8 @@ public class EquipmentInitializer : MonoBehaviour
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, 13))
             ToastManager.Show("[抽卡·SSR] 饮血剑：所有来源伤害的 1% 将转为生命值");
 
-        // SSR_11「气运之子」(equipmentSystemId=14)：奇遇从二选一变三选一
-        if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, 14))
+        // SSR_11「气运之子」(equipmentSystemId=36)：奇遇从二选一变三选一
+        if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, 36))
             ToastManager.Show("[抽卡·SSR] 气运之子：奇遇可选数量+1（二选一变三选一）");
 
         // SSR_2 启动资金：等级+3 + 开局3次三选一 — 在 battleUI.Start 末尾处理（避免与 choiceUI 初始化顺序冲突）

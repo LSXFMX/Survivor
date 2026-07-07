@@ -221,11 +221,12 @@ public class ArchiveManager : MonoBehaviour
         }
         if (template == null) return;
 
-        // 需要补出的四个 SSR：equipmentId = 11 / 12 / 13 / 14
+        // 需要补出的四个 SSR：equipmentId = 11 / 12 / 13 / 36
+        //   注：14 已被 N6「夯子之心」占用，故 SSR_11 用 36
         TryCloneSsrIcon(template, ssrParent, 11, existingIds);
         TryCloneSsrIcon(template, ssrParent, 12, existingIds);
         TryCloneSsrIcon(template, ssrParent, 13, existingIds);
-        TryCloneSsrIcon(template, ssrParent, 14, existingIds);
+        TryCloneSsrIcon(template, ssrParent, 36, existingIds);
     }
 
     /// <summary>

@@ -21,8 +21,8 @@ public class AdventureEventManager : MonoBehaviour
 
     private Image _buttonImage;
 
-    /// <summary>SSR_11 气运之子 equipmentSystemId=14，解锁后奇遇从2选变3选</summary>
-    private const int SSR_FORTUNE_CHILD_ID = 14;
+    /// <summary>SSR_11 气运之子 equipmentSystemId=36，解锁后奇遇从2选变3选</summary>
+    private const int SSR_FORTUNE_CHILD_ID = 36;
 
     private void Awake()
     {

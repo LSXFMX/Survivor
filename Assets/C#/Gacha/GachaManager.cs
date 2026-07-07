@@ -226,7 +226,8 @@ public class GachaManager : MonoBehaviour
             Debug.Log("[GachaManager] 已补出 SSR_10 饮血剑（场景未配，代码兜底）");
         }
 
-        // SSR_11 气运之子 (equipmentSystemId=14)：累计抽卡 550 次后加入卡池
+        // SSR_11 气运之子 (equipmentSystemId=36)：累计抽卡 550 次后加入卡池
+        //   注：equipmentId=14 已被 N6 通关装备「夯子之心」占用，故用 36（0-35 全占）
         if (ssrItems != null && !RarityIdExists(ssrItems, 11))
         {
             ssrItems.Add(new GachaItemData
@@ -234,7 +235,7 @@ public class GachaManager : MonoBehaviour
                 itemName = "气运之子",
                 rarity = GachaRarity.SSR,
                 rarityId = 11,
-                equipmentSystemId = 14,
+                equipmentSystemId = 36,
                 poolCount = 100,
                 unlockThreshold = 550,
                 poolRefillEveryDraws = 0,
@@ -275,7 +276,7 @@ public class GachaManager : MonoBehaviour
             case 11: return "像素幸存者资源包/存档装备图标/抽卡装备/SSR/008.png";
             case 12: return "像素幸存者资源包/存档装备图标/抽卡装备/SSR/009.png";
             case 13: return "像素幸存者资源包/存档装备图标/抽卡装备/SSR/010.png";
-            case 14: return "像素幸存者资源包/存档装备图标/抽卡装备/SSR/011.png";
+            case 36: return "像素幸存者资源包/存档装备图标/抽卡装备/SSR/011.png";
             default: return null; // 其它 SSR 由场景 Inspector 已拖好
         }
     }

@@ -164,7 +164,7 @@ public class EquipmentIcon : MonoBehaviour
             howToGet = "累计抽卡 500 次后加入卡池";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/SSR/010.png");
         }
-        else if (equipmentId == 14)
+        else if (equipmentId == 36)
         {
             equipmentName = "气运之子";
             description = "奇遇可选数量+1（二选一变三选一）\n\n气运加身，抉择无忧。";
