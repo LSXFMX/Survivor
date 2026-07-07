@@ -568,7 +568,7 @@ public class GachaManager : MonoBehaviour
 
     public string GetYuanSourceDescription()
     {
-        return "【源】获取方式：\n"
+        return "[源]获取方式：\n"
             + "1. 通关难度 N1~N8：分别获得 1~8 个源。\n"
             + "2. 击败世界Boss会提高通关源奖励倍率：\n"
             + "   奖励 = 难度数字 × (1 + 本局击败Boss数量)。\n"
@@ -576,8 +576,8 @@ public class GachaManager : MonoBehaviour
             + "   奖励 = 难度数字 × 6。\n"
             + "4. 首次点击主页面的草：一次性获得 100 源。\n"
             + "5. 抽奖时若奖池为空，会退还本次消耗的源。\n"
-            + "\n【读档币】累计抽卡 200 次后加入卡池（初始 100 个），之后每累计 20 抽补充 1 个。\n"
-            + "\n【存档装备积分】每抽卡 1 次获得 1 点积分，可在存档装备界面兑换解锁装备。";
+            + "\n[读档币]累计抽卡 200 次后加入卡池（初始 100 个），之后每累计 20 抽补充 1 个。\n"
+            + "\n[存档装备积分]每抽卡 1 次获得 1 点积分，可在存档装备界面兑换解锁装备。";
     }
 
     public void ResetAll()

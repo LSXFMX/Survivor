@@ -48,7 +48,7 @@ public class ArchiveManager : MonoBehaviour
 
     [Header("清空时显示")]
     [TextArea(1, 2)]
-    public string emptyTypeText = "【请选择装备】";
+    public string emptyTypeText = "[请选择装备]";
     [TextArea(1, 2)]
     public string emptyNameText = "点击左侧装备查看详情";
     [TextArea(2, 3)]
@@ -722,12 +722,12 @@ public class ArchiveManager : MonoBehaviour
     {
         switch (type)
         {
-            case EquipmentType.ClearEquipment: return "【通关装备】";
-            case EquipmentType.AchievementEquipment: return "【成就装备】";
-            case EquipmentType.FavorEquipment: return "【好感度装备】";
-            case EquipmentType.GachaEquipment: return "【抽卡装备】";
-            case EquipmentType.InheritEquipment: return "【继承装备】";
-            default: return "【未知类型】";
+            case EquipmentType.ClearEquipment: return "[通关装备]";
+            case EquipmentType.AchievementEquipment: return "[成就装备]";
+            case EquipmentType.FavorEquipment: return "[好感度装备]";
+            case EquipmentType.GachaEquipment: return "[抽卡装备]";
+            case EquipmentType.InheritEquipment: return "[继承装备]";
+            default: return "[未知类型]";
         }
     }
 

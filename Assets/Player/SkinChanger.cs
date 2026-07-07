@@ -92,9 +92,9 @@ public class SkinChanger : MonoBehaviour
         "<b><color=#FF8E70>夏无（UR · 火/血族）</color></b>\n" +
         "<color=#FFD37A>本命技能加成 · 血族血统</color>\n" +
         "  • 蝙蝠使魔数量：1 → <color=#7FFFB0>5</color>\n" +
-        "  • 自带吸血 <color=#7FFFB0>10%</color>（装备【血族之力】后提升至 <color=#7FFFB0>20%</color>）\n" +
+        "  • 自带吸血 <color=#7FFFB0>10%</color>（装备[血族之力]后提升至 <color=#7FFFB0>20%</color>）\n" +
         "<color=#FFD37A>额外特性</color>\n" +
-        "  • <color=#7FFFB0>开局自动获得</color>【火球术】（火球 ×3）\n" +
+        "  • <color=#7FFFB0>开局自动获得</color>[火球术]（火球 ×3）\n" +
         "<color=#A0A0A0>持续输出 + 持续回复，越打越凶。【适合在解锁血族血统后游玩】</color>",
 
         // skinId=3 无罪（UR · 亡者领域）
@@ -105,8 +105,8 @@ public class SkinChanger : MonoBehaviour
         "  • 风箭 attackRadius：10 → <color=#7FFFB0>15</color>\n" +
         "  • 孢子领域 attackRadius：8 → <color=#7FFFB0>15</color>\n" +
         "<color=#FFD37A>专属内容</color>\n" +
-        "  • <color=#7FFFB0>开局自动获得</color><color=#FFB060>【风箭】</color>+<color=#FFB060>【孢子领域】</color>\n" +
-        "  • <color=#FFB060>【亡者领域】被动</color>：被复活的友军小怪死亡时回复 <color=#7FFFB0>0.5%</color> 最大生命值\n" +
+        "  • <color=#7FFFB0>开局自动获得</color><color=#FFB060>[风箭]</color>+<color=#FFB060>[孢子领域]</color>\n" +
+        "  • <color=#FFB060>[亡者领域]被动</color>：被复活的友军小怪死亡时回复 <color=#7FFFB0>0.5%</color> 最大生命值\n" +
         "<color=#A0A0A0>活不过前期的乐乐角色</color>",
     };
 

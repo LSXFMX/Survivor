@@ -199,7 +199,7 @@ public class EquipmentIcon : MonoBehaviour
                 "属性继承：\n" +
                 "• 攻击次数 = 风箭多重 + 火球多重\n" +
                 "• 伤害 & 冷却 = 学习瞬间继承火球术的值\n" +
-                "• 持有【不忘初心】时保留火球术，数量/伤害/冷却全部实时同步火球";
+                "• 持有[不忘初心]时保留火球术，数量/伤害/冷却全部实时同步火球";
             howToGet = "抽卡获得（N3 加入卡池）";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/UR/001.png");
         }
@@ -347,7 +347,7 @@ public class EquipmentIcon : MonoBehaviour
         else if (equipmentId == 25)
         {
             equipmentName = "月圆之甲";
-            description = "移动速度＋2\n\n诶哆...";
+            description = "移动速度＋2\n\n唉哆...";
             howToGet = "通关N10有概率掉落";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/025.png");
         }
