@@ -209,7 +209,7 @@ public class GachaUI : MonoBehaviour
         TextMeshProUGUI title = CreateText(treasurePanel.transform, "聚宝盆 · 首次通关宝箱", 30, TextAlignmentOptions.Center);
         SetRect(title.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0.5f, 1), new Vector2(0, -18), new Vector2(-24, 58));
 
-        for (int i = 1; i <= 8; i++)
+        for (int i = 1; i <= 13; i++)
         {
             string label = "N" + i;
             int clearCount = ClearRecordManager.Instance != null ? ClearRecordManager.Instance.GetClearCount(label) : 0;

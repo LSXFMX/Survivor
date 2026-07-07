@@ -228,7 +228,13 @@ public class MindControlled : MonoBehaviour
             _en.rolestate = enemy.state.idle;
             _en.role = null; // 切断对玩家的索敌——MindControlled 自己来调度移动/攻击目标
             _en.health = Mathf.Max(1, _en.healthmax);
-            foreach (var col in _en.GetComponents<Collider>()) col.enabled = true;
+            // 修复 Bug1：友军collider全部启用并关闭isTrigger，让友军作为实体阻挡玩家
+            // 蝙蝠除外（它用 OnTriggerEnter 探测敌人，改实体后无法触发）
+            foreach (var col in _en.GetComponentsInChildren<Collider>(true))
+            {
+                if (_en as Bat != null) { col.enabled = true; }
+                else { col.enabled = true; col.isTrigger = false; }
+            }
             _en.StopAllCoroutines();
 
             // 友军移速 ×1.5：让被复活的友军比原速略快接战
@@ -253,6 +259,10 @@ public class MindControlled : MonoBehaviour
                 _rb.angularVelocity = Vector3.zero;
                 _rb.useGravity = false;
                 _rb.isKinematic = true;
+                // 修复 Bug1：kinematic+Discrete在高速MovePosition时可能"隧穿"玩家，
+                //   切到ContinuousSpeculative让PhysX始终检测碰撞。
+                if (_rb.collisionDetectionMode == CollisionDetectionMode.Discrete)
+                    _rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             }
 
             // 2026-06 修"被控制 boss / 友军只播待机不播行走"：
@@ -495,13 +505,35 @@ public class MindControlled : MonoBehaviour
     {
         enemy en = target.GetComponent<enemy>();
         if (en == null || en.health <= 0) return;
-        int dmg = Mathf.Max(1, (int)(_en.atk - en.def));
-        en.health -= dmg;
-        SpawnAllyDamageNumber(en, dmg);
-        en.startturnred();
-        // 亡者领域：标记"被友军打过"，让它在 Destroy1 时进入"友军击杀复活链路"（20%）
+        // 修复 Bug3：亡者领域友军攻击=治疗（tomb主题"复活"），不是伤害
+        int heal = Mathf.Max(1, (int)(_en.atk - en.def));
+        int before = en.health;
+        en.health = Mathf.Min(en.healthmax, en.health + heal);
+        int actual = en.health - before;
+        if (actual > 0) SpawnAllyHealNumber(en, actual);
+        // 亡者领域：标记"被友军治疗过"，让它在 Destroy1 时进入"友军击杀复活链路"（20%）
         TombDomainHook.MarkAllyDamage(en);
-        if (en.health <= 0) en.Destroy1();
+    }
+
+    /// <summary>友军造成治疗（亡者领域攻击=治疗）的绿色飘字</summary>
+    public static void SpawnAllyHealNumber(enemy victim, int heal)
+    {
+        if (victim == null || victim.atknumber == null) return;
+        if (!DamageNumberSettings.Visible) return;
+
+        Vector3 pos = victim.transform.position;
+        SpriteRenderer sr = victim.GetComponent<SpriteRenderer>();
+        if (sr != null) pos.y = sr.bounds.max.y + 0.25f;
+        else            pos.y += 0.6f;
+
+        GameObject num = Object.Instantiate(victim.atknumber, pos, Quaternion.identity);
+        num.transform.localScale *= 1.4f;
+        var txt = num.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
+        if (txt != null)
+        {
+            txt.text = "+" + heal;
+            txt.color = new Color32(80, 255, 180, 255); // 青绿色（亡者领域主题）
+        }
     }
 
     /// <summary>

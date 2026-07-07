@@ -89,21 +89,9 @@ public class BossBat : enemy
         if (_state == BossState.dead) return;
         if (_busy) return; // 协程运行中，不干预
 
-        // 亡者领域：被控制为友军后，只保留召唤逻辑（让召唤的蝙蝠也是被控状态）
-        bool mindControlled = GetComponent<MindControlled>() != null;
-        if (mindControlled)
-        {
-            _summonTimer += Time.fixedDeltaTime;
-            float hDist = Mathf.Abs(transform.position.x - (role != null ? role.transform.position.x : transform.position.x));
-            if (hDist >= summonRange && _summonTimer >= summonCooldown)
-                StartCoroutine(SummonRoutine());
-            return; // 移动/索敌/回血交给 MindControlled
-        }
-
-        // 自然回血：每秒按 healthmax 的百分比恢复。
-        //   • 放在 MindControlled 短路之后 → 被亡者领域操控时不再 tick，等价于"失去自然回血词条"。
-        //   • 死亡 / busy 协程时也已被上面 return 拦截，不会在死后偷偷回血。
-        TickNaturalHeal();
+        // 亡者领域：被控制为友军后，跳过回血（等价于"失去自然回血词条"）。
+        // `role` 已被 MindControlled 设为敌方目标 → 直接让下面的状态机（move/dash/summon）自然运转
+        if (GetComponent<MindControlled>() == null) TickNaturalHeal();
 
         // 保持 Y 轴固定
         if (_rb != null)
