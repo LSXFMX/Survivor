@@ -53,6 +53,8 @@ public class WorldBossSlime : SlimeBoss
     public override void Destroy1()
     {
         if (rolestate == state.dead) return;
+        // 亡者领域复活检查（与WorldBossBat/WorldBossMushroomMan一致）
+        if (!_reviveAttempted) { _reviveAttempted = true; if (TombDomainHook.TryReviveAsAlly(this)) { Debug.Log("[亡者领域] 世界史莱姆Boss被永久控制为友军"); return; } }
         worldBossManager?.OnWorldBossDefeated(faction);
         var saved = battleUI; battleUI = null;
         base.Destroy1();
