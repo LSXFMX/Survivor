@@ -774,6 +774,11 @@ public class battleUI : MonoBehaviour
 
     public void Click_menu()
     {
+        // 奇遇选择中不允许打开暂停菜单
+        if (AdventureEventManager.Instance != null &&
+            AdventureEventManager.Instance.adventureUI != null &&
+            AdventureEventManager.Instance.adventureUI.IsShowing) return;
+
         menu.gameObject.SetActive(true);
         // 进入暂停菜单时收起子面板
         if (settingsPanel != null)     settingsPanel.SetActive(false);
@@ -799,6 +804,10 @@ public class battleUI : MonoBehaviour
         // 暂停中不允许切换（双保险，按钮 interactable 已在暂停时为 false，这里再防御）
         if (menu != null && menu.gameObject.activeSelf) return;
         if (Time.timeScale == 0f) return;
+        // 奇遇选择中不允许切换倍速
+        if (AdventureEventManager.Instance != null &&
+            AdventureEventManager.Instance.adventureUI != null &&
+            AdventureEventManager.Instance.adventureUI.IsShowing) return;
 
         int maxSpeed = CanUseTripleSpeed() ? 3 : 2;
         speedMode++;

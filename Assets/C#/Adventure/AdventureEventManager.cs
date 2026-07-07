@@ -9,7 +9,7 @@ public class AdventureEventManager : MonoBehaviour
 {
     [SerializeField] private int triggerThreshold = 200;
     [SerializeField] private List<AdventureOptionBase> optionPool;
-    [SerializeField] private AdventureUI adventureUI;
+    [SerializeField] public AdventureUI adventureUI;
 
     [Header("触发按钮")]
     [SerializeField] private Button triggerButton;
