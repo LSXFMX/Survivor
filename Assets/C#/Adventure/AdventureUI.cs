@@ -20,13 +20,16 @@ public class AdventureUI : MonoBehaviour
     public Button buttonB;
     public GameObject rootB;
 
-    [Header("选项 C（SSR_11 气运之子 解锁后显示，场景已拖好）")]
-    public TextMeshProUGUI nameC;
-    public TextMeshProUGUI descC;
-    public TextMeshProUGUI effectC;
-    public Image iconC;
-    public Button buttonC;
+    [Header("选项 C（只需拖 rootC，子控件运行时自动查找）")]
     public GameObject rootC;
+
+    // C 子控件从 rootC 运行时自动提取
+    private TextMeshProUGUI _nameC;
+    private TextMeshProUGUI _descC;
+    private TextMeshProUGUI _effectC;
+    private Image _iconC;
+    private Button _buttonC;
+    private bool _cResolved;
 
     public bool IsShowing => gameObject.activeSelf;
 
@@ -39,8 +42,24 @@ public class AdventureUI : MonoBehaviour
     {
         if (buttonA != null) buttonA.onClick.AddListener(OnClickA);
         if (buttonB != null) buttonB.onClick.AddListener(OnClickB);
-        if (buttonC != null) buttonC.onClick.AddListener(OnClickC);
         if (rootC != null) rootC.SetActive(false);
+    }
+
+    private void ResolveOptionC()
+    {
+        if (_cResolved || rootC == null) return;
+        _cResolved = true;
+
+        // 从 rootC 递归查找所有 TextMeshProUGUI 并按其名字匹配
+        foreach (var t in rootC.GetComponentsInChildren<TextMeshProUGUI>(true))
+        {
+            if (t.name.Contains("Name"))   _nameC   = t;
+            if (t.name.Contains("Desc"))   _descC   = t;
+            if (t.name.Contains("Effect")) _effectC = t;
+        }
+        _iconC   = rootC.GetComponentInChildren<Image>(true);
+        _buttonC = rootC.GetComponent<Button>() ?? rootC.GetComponentInChildren<Button>(true);
+        if (_buttonC != null) _buttonC.onClick.AddListener(OnClickC);
     }
 
     public void Show(AdventureOptionBase optA, AdventureOptionBase optB, int cost)
@@ -60,7 +79,8 @@ public class AdventureUI : MonoBehaviour
 
         if (optC != null && rootC != null)
         {
-            FillOption(nameC, descC, effectC, iconC, rootC, optC);
+            ResolveOptionC();
+            FillOption(_nameC, _descC, _effectC, _iconC, rootC, optC);
             rootC.SetActive(true);
         }
         else if (rootC != null)
