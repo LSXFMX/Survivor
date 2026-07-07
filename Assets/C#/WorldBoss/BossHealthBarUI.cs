@@ -20,7 +20,7 @@ public class BossHealthBarUI : MonoBehaviour
     public float barHeight      = 28f;    // 血条高
     public float avatarSize     = 48f;    // 头像尺寸
     public float rowSpacing     = 10f;    // 多条血条间距
-    public float topOffset      = 80f;    // 距屏幕顶偏移（避开计时器）
+    public float topOffset      = 130f;   // 距屏幕顶偏移（避开计时器 + 关底倒计时文字）
     public float barBorderWidth = 2f;    // 血条边框宽度
 
     private RectTransform _container;
@@ -34,6 +34,7 @@ public class BossHealthBarUI : MonoBehaviour
         public Image avatar;
         public RectTransform fillRt;
         public Image fill;
+        public TextMeshProUGUI hpText;
         public bool dead;
     }
 
@@ -88,6 +89,10 @@ public class BossHealthBarUI : MonoBehaviour
             e.fill.color = pct > 0.5f
                 ? Color.Lerp(new Color(1f, 0.85f, 0.1f, 1f), new Color(0.2f, 1f, 0.3f, 1f), (pct - 0.5f) * 2f)
                 : Color.Lerp(new Color(1f, 0.2f, 0.2f, 1f), new Color(1f, 0.85f, 0.1f, 1f), pct * 2f);
+
+            // 血量文字 "988/1000"
+            if (e.hpText != null)
+                e.hpText.text = e.boss.health + "/" + e.boss.healthmax;
 
             // 实时头像
             if (e.bossSR != null && e.bossSR.sprite != null)
@@ -217,6 +222,25 @@ public class BossHealthBarUI : MonoBehaviour
         fillImg.color = new Color(0.2f, 1f, 0.3f, 1f); // 默认绿色
         fillImg.raycastTarget = false;
 
+        // 血量文字 "988/1000"（在血条背景上，填充满、居中）
+        var textGo = new GameObject("HpText", typeof(RectTransform));
+        textGo.transform.SetParent(bgGo.transform, false);
+        var textRt = textGo.GetComponent<RectTransform>();
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.offsetMin = Vector2.zero;
+        textRt.offsetMax = Vector2.zero;
+        var hpText = textGo.AddComponent<TextMeshProUGUI>();
+        hpText.text = boss.health + "/" + boss.healthmax;
+        hpText.alignment = TextAlignmentOptions.Center;
+        hpText.fontSize = 16;
+        hpText.fontStyle = FontStyles.Bold;
+        // 对比色：深色描边 + 白字，无论 fill 是什么颜色都清晰可见
+        hpText.color = Color.white;
+        hpText.outlineColor = new Color32(0, 0, 0, 255);
+        hpText.outlineWidth = 0.25f;
+        hpText.raycastTarget = false;
+
         // 初始头像
         var sr = boss.GetComponent<SpriteRenderer>();
         if (sr != null && sr.sprite != null)
@@ -230,6 +254,7 @@ public class BossHealthBarUI : MonoBehaviour
             avatar  = avatarImg,
             fill    = fillImg,
             fillRt  = fillRt,
+            hpText  = hpText,
             dead    = false,
         });
     }
