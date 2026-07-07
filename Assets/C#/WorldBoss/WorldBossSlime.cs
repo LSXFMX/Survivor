@@ -1,26 +1,18 @@
 using UnityEngine;
-using TMPro;
 
-/// <summary>
-/// 世界史莱姆Boss：继承 SlimeBoss，待机→激活，包含世界Boss属性加成。
-/// 属性翻倍由预制体提供（health=1000,atk=100），难度倍率由基类OnEnable应用。
-/// 20%/s自然回血 + 0.1%全能吸血。
-/// </summary>
 public class WorldBossSlime : SlimeBoss
 {
     [Header("世界Boss设置")]
     public float       activateRange            = 15f;
     public FactionType faction                  = FactionType.Slime;
-    [Range(0f, 0.001f)] public float naturalHealPctPerSecond = 0.0001f; // 0.01%/s 回血
-    [Range(0f, 0.01f)]public float lifestealPct           = 0.001f; // 0.1% 全能吸血
+    [Range(0f, 0.001f)] public float naturalHealPctPerSecond = 0.0001f;
+    [Range(0f, 0.01f)] public float lifestealPct = 0.001f;
     private float _healAccum;
 
     [HideInInspector] public WorldBossManager worldBossManager;
 
     private bool _activated = false;
-    private int  _lastHealth;
-
-    private void Start() { _lastHealth = health; }
+    private bool _wasHit = false;
 
     protected override void FixedUpdate()
     {
@@ -29,16 +21,16 @@ public class WorldBossSlime : SlimeBoss
 
         if (!_activated)
         {
-            if (_lastHealth > health || (role != null && Vector3.Distance(transform.position, role.transform.position) <= activateRange))
+            if (health < healthmax) { _wasHit = true; health = healthmax; }
+            if (role == null) getrole();
+            if (role != null && Vector3.Distance(transform.position, role.transform.position) <= activateRange && _wasHit)
             {
                 _activated = true;
                 ToastManager.Show("世界Boss已激活！");
                 BossHealthBarUI.Register(this);
             }
-            _lastHealth = health;
             if (!_activated) return;
         }
-
         TickNaturalHeal();
         base.FixedUpdate();
     }
@@ -52,11 +44,10 @@ public class WorldBossSlime : SlimeBoss
 
     protected override void OnCollisionEnter(Collision collision)
     {
-        // 记录碰撞前血量用于吸血
         int hpBefore = health;
         base.OnCollisionEnter(collision);
-        int dmgDealt = hpBefore > 0 && lifestealPct > 0f ? Mathf.Max(0, hpBefore - health) : 0;
-        if (dmgDealt > 0 && health > 0) health = Mathf.Min(healthmax, health + Mathf.Max(1, Mathf.RoundToInt(dmgDealt * lifestealPct)));
+        int d = hpBefore > 0 && lifestealPct > 0f ? Mathf.Max(0, hpBefore - health) : 0;
+        if (d > 0 && health > 0) health = Mathf.Min(healthmax, health + Mathf.Max(1, Mathf.RoundToInt(d * lifestealPct)));
     }
 
     public override void Destroy1()

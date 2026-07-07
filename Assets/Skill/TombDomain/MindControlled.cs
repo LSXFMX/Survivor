@@ -228,13 +228,7 @@ public class MindControlled : MonoBehaviour
             _en.rolestate = enemy.state.idle;
             _en.role = null; // 切断对玩家的索敌——MindControlled 自己来调度移动/攻击目标
             _en.health = Mathf.Max(1, _en.healthmax);
-            // 修复 Bug1：友军collider全部启用并关闭isTrigger，让友军作为实体阻挡玩家
-            // 蝙蝠除外（它用 OnTriggerEnter 探测敌人，改实体后无法触发）
-            foreach (var col in _en.GetComponentsInChildren<Collider>(true))
-            {
-                if (_en as Bat != null) { col.enabled = true; }
-                else { col.enabled = true; col.isTrigger = false; }
-            }
+            foreach (var col in _en.GetComponentsInChildren<Collider>(true)) col.enabled = true;
             _en.StopAllCoroutines();
 
             // 友军移速 ×1.5：让被复活的友军比原速略快接战
@@ -259,10 +253,7 @@ public class MindControlled : MonoBehaviour
                 _rb.angularVelocity = Vector3.zero;
                 _rb.useGravity = false;
                 _rb.isKinematic = true;
-                // 修复 Bug1：kinematic+Discrete在高速MovePosition时可能"隧穿"玩家，
-                //   切到ContinuousSpeculative让PhysX始终检测碰撞。
-                if (_rb.collisionDetectionMode == CollisionDetectionMode.Discrete)
-                    _rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+                _rb.mass = 0.1f; // 极低质量，避免友军推着敌军到处跑
             }
 
             // 2026-06 修"被控制 boss / 友军只播待机不播行走"：
@@ -527,18 +518,17 @@ public class MindControlled : MonoBehaviour
         else            pos.y += 0.6f;
 
         GameObject num = Object.Instantiate(victim.atknumber, pos, Quaternion.identity);
-        num.transform.localScale *= 1.4f;
+        num.transform.localScale *= 0.65f;
         var txt = num.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
         if (txt != null)
         {
             txt.text = "+" + heal;
-            txt.color = new Color32(80, 255, 180, 255); // 青绿色（亡者领域主题）
+            txt.color = new Color32(80, 255, 180, 255);
         }
     }
 
     /// <summary>
-    /// 友军造成伤害的飘字：抬到敌人头顶 + 放大 + 高亮紫色，
-    /// 确保不会和绿色友军身体融色、不会被流光遮罩盖住，玩家一眼能看到"友军在打"。
+    /// 友军造成伤害的飘字：抬到敌人头顶 + 高亮紫色，
     /// 由 MindControlled / Bat 友军模式 等共用——所以是 internal static。
     /// </summary>
     public static void SpawnAllyDamageNumber(enemy victim, int dmg)
@@ -553,8 +543,8 @@ public class MindControlled : MonoBehaviour
         else            pos.y += 0.6f;
 
         GameObject num = Object.Instantiate(victim.atknumber, pos, Quaternion.identity);
-        // 放大 1.4×，让"友军输出"更显眼
-        num.transform.localScale *= 1.4f;
+        // 缩小 0.65×（原1.4×被缩小一半），让飘字不遮挡战斗视野
+        num.transform.localScale *= 0.65f;
         var txt = num.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
         if (txt != null)
         {

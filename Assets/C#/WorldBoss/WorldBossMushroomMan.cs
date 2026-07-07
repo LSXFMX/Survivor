@@ -1,17 +1,6 @@
 using System.Collections;
 using UnityEngine;
 
-/// <summary>
-/// 世界蘑菇Boss：继承 BossMushroomMan，增加待机/激活逻辑。
-/// - 生成后原地待机，不追玩家
-/// - 玩家进入 activateRange 后激活，开始正常Boss行为
-/// - 死亡后通知 WorldBossManager（而非 battleUI）
-///
-/// Inspector 配置：
-/// - activateRange     : 激活距离，默认 15
-/// - faction           : 对应社群
-/// - worldBossManager  : 由 WorldBossManager 赋值
-/// </summary>
 public class WorldBossMushroomMan : BossMushroomMan
 {
     [Header("世界Boss设置")]
@@ -22,43 +11,30 @@ public class WorldBossMushroomMan : BossMushroomMan
     [HideInInspector] public WorldBossManager worldBossManager;
 
     private bool _activated = false;
-    private int  _lastHealth;
+    private bool _wasHit = false;
 
     private void Start()
     {
-        _lastHealth = health;
+        // 初始血量即为满血，受击标记为false
     }
 
-    // 覆盖父类 FixedUpdate
     protected override void FixedUpdate()
     {
         if (rolestate == state.dead) return;
-
-        // 亡者领域：被控制为友军后，行为完全交给 MindControlled（不再追玩家、不再走激活逻辑）
         if (GetComponent<MindControlled>() != null) return;
 
         if (!_activated)
         {
-            // 受到攻击（血量减少）也激活
-            if (_lastHealth > health)
+            // 受击检测：血量减少即标记"玩家在攻击"
+            if (health < healthmax) { _wasHit = true; health = healthmax; } // 无敌：回满血
+
+            // 距离检测
+            if (role == null) getrole();
+            if (role != null && Vector3.Distance(transform.position, role.transform.position) <= activateRange && _wasHit)
             {
                 _activated = true;
                 ToastManager.Show("世界Boss已激活！");
                 BossHealthBarUI.Register(this);
-            }
-            _lastHealth = health;
-
-            // 玩家靠近也激活
-            if (role == null) getrole();
-            if (role != null)
-            {
-                float dist = Vector3.Distance(transform.position, role.transform.position);
-                if (dist <= activateRange)
-                {
-                    _activated = true;
-                    ToastManager.Show("世界Boss已激活！");
-                    BossHealthBarUI.Register(this);
-                }
             }
             if (!_activated) return;
         }
@@ -66,7 +42,6 @@ public class WorldBossMushroomMan : BossMushroomMan
         base.FixedUpdate();
     }
 
-    // 全能吸血：碰撞造成伤害后回血
     protected override void OnCollisionEnter(Collision collision)
     {
         int hpBefore = health;
@@ -75,30 +50,12 @@ public class WorldBossMushroomMan : BossMushroomMan
         if (d > 0 && health > 0) health = Mathf.Min(healthmax, health + Mathf.Max(1, Mathf.RoundToInt(d * lifestealPct)));
     }
 
-    // 覆盖死亡：通知 WorldBossManager 而非 battleUI
     public override void Destroy1()
     {
         if (rolestate == state.dead) return;
-
-        // 2026-06-12：不管是否会被亡者领域复活，只要击败世界Boss就立即给予
-        // 局内成长和源奖励。复活检查放在之后执行。
         worldBossManager?.OnWorldBossDefeated(faction);
-
-        // 亡者领域：复活检查。成功则 Boss 转为友军，不执行后续死亡流程。
-        if (!_reviveAttempted)
-        {
-            _reviveAttempted = true;
-            if (TombDomainHook.TryReviveAsAlly(this))
-            {
-                Debug.Log($"[亡者领域] 世界蘑菇Boss {gameObject.name} 被永久控制为友军");
-                return;
-            }
-        }
-
-        // 调用父类死亡流程（播动画、生成经验石等）
-        // 但不触发 battleUI.OnBossDefeated()，所以先把 battleUI 置空
-        var savedBattleUI = battleUI;
-        battleUI = null;
+        if (!_reviveAttempted) { _reviveAttempted = true; if (TombDomainHook.TryReviveAsAlly(this)) { Debug.Log($"[亡者领域] 世界蘑菇Boss被永久控制为友军"); return; } }
+        var savedBattleUI = battleUI; battleUI = null;
         base.Destroy1();
         battleUI = savedBattleUI;
     }

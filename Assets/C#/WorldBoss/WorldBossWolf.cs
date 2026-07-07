@@ -1,29 +1,28 @@
 using UnityEngine;
-using TMPro;
 
-/// <summary>
-/// 世界狼人Boss：继承 WolfBoss，待机→激活，属性翻倍（prefab=1000/100）+20%/s回血+0.1%吸血。
-/// </summary>
 public class WorldBossWolf : WolfBoss
 {
     [Header("世界Boss设置")]
     public float       activateRange            = 15f;
     public FactionType faction                  = FactionType.Wolf;
-    [Range(0f, 0.001f)] public float naturalHealPctPerSecond = 0.0001f;
+    [Range(0f, 0.5f)] public float naturalHealPctPerSecond = 0.0001f;
     [Range(0f, 0.01f)]public float lifestealPct           = 0.001f;
     private float _healAccum;
 
     [HideInInspector] public WorldBossManager worldBossManager;
 
     private bool _activated = false;
+    private bool _wasHit = false;
 
     protected override void FixedUpdate()
     {
         if (rolestate == state.dead) return;
+
         if (!_activated)
         {
+            if (health < healthmax) { _wasHit = true; health = healthmax; }
             if (role == null) getrole();
-            if (role != null && Vector3.Distance(transform.position, role.transform.position) <= activateRange)
+            if (role != null && Vector3.Distance(transform.position, role.transform.position) <= activateRange && _wasHit)
             {
                 _activated = true;
                 ToastManager.Show("世界Boss已激活！");
