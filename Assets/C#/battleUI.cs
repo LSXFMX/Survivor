@@ -535,6 +535,12 @@ public class battleUI : MonoBehaviour
     public void timeover()
     {
         startcount = false;
+        // N1：不生成Boss，直接胜利
+        if (DifficultyManager.Instance != null && DifficultyManager.Instance.Current.label == "N1")
+        {
+            StartCoroutine(ReturnToMain(true));
+            return;
+        }
         if (!bossSpawned) SpawnBoss();
     }
 
