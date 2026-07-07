@@ -535,12 +535,6 @@ public class battleUI : MonoBehaviour
     public void timeover()
     {
         startcount = false;
-        // N1：不生成Boss，直接胜利
-        if (DifficultyManager.Instance != null && DifficultyManager.Instance.Current.label == "N1")
-        {
-            StartCoroutine(ReturnToMain(true));
-            return;
-        }
         if (!bossSpawned) SpawnBoss();
     }
 
@@ -675,17 +669,47 @@ public class battleUI : MonoBehaviour
     {
         string label = DifficultyManager.Instance != null ? DifficultyManager.Instance.Current.label : "N2";
 
-        // N11/N12 生成史莱姆社群Boss，N9/N10 生成狼人社群Boss，N7/N8 生成吸血鬼Boss，其余生成单蘑菇人Boss
+        // N11/N12 生成史莱姆社群Boss，N9/N10 生成狼人社群Boss，N7/N8 生成吸血鬼Boss，
+        // N6 / N12 生成双Boss，其余生成单蘑菇人Boss
         bool isSlimeBoss  = label == "N11" || label == "N12";
         bool isWolfBoss   = label == "N9"  || label == "N10";
         bool isBatBoss    = label == "N7"  || label == "N8";
+        bool isDoubleBoss = label == "N6"  || label == "N12";
 
         bossSpawned = true;
         bossPhase   = true;
         bossTimer   = BOSS_TIME_LIMIT;
         startcount  = false;
 
-        if (isSlimeBoss)
+        if (isDoubleBoss)
+        {
+            // N6 → 双蘑菇boss，N12 → 双史莱姆boss
+            GameObject prefab = null;
+            string prefabPath = null;
+            if (label == "N6")  { prefab = bossPrefab; }
+            if (label == "N12") { prefab = slimeBossPrefab != null ? slimeBossPrefab
+                                            : Resources.Load<GameObject>("WorldBoss/SlimeBoss"); prefabPath = "WorldBoss/SlimeBoss"; }
+            if (prefab == null) { Debug.LogWarning("[Boss] 双Boss预制体缺失"); return; }
+            _doubleBossRemain = 2;
+            for (int i = 0; i < 2; i++)
+            {
+                Vector3 pos = GetBossSpawnPos(i, 2);
+                GameObject obj = Instantiate(prefab, pos, Quaternion.Euler(45, 0, 0),
+                    enemylayer != null ? enemylayer : null);
+                if (label == "N6")
+                {
+                    BossMushroomMan b = obj.GetComponent<BossMushroomMan>();
+                    if (b != null) { b.battleUI = this; BossHealthBarUI.Register(b); }
+                }
+                else if (label == "N12")
+                {
+                    SlimeBoss s = obj.GetComponent<SlimeBoss>();
+                    if (s != null) { s.battleUI = this; BossHealthBarUI.Register(s); }
+                }
+            }
+            Debug.Log("[Boss] 双Boss已生成（" + label + "）");
+        }
+        else if (isSlimeBoss)
         {
             GameObject prefab = slimeBossPrefab != null ? slimeBossPrefab
                               : Resources.Load<GameObject>("WorldBoss/SlimeBoss");
