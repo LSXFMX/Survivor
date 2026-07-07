@@ -675,11 +675,10 @@ public class battleUI : MonoBehaviour
     {
         string label = DifficultyManager.Instance != null ? DifficultyManager.Instance.Current.label : "N2";
 
-        // N12 生成史莱姆社群Boss，N10/N11 生成狼人社群Boss，N7/N8 生成蝙蝠Boss，N6 生成双蘑菇人Boss，其余生成单蘑菇人Boss
-        bool isSlimeBoss  = label == "N12";
-        bool isWolfBoss   = label == "N10" || label == "N11";
-        bool isBatBoss    = label == "N7" || label == "N8";
-        bool isDoubleBoss = label == "N6";
+        // N11/N12 生成史莱姆社群Boss，N9/N10 生成狼人社群Boss，N7/N8 生成吸血鬼Boss，其余生成单蘑菇人Boss
+        bool isSlimeBoss  = label == "N11" || label == "N12";
+        bool isWolfBoss   = label == "N9"  || label == "N10";
+        bool isBatBoss    = label == "N7"  || label == "N8";
 
         bossSpawned = true;
         bossPhase   = true;
@@ -717,21 +716,6 @@ public class battleUI : MonoBehaviour
             spawnedBatBoss = obj.GetComponent<BossBat>();
             if (spawnedBatBoss != null) { spawnedBatBoss.battleUI = this; BossHealthBarUI.Register(spawnedBatBoss); }
             Debug.Log("[Boss] 蝙蝠Boss已生成");
-        }
-        else if (isDoubleBoss)
-        {
-            if (bossPrefab == null) return;
-            // 生成两只蘑菇人，需要两只都死才算通关
-            _doubleBossRemain = 2;
-            for (int i = 0; i < 2; i++)
-            {
-                Vector3 pos = GetBossSpawnPos(i, 2);
-                GameObject obj = Instantiate(bossPrefab, pos, Quaternion.Euler(45, 0, 0),
-                    enemylayer != null ? enemylayer : null);
-                BossMushroomMan b = obj.GetComponent<BossMushroomMan>();
-                if (b != null) { b.battleUI = this; BossHealthBarUI.Register(b); }
-            }
-            Debug.Log("[Boss] 双蘑菇人Boss已生成");
         }
         else
         {

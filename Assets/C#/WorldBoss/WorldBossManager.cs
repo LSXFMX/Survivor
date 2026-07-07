@@ -128,10 +128,10 @@ public class WorldBossManager : MonoBehaviour
         {
             if (entry.bossPrefab == null) continue;
 
-            // 按社群设定最低出现难度：蘑菇 N7+，狼人 N9+，蝙蝠 N10+，史莱姆 N11+
-            if (entry.faction == FactionType.Wolf  && currentN < 9)  continue;
-            if (entry.faction == FactionType.Bat   && currentN < 10) continue;
-            if (entry.faction == FactionType.Slime && currentN < 11) continue;
+            // 按社群设定最低出现难度：蘑菇 N7+，吸血鬼 N9+，狼人 N10+，史莱姆 N12+
+            if (entry.faction == FactionType.Wolf  && currentN < 10) continue;
+            if (entry.faction == FactionType.Bat   && currentN < 9)  continue;
+            if (entry.faction == FactionType.Slime && currentN < 12) continue;
 
             // 生成位置：优先 spawnPoint，其次社群对象位置，最后玩家附近兜底
             Vector3 spawnPos;
