@@ -3,24 +3,25 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// UI Boss 血条系统：屏幕 overlay 上为所有激活的 Boss 显示血条。
+/// UI Boss 血条系统（v4）
 ///
-/// 关键设计变更（v3）：
-/// - 不再使用 Image.Type.Filled（精灵边界 + pivot 不可靠导致掉血方向/比例全错）
-/// - 改用 Image + 直接控制 fill RectTransform 宽度 = fillAmount * barWidthPixels
-/// - 血条使用固定合理宽度（barWidthPixels），不依赖 Screen.width 避免超屏
-/// - 多个 Boss 垂直堆叠在时间文字下方
+/// 关键修复：
+/// - 弃用精灵图（之前 BossBarBg 内部透明 + Sliced 边界导致整条血条看起来透明）
+/// - 改用纯色 Image，背景深灰、边框更暗、fill 按血量变色，绝对不透明
+/// - topOffset 加大到 80 像素确保避开计时器
+/// - 多 Boss 垂直堆叠
 /// </summary>
 public class BossHealthBarUI : MonoBehaviour
 {
     public static BossHealthBarUI Instance { get; private set; }
 
-    [Header("布局（固定像素，不依赖屏幕尺寸）")]
+    [Header("布局（固定像素）")]
     public float barWidthPixels = 500f;   // 血条宽
-    public float barHeight      = 24f;    // 血条高
-    public float avatarSize     = 44f;    // 头像尺寸
-    public float rowSpacing     = 8f;     // 多条血条间距
-    public float topOffset      = 60f;    // 距屏幕顶偏移
+    public float barHeight      = 28f;    // 血条高
+    public float avatarSize     = 48f;    // 头像尺寸
+    public float rowSpacing     = 10f;    // 多条血条间距
+    public float topOffset      = 80f;    // 距屏幕顶偏移（避开计时器）
+    public float barBorderWidth = 2f;    // 血条边框宽度
 
     private RectTransform _container;
     private readonly List<BossEntry> _entries = new List<BossEntry>();
@@ -61,7 +62,7 @@ public class BossHealthBarUI : MonoBehaviour
         _container.anchorMax = new Vector2(0.5f, 1f);
         _container.pivot     = new Vector2(0.5f, 1f);
         _container.anchoredPosition = new Vector2(0f, -topOffset);
-        _container.sizeDelta = new Vector2(avatarSize + 8f + barWidthPixels, 500f);
+        _container.sizeDelta = new Vector2(avatarSize + 10f + barWidthPixels, 500f);
     }
 
     void LateUpdate()
@@ -81,12 +82,12 @@ public class BossHealthBarUI : MonoBehaviour
             float pct  = Mathf.Clamp01((float)e.boss.health / maxHp);
 
             // 直接控制 fill 宽度 → 从右往左掉血
-            float w = barWidthPixels * pct;
+            float w = Mathf.Max(0f, barWidthPixels * pct);
             e.fillRt.sizeDelta = new Vector2(w, e.fillRt.sizeDelta.y);
-            // fill 颜色：低血红 → 中血黄 → 高血绿
+            // fill 颜色：低血红 → 中血黄 → 高血绿（全部 alpha=1，不透明）
             e.fill.color = pct > 0.5f
-                ? Color.Lerp(new Color(1f, 0.85f, 0.1f), new Color(0.2f, 1f, 0.3f), (pct - 0.5f) * 2f)
-                : Color.Lerp(new Color(1f, 0.2f, 0.2f), new Color(1f, 0.85f, 0.1f), pct * 2f);
+                ? Color.Lerp(new Color(1f, 0.85f, 0.1f, 1f), new Color(0.2f, 1f, 0.3f, 1f), (pct - 0.5f) * 2f)
+                : Color.Lerp(new Color(1f, 0.2f, 0.2f, 1f), new Color(1f, 0.85f, 0.1f, 1f), pct * 2f);
 
             // 实时头像
             if (e.bossSR != null && e.bossSR.sprite != null)
@@ -144,16 +145,16 @@ public class BossHealthBarUI : MonoBehaviour
 
         float rowH = avatarSize + 6f;
 
-        // 条目根（垂直堆叠用）
+        // 条目根
         var rootGo = new GameObject("BossBar_" + boss.rolename, typeof(RectTransform));
         rootGo.transform.SetParent(_container, false);
         var rootRt = rootGo.GetComponent<RectTransform>();
         rootRt.anchorMin = rootRt.anchorMax = new Vector2(0.5f, 1f);
         rootRt.pivot = new Vector2(0.5f, 1f);
-        rootRt.sizeDelta = new Vector2(avatarSize + 8f + barWidthPixels, rowH);
+        rootRt.sizeDelta = new Vector2(avatarSize + 10f + barWidthPixels, rowH);
         rootRt.anchoredPosition = Vector2.zero;
 
-        // 头像背景（深色底片）
+        // 头像背景（纯色黑底，绝对不透明）
         var avatarBgGo = new GameObject("AvatarBg", typeof(RectTransform));
         avatarBgGo.transform.SetParent(rootGo.transform, false);
         var abrt = avatarBgGo.GetComponent<RectTransform>();
@@ -162,7 +163,7 @@ public class BossHealthBarUI : MonoBehaviour
         abrt.sizeDelta = new Vector2(avatarSize + 4f, avatarSize + 4f);
         abrt.anchoredPosition = Vector2.zero;
         var abImg = avatarBgGo.AddComponent<Image>();
-        abImg.color = new Color(0.05f, 0.05f, 0.05f, 0.85f);
+        abImg.color = new Color(0f, 0f, 0f, 1f);
         abImg.raycastTarget = false;
 
         // 头像
@@ -177,33 +178,43 @@ public class BossHealthBarUI : MonoBehaviour
         avatarImg.preserveAspect = true;
         avatarImg.raycastTarget = false;
 
-        // 血条背景图（精灵 + Sliced）
-        float barX = avatarSize + 8f;
+        // 血条外框（暗色边框，模拟精灵的边框效果但纯色绝对不透明）
+        float barX = avatarSize + 10f;
+        var frameGo = new GameObject("BarFrame", typeof(RectTransform));
+        frameGo.transform.SetParent(rootGo.transform, false);
+        var frameRt = frameGo.GetComponent<RectTransform>();
+        frameRt.anchorMin = frameRt.anchorMax = new Vector2(0f, 0.5f);
+        frameRt.pivot = new Vector2(0f, 0.5f);
+        float frameH = barHeight + barBorderWidth * 2f;
+        frameRt.sizeDelta = new Vector2(barWidthPixels + barBorderWidth * 2f, frameH);
+        frameRt.anchoredPosition = new Vector2(barX - barBorderWidth, 0f);
+        var frameImg = frameGo.AddComponent<Image>();
+        frameImg.color = new Color(0.05f, 0.05f, 0.05f, 1f); // 黑色边框
+        frameImg.raycastTarget = false;
+
+        // 血条背景（深灰色，绝对不透明）
         var bgGo = new GameObject("BarBg", typeof(RectTransform));
-        bgGo.transform.SetParent(rootGo.transform, false);
+        bgGo.transform.SetParent(frameGo.transform, false);
         var bgRt = bgGo.GetComponent<RectTransform>();
-        bgRt.anchorMin = bgRt.anchorMax = new Vector2(0f, 0.5f);
-        bgRt.pivot = new Vector2(0f, 0.5f);
+        bgRt.anchorMin = bgRt.anchorMax = new Vector2(0.5f, 0.5f);
+        bgRt.pivot = new Vector2(0.5f, 0.5f);
         bgRt.sizeDelta = new Vector2(barWidthPixels, barHeight);
-        bgRt.anchoredPosition = new Vector2(barX, 0f);
+        bgRt.anchoredPosition = Vector2.zero;
         var bgImg = bgGo.AddComponent<Image>();
-        bgImg.sprite = Resources.Load<Sprite>("UI/BossBarBg");
-        bgImg.type = Image.Type.Sliced;
+        bgImg.color = new Color(0.15f, 0.15f, 0.15f, 1f); // 深灰背景
         bgImg.raycastTarget = false;
 
-        // 血量填充 — width 由代码控制（不用 Filled 裁剪）
+        // 血量填充（纯色，左对齐，宽度由代码控制）
         var fillGo = new GameObject("BarFill", typeof(RectTransform));
         fillGo.transform.SetParent(bgGo.transform, false);
         var fillRt = fillGo.GetComponent<RectTransform>();
         fillRt.anchorMin = new Vector2(0f, 0f);
         fillRt.anchorMax = new Vector2(0f, 1f);
         fillRt.pivot = new Vector2(0f, 0.5f);
-        fillRt.anchoredPosition = new Vector2(3f, 0f);  // 内边距
-        fillRt.sizeDelta = new Vector2(barWidthPixels - 6f, -6f);
+        fillRt.anchoredPosition = Vector2.zero;
+        fillRt.sizeDelta = new Vector2(barWidthPixels, 0f);
         var fillImg = fillGo.AddComponent<Image>();
-        fillImg.sprite = Resources.Load<Sprite>("UI/BossBarFill");
-        fillImg.type = Image.Type.Sliced;
-        fillImg.color = new Color(0.2f, 1f, 0.3f, 1f);
+        fillImg.color = new Color(0.2f, 1f, 0.3f, 1f); // 默认绿色
         fillImg.raycastTarget = false;
 
         // 初始头像
