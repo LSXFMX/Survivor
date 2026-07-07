@@ -13,12 +13,14 @@ using UnityEngine;
 public class BossBat : enemy
 {
     [Header("Boss 体型")]
-    public float bossScale = 15f;
+    public float bossScale = 10f;
 
     [Header("冲刺劈砍")]
     public float dashRange    = 8f;
     public float dashSpeed    = 25f;
     public float dashDistance = 15f;
+    public float dashCooldown = 1f; // 冲刺CD，避免连续冲刺卡死
+    private float _dashTimer;
 
     [Header("召唤蝙蝠")]
     public float      summonRange    = 12f;
@@ -102,6 +104,7 @@ public class BossBat : enemy
         transform.position = new Vector3(transform.position.x, _fixedY, transform.position.z);
 
         _summonTimer += Time.fixedDeltaTime;
+        _dashTimer   += Time.fixedDeltaTime;
 
         switch (_state)
         {
@@ -134,9 +137,10 @@ public class BossBat : enemy
 
                 float hDist = Mathf.Abs(dx);
 
-                // 近距离 → 冲刺劈砍
-                if (hDist <= dashRange)
+                // 近距离 + CD 结束 → 冲刺劈砍
+                if (hDist <= dashRange && _dashTimer >= dashCooldown)
                 {
+                    _dashTimer = 0f;
                     StartCoroutine(DashRoutine());
                     break;
                 }

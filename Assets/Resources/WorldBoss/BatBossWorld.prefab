@@ -147,7 +147,7 @@ MonoBehaviour:
   naturalHealPctPerSecond: 0.0001
   expstone: {fileID: 7733258394847694891, guid: 2a634f41aed7e5a43bc79c0cd73c4360,
     type: 3}
-  bossScale: 15
+  bossScale: 10
   dashRange: 8
   dashSpeed: 25
   dashDistance: 15
