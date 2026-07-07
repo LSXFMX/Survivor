@@ -279,22 +279,22 @@ public class WolfBoss : enemy
 
         try
         {
-            // 1) 瞬移到玩家身旁（y 锁在地面）
+            // 1) 先锁定玩家移动 → 再瞬移到玩家身旁，杜绝瞬移期间玩家走位造成误差
+            SetPlayersMovementLocked(true);
             getrole();
             if (role != null)
             {
                 Vector3 pp = role.transform.position;
-                float side = (transform.position.x <= pp.x) ? -1.6f : 1.6f;
-                transform.position = new Vector3(pp.x + side, pp.y, pp.z); // 用玩家的 Y（地面）
+                float side = (transform.position.x <= pp.x) ? -0.5f : 0.5f;
+                transform.position = new Vector3(pp.x + side, pp.y, pp.z);
                 FaceTarget();
             }
 
-            // 2) 播放抓取第一帧 → 短暂可见后定格 → 限制玩家移动（让玩家意识到被抓住）
+            // 2) 播放抓取第一帧 → 短暂可见后定格
             Sca = humanScale;
             PlayAnim("Transform");
-            yield return new WaitForSeconds(0.25f); // 先让玩家看到 Boss 瞬移过来 + 抓取姿态
+            yield return new WaitForSeconds(0.25f);
             if (anim != null) anim.speed = 0f;      // 冻结在抓取帧
-            SetPlayersMovementLocked(true);
             yield return new WaitForSeconds(2f);    // 停顿 2 秒让玩家充分意识到被抓取
 
             // 3) 撕咬一爪：全屏利爪特效 + 造成玩家最大生命值 10% 的处决伤害
@@ -399,10 +399,10 @@ public class WolfBoss : enemy
             // ═══ 第二段：抓取处决（Boss 与玩家同时定身）═══
             hitPlayer.movementLocked = true;
             lockedPlayer = hitTf;
-            // Boss 贴到玩家侧旁形成"咬住"视觉
+            // Boss 贴身零距离"咬住"视觉
             Vector3 pp = hitTf.position;
-            float side = (transform.position.x <= pp.x) ? -1.2f : 1.2f;
-            transform.position = new Vector3(pp.x + side, pp.y, pp.z); // 用玩家的 Y（地面）
+            float side = (transform.position.x <= pp.x) ? -0.3f : 0.3f;
+            transform.position = new Vector3(pp.x + side, pp.y, pp.z);
             FaceTarget();
 
             // 定身停顿：让玩家意识到被抓住

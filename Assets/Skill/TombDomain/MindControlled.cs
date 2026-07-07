@@ -397,9 +397,9 @@ public class MindControlled : MonoBehaviour
                 Vector3 dir = (tgt.position - transform.position); dir.y = 0; dir = dir.normalized;
                 float spd = Mathf.Max(1f, _en.speed);
                 Vector3 newPos = transform.position + dir * spd * Time.fixedDeltaTime;
-                // 用 MovePosition 而不是直接改 transform.position，
-                // kinematic Rigidbody + MovePosition 才能正确推开静态/动态 collider，不被反弹。
-                if (_rb != null) _rb.MovePosition(newPos); else transform.position = newPos;
+                // Boss用MovePosition（推开障碍），小怪用transform.position（不推大怪）
+                if (isWorldBoss && _rb != null) _rb.MovePosition(newPos);
+                else transform.position = newPos;
                 // 驱动行走动画（修"被控制 boss 只播待机"）。Animator 可能为 null（无动画的简单怪），安全跳过。
                 if (_aniRef != null) _aniRef.SetBool("ismove", true);
             }
