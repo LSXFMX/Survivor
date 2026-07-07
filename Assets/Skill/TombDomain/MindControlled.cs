@@ -53,9 +53,9 @@ public class MindControlled : MonoBehaviour
     /// </summary>
     public float bossTeleportFactor = 2f;
 
-    /// <summary>被控制的世界Boss每2分钟扣除50%当前生命值（一次性扣除）。</summary>
-    public float bossHpDecayInterval = 120f;
-    private float _bossDecayTimer = 0f;
+    /// <summary>被控制的世界Boss每秒扣除0.5%血量上限（匀速持续出血）。</summary>
+    public float bossHpDrainPerSecond = 0.005f; // 0.5%/s
+    private float _bossDrainAccum;
 
     /// <summary>
     /// 步行回归时的速度（unit/秒）。取 max(_en.speed, this) 后再乘 _allySpeedMultiplier，
@@ -299,15 +299,15 @@ public class MindControlled : MonoBehaviour
             if (_aliveTimer >= minionLifetime) { _en.Destroy1(); return; }
         }
 
-        // 世界Boss：每2分钟一次性扣除50%当前生命值
+        // 世界Boss：每秒扣除0.5%血量上限（匀速出血，替代旧的2分钟50%暴毙）
         if (isWorldBoss)
         {
-            _bossDecayTimer += Time.fixedDeltaTime;
-            if (_bossDecayTimer >= bossHpDecayInterval)
+            _bossDrainAccum += Time.fixedDeltaTime * bossHpDrainPerSecond * _en.healthmax;
+            if (_bossDrainAccum >= 1f)
             {
-                _bossDecayTimer = 0f;
-                int decay = Mathf.Max(1, _en.health / 2);
-                _en.health -= decay;
+                int drain = Mathf.FloorToInt(_bossDrainAccum);
+                _bossDrainAccum -= drain;
+                _en.health -= drain;
                 if (_en.health <= 0) { _en.Destroy1(); return; }
             }
         }
