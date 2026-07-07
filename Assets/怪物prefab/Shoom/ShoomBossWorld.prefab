@@ -260,9 +260,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   rolename: "\u8611\u83C7\u4EBA\u4E16\u754Cboss"
-  health: 200
-  healthmax: 200
-  atk: 20
+  health: 1000
+  healthmax: 1000
+  atk: 100
   def: 5
   speed: 2
   CR: 0
@@ -278,6 +278,7 @@ MonoBehaviour:
   rolestate: 0
   role: {fileID: 0}
   Sca: 5
+  naturalHealPctPerSecond: 0.2
   material: {fileID: -876546973899608171, guid: 8bef114c142cd4743948e426f1da55a1,
     type: 3}
   red: {fileID: -876546973899608171, guid: 006fb32767b8c5341bff9e7812b46530, type: 3}

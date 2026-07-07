@@ -1,72 +1,70 @@
 using UnityEngine;
+using TMPro;
 
 /// <summary>
-/// 世界史莱姆Boss：继承 SlimeBoss，增加"待机 → 激活"逻辑（世界Boss通用范式）。
-/// - 生成后原地待机，不追玩家、不放技能
-/// - 玩家进入 activateRange 或受到攻击后激活，开始正常史莱姆Boss行为
-/// - 死亡后通知 WorldBossManager（而非 battleUI 关底结算）
+/// 世界史莱姆Boss：继承 SlimeBoss，待机→激活，包含世界Boss属性加成。
+/// 属性翻倍由预制体提供（health=1000,atk=100），难度倍率由基类OnEnable应用。
+/// 20%/s自然回血 + 0.1%全能吸血。
 /// </summary>
 public class WorldBossSlime : SlimeBoss
 {
     [Header("世界Boss设置")]
-    public float       activateRange = 15f;
-    public FactionType faction       = FactionType.Slime;
+    public float       activateRange            = 15f;
+    public FactionType faction                  = FactionType.Slime;
+    [Range(0f, 0.5f)] public float naturalHealPctPerSecond = 0.2f; // 20%/s 回血
+    [Range(0f, 0.01f)]public float lifestealPct           = 0.001f; // 0.1% 全能吸血
+    private float _healAccum;
 
     [HideInInspector] public WorldBossManager worldBossManager;
 
     private bool _activated = false;
     private int  _lastHealth;
 
-    private void Start()
-    {
-        _lastHealth = health;
-    }
+    private void Start() { _lastHealth = health; }
 
     protected override void FixedUpdate()
     {
         if (rolestate == state.dead) return;
-
-        // 亡者领域：被控制为友军后，行为完全交给 MindControlled
         if (GetComponent<MindControlled>() != null) return;
 
         if (!_activated)
         {
-            // 受到攻击（血量减少）也激活
-            if (_lastHealth > health)
+            if (_lastHealth > health || (role != null && Vector3.Distance(transform.position, role.transform.position) <= activateRange))
             {
                 _activated = true;
                 ToastManager.Show("世界Boss已激活！");
+                BossHealthBarUI.Register(this);
             }
             _lastHealth = health;
-
-            // 玩家靠近也激活
-            if (role == null) getrole();
-            if (role != null)
-            {
-                float dist = Vector3.Distance(transform.position, role.transform.position);
-                if (dist <= activateRange)
-                {
-                    _activated = true;
-                    ToastManager.Show("世界Boss已激活！");
-                }
-            }
             if (!_activated) return;
         }
 
+        TickNaturalHeal();
         base.FixedUpdate();
     }
 
-    // 覆盖死亡：通知 WorldBossManager 而非 battleUI（世界Boss被击败不等于关底通关）
+    private void TickNaturalHeal()
+    {
+        if (naturalHealPctPerSecond <= 0f || health <= 0 || health >= healthmax) return;
+        _healAccum += healthmax * naturalHealPctPerSecond * Time.fixedDeltaTime;
+        if (_healAccum >= 1f) { int g = (int)_healAccum; _healAccum -= g; health = Mathf.Min(healthmax, health + g); }
+    }
+
+    protected override void OnCollisionEnter(Collision collision)
+    {
+        // 记录碰撞前血量用于吸血
+        int hpBefore = health;
+        base.OnCollisionEnter(collision);
+        int dmgDealt = hpBefore > 0 && lifestealPct > 0f ? Mathf.Max(0, hpBefore - health) : 0;
+        if (dmgDealt > 0 && health > 0) health = Mathf.Min(healthmax, health + Mathf.Max(1, Mathf.RoundToInt(dmgDealt * lifestealPct)));
+    }
+
     public override void Destroy1()
     {
         if (rolestate == state.dead) return;
-
         worldBossManager?.OnWorldBossDefeated(faction);
-
-        // 临时置空 battleUI，避免 SlimeBoss.Destroy1 触发关底胜利结算
-        var savedBattleUI = battleUI;
-        battleUI = null;
+        var saved = battleUI; battleUI = null;
         base.Destroy1();
-        battleUI = savedBattleUI;
+        battleUI = saved;
     }
 }

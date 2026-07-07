@@ -123,9 +123,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   rolename: "\u5438\u8840\u9B3C\u4E16\u754CBoss"
-  health: 800
-  healthmax: 800
-  atk: 60
+  health: 1000
+  healthmax: 1000
+  atk: 100
   def: 15
   speed: 2
   CR: 0
@@ -144,6 +144,7 @@ MonoBehaviour:
   material: {fileID: -876546973899608171, guid: 8bef114c142cd4743948e426f1da55a1,
     type: 3}
   red: {fileID: -876546973899608171, guid: 006fb32767b8c5341bff9e7812b46530, type: 3}
+  naturalHealPctPerSecond: 0.2
   expstone: {fileID: 7733258394847694891, guid: 2a634f41aed7e5a43bc79c0cd73c4360,
     type: 3}
   bossScale: 15

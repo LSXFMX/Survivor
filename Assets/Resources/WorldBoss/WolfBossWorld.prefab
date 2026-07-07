@@ -123,9 +123,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   rolename: "\u72FC\u4EBABOSS"
-  health: 500
-  healthmax: 500
-  atk: 50
+  health: 1000
+  healthmax: 1000
+  atk: 100
   def: 0
   speed: 4
   CR: 0
