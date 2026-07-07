@@ -41,7 +41,10 @@ public class SettingsPanelUI : MonoBehaviour
     private static readonly (int w, int h, string label)[] ResolutionPresets =
     {
         (1920, 1080, "1920×1080"),
+        (1680, 1050, "1680×1050"),
         (1600, 900,  "1600×900"),
+        (1440, 900,  "1440×900"),
+        (1366, 768,  "1366×768"),
         (1280, 720,  "1280×720"),
         (1024, 768,  "1024×768"),
         (800,  600,  "800×600"),
@@ -254,12 +257,12 @@ public class SettingsPanelUI : MonoBehaviour
                 new Vector2(60f, y0 - 6 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
         }
 
-        // 关闭按钮：右下角（避开所有控件行）
+        // 关闭按钮：面板内部底部居中，控件行之下
         if (closeButton == null)
         {
             closeButton = UIBuilder.CreateButton(rt, "CloseButton", "关闭",
-                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f),
-                new Vector2(-30f, 30f), new Vector2(140f, 60f), font);
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(0f, 40f), new Vector2(200f, 64f), font);
         }
     }
 }
