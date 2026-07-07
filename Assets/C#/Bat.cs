@@ -219,10 +219,19 @@ public class Bat : enemy
 
             int dmg = Mathf.Max(1, (int)(atk - en.def));
             _hitThisDive = true;
-            en.health -= dmg;
-
-            // 用统一的"友军伤害飘字"——头顶 + 高亮紫色 + 放大，避免被绿色/流光友军身体盖住
-            MindControlled.SpawnAllyDamageNumber(en, dmg);
+            // 亡者领域友军蝙蝠：攻击=治疗（tomb主题复活），弹绿色飘字
+            if (isAllyMode)
+            {
+                int before = en.health;
+                en.health = Mathf.Min(en.healthmax, en.health + dmg);
+                int actualH = en.health - before;
+                if (actualH > 0) MindControlled.SpawnAllyHealNumber(en, actualH);
+            }
+            else
+            {
+                en.health -= dmg;
+                MindControlled.SpawnAllyDamageNumber(en, dmg);
+            }
             en.startturnred();
             // 亡者领域：标记"被友军打过"，让它在 Destroy1 时进入"友军击杀复活链路"（20%）
             TombDomainHook.MarkAllyDamage(en);
