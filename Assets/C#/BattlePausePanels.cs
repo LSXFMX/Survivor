@@ -193,12 +193,12 @@ public class SettingsPanelUI : MonoBehaviour
                 new Vector2(60f, y0 - 4 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
         }
 
-        // 关闭按钮（底部居中）
+        // 关闭按钮：右下角（避开所有控件行）
         if (closeButton == null)
         {
             closeButton = UIBuilder.CreateButton(rt, "CloseButton", "关闭",
-                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(0f, 60f), new Vector2(220f, 70f), font);
+                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f),
+                new Vector2(-30f, 30f), new Vector2(140f, 60f), font);
         }
     }
 }

@@ -496,15 +496,26 @@ public class MindControlled : MonoBehaviour
     {
         enemy en = target.GetComponent<enemy>();
         if (en == null || en.health <= 0) return;
-        // 修复 Bug3：亡者领域友军攻击=治疗（tomb主题"复活"），不是伤害
-        int heal = Mathf.Max(1, (int)(_en.atk - en.def));
-        int before = en.health;
-        en.health = Mathf.Min(en.healthmax, en.health + heal);
-        int actual = en.health - before;
-        // 只有被控制的Boss弹出绿色治愈数字，小怪不弹
-        if (actual > 0 && isWorldBoss) SpawnAllyHealNumber(en, actual);
-        // 亡者领域：标记"被友军治疗过"，让它在 Destroy1 时进入"友军击杀复活链路"（20%）
-        TombDomainHook.MarkAllyDamage(en);
+        int dmg = Mathf.Max(1, (int)(_en.atk - en.def));
+
+        if (isWorldBoss)
+        {
+            // 复活Boss：攻击=治疗（tomb主题复活），弹绿色治愈数字
+            int before = en.health;
+            en.health = Mathf.Min(en.healthmax, en.health + dmg);
+            int actual = en.health - before;
+            if (actual > 0) SpawnAllyHealNumber(en, actual);
+            TombDomainHook.MarkAllyDamage(en);
+        }
+        else
+        {
+            // 复活小怪：正常造成伤害 + 紫色伤害数字（与原enemy攻击一致）
+            en.health -= dmg;
+            SpawnAllyDamageNumber(en, dmg);
+            en.startturnred();
+            TombDomainHook.MarkAllyDamage(en);
+            if (en.health <= 0) en.Destroy1();
+        }
     }
 
     /// <summary>友军造成治疗（亡者领域攻击=治疗）的绿色飘字</summary>
