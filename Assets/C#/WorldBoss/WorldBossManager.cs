@@ -68,6 +68,7 @@ public class WorldBossManager : MonoBehaviour
     private void EnsureAutoEntries()
     {
         TryAutoAddEntry(FactionType.Bat,   "蝙蝠社群",   "WorldBoss/BatBossWorld");
+        TryAutoAddEntry(FactionType.Wolf,  "狼人社群",   "WorldBoss/WolfBossWorld");
         TryAutoAddEntry(FactionType.Slime, "史莱姆社群", "WorldBoss/SlimeBossWorld");
     }
 
@@ -127,7 +128,8 @@ public class WorldBossManager : MonoBehaviour
         {
             if (entry.bossPrefab == null) continue;
 
-            // 按社群设定最低出现难度：蘑菇 N7+，蝙蝠 N10+，史莱姆 N11+
+            // 按社群设定最低出现难度：蘑菇 N7+，狼人 N9+，蝙蝠 N10+，史莱姆 N11+
+            if (entry.faction == FactionType.Wolf  && currentN < 9)  continue;
             if (entry.faction == FactionType.Bat   && currentN < 10) continue;
             if (entry.faction == FactionType.Slime && currentN < 11) continue;
 
@@ -157,6 +159,13 @@ public class WorldBossManager : MonoBehaviour
             {
                 wbBat.faction          = entry.faction;
                 wbBat.worldBossManager = this;
+            }
+
+            var wbWolf = obj.GetComponent<WorldBossWolf>();
+            if (wbWolf != null)
+            {
+                wbWolf.faction          = entry.faction;
+                wbWolf.worldBossManager = this;
             }
 
             var wbSlime = obj.GetComponent<WorldBossSlime>();
