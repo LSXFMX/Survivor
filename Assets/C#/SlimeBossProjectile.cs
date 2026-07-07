@@ -43,24 +43,10 @@ public class SlimeBossProjectile : MonoBehaviour
 
     private void FaceDir()
     {
-        // 用 XZ 平面角度设置 Z 轴旋转（sprite 默认朝右），朝左时翻转 Y scale
+        // Z 旋转 = 方向角。angle=180°（向左）时旋转180°，月牙C自然从开口朝右翻转为开口朝左
+        // （与箭矢相同的Z旋转逻辑，保持一致）
         float angle = Mathf.Atan2(_dir.z, _dir.x) * Mathf.Rad2Deg;
-        bool faceLeft = Mathf.Abs(_dir.x) > 0.01f && _dir.x < 0f;
-        if (faceLeft)
-        {
-            // 朝左：镜像 + 修正角度（让开口朝左）
-            Vector3 s = transform.localScale;
-            s.y = -Mathf.Abs(s.y);
-            transform.localScale = s;
-            transform.rotation = Quaternion.Euler(_baseTiltX, 0f, 180f - angle);
-        }
-        else
-        {
-            Vector3 s = transform.localScale;
-            s.y = Mathf.Abs(s.y);
-            transform.localScale = s;
-            transform.rotation = Quaternion.Euler(_baseTiltX, 0f, angle);
-        }
+        transform.rotation = Quaternion.Euler(_baseTiltX, 0f, angle);
     }
 
     void FixedUpdate()
