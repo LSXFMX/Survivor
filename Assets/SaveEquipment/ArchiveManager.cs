@@ -221,10 +221,11 @@ public class ArchiveManager : MonoBehaviour
         }
         if (template == null) return;
 
-        // 需要补出的三个 SSR：equipmentId = 11 / 12 / 13
+        // 需要补出的四个 SSR：equipmentId = 11 / 12 / 13 / 14
         TryCloneSsrIcon(template, ssrParent, 11, existingIds);
         TryCloneSsrIcon(template, ssrParent, 12, existingIds);
         TryCloneSsrIcon(template, ssrParent, 13, existingIds);
+        TryCloneSsrIcon(template, ssrParent, 14, existingIds);
     }
 
     /// <summary>

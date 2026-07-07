@@ -21,6 +21,9 @@ public class AdventureEventManager : MonoBehaviour
 
     private Image _buttonImage;
 
+    /// <summary>SSR_11 气运之子 equipmentSystemId=14，解锁后奇遇从2选变3选</summary>
+    private const int SSR_FORTUNE_CHILD_ID = 14;
+
     private void Awake()
     {
         Instance = this;
@@ -62,12 +65,20 @@ public class AdventureEventManager : MonoBehaviour
         }
         if (adventureUI != null && adventureUI.IsShowing) return;
 
-        var (optA, optB) = PickTwoOptions();
-        if (optA == null || optB == null) return;
-        adventureUI?.Show(optA, optB, triggerThreshold);
+        int pickCount = 2;
+        if (EquipmentSystem.Instance != null &&
+            EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, SSR_FORTUNE_CHILD_ID))
+        {
+            pickCount = 3; // SSR_11 气运之子：二选一变三选一
+        }
+
+        var options = PickOptions(pickCount);
+        if (options == null || options.Count < 2) return;
+        if (pickCount == 3) adventureUI?.Show(options[0], options[1], options[2], triggerThreshold);
+        else                adventureUI?.Show(options[0], options[1], triggerThreshold);
     }
 
-    private (AdventureOptionBase, AdventureOptionBase) PickTwoOptions()
+    private List<AdventureOptionBase> PickOptions(int count)
     {
         List<AdventureOptionBase> available = new List<AdventureOptionBase>();
         foreach (var opt in optionPool)
@@ -79,17 +90,17 @@ public class AdventureEventManager : MonoBehaviour
         if (available.Count < 2)
         {
             Debug.LogWarning("[AdventureEventManager] 当前难度可用选项少于2个");
-            return (null, null);
+            return null;
         }
 
-        int indexA = Random.Range(0, available.Count);
-        int indexB = indexA;
-        int safety = 0;
-        while (indexB == indexA && available.Count > 1)
+        List<AdventureOptionBase> picked = new List<AdventureOptionBase>();
+        for (int i = 0; i < count; i++)
         {
-            indexB = Random.Range(0, available.Count);
-            if (++safety > 100) break;
+            int idx = Random.Range(0, available.Count);
+            picked.Add(available[idx]);
+            available.RemoveAt(idx);
+            if (available.Count == 0) break;
         }
-        return (available[indexA], available[indexB]);
+        return picked;
     }
 }
