@@ -189,12 +189,13 @@ public class GachaUI : MonoBehaviour
     {
         if (treasurePanel == null)
         {
-            treasurePanel = CreatePanel("FirstClearTreasurePanel", new Vector2(640, 620));
+            treasurePanel = CreatePanel("FirstClearTreasurePanel", new Vector2(720, 940));
             RectTransform rect = treasurePanel.GetComponent<RectTransform>();
             rect.anchorMin = new Vector2(0.5f, 0.5f);
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.anchoredPosition = Vector2.zero;
+            // 整个界面向下扩展后向上提一些，避免 N13 顶到屏幕边缘
+            rect.anchoredPosition = new Vector2(0f, 60f);
             var closePanel = RightClickClosePanel.EnsureOn(treasurePanel);
             closePanel.onRightClickClose = new UnityEngine.Events.UnityEvent();
             closePanel.onRightClickClose.AddListener(() => treasurePanel.SetActive(false));
@@ -207,7 +208,7 @@ public class GachaUI : MonoBehaviour
     {
         foreach (Transform child in treasurePanel.transform) Destroy(child.gameObject);
         TextMeshProUGUI title = CreateText(treasurePanel.transform, "聚宝盆 · 首次通关宝箱", 30, TextAlignmentOptions.Center);
-        SetRect(title.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0.5f, 1), new Vector2(0, -18), new Vector2(-24, 58));
+        SetRect(title.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0.5f, 1), new Vector2(0, -14), new Vector2(-24, 64));
 
         for (int i = 1; i <= 13; i++)
         {
@@ -237,12 +238,12 @@ public class GachaUI : MonoBehaviour
             });
         }
 
-        Button close = CreateTextButton(treasurePanel.transform, "关闭", new Vector2(140, 46));
+        Button close = CreateTextButton(treasurePanel.transform, "关闭", new Vector2(160, 52));
         RectTransform cr = close.GetComponent<RectTransform>();
         cr.anchorMin = new Vector2(0.5f, 0);
         cr.anchorMax = new Vector2(0.5f, 0);
         cr.pivot = new Vector2(0.5f, 0);
-        cr.anchoredPosition = new Vector2(0, 20);
+        cr.anchoredPosition = new Vector2(0, 50);
         close.onClick.AddListener(() => treasurePanel.SetActive(false));
     }
 
