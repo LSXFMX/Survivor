@@ -450,17 +450,18 @@ public class title : MonoBehaviour
         }
     }
 
-    // ───────────────────────── 测试：副本时间设为 1 分钟 ─────────────────────────
+    // ───────────────────────── 测试：副本时间 1分钟 开关 ─────────────────────────
     private GameObject _oneMinBtnGo;
+    private bool _oneMinToggled = false;
+    private int[] _originalMinutes; // 开关 OFF→ON 时备份原值
 
     private void EnsureOneMinuteButton()
     {
-        if (_oneMinBtnGo != null) { _oneMinBtnGo.SetActive(true); return; }
+        if (_oneMinBtnGo != null) { UpdateOneMinButtonVisual(); _oneMinBtnGo.SetActive(true); return; }
 
         Canvas hostCanvas = FindMainMenuCanvas();
         if (hostCanvas == null) return;
 
-        // 位于内测福利按钮下方：y = -90 - 60 - 10 = -160
         var btnGo = new GameObject("__OneMinuteButton",
             typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
         btnGo.transform.SetParent(hostCanvas.transform, false);
@@ -472,8 +473,6 @@ public class title : MonoBehaviour
         rt.sizeDelta = new Vector2(220f, 60f);
 
         var img = btnGo.GetComponent<Image>();
-        img.color = new Color(0.28f, 0.08f, 0.10f, 0.9f); // 深红调，区分其它测试按钮
-
         var btn = btnGo.GetComponent<Button>();
         var colors = btn.colors;
         colors.normalColor      = new Color(1f, 1f, 1f, 1f);
@@ -490,7 +489,6 @@ public class title : MonoBehaviour
         lrt.offsetMin = Vector2.zero;
         lrt.offsetMax = Vector2.zero;
         var label = labelGo.GetComponent<Text>();
-        label.text      = "副本时间=1分钟";
         label.alignment = TextAnchor.MiddleCenter;
         label.fontSize  = 20;
         label.color     = new Color(1f, 0.85f, 0.5f);
@@ -498,23 +496,53 @@ public class title : MonoBehaviour
         if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
         if (font != null) label.font = font;
 
-        btn.onClick.AddListener(OnOneMinuteButtonClick);
+        btn.onClick.AddListener(OnOneMinuteButtonToggle);
         _oneMinBtnGo = btnGo;
+        UpdateOneMinButtonVisual();
     }
 
-    private void OnOneMinuteButtonClick()
+    private void OnOneMinuteButtonToggle()
     {
         AudioManager.PlaySfx(AudioManager.SfxKey.Click);
-        if (DifficultyManager.Instance != null && DifficultyManager.Instance.configs != null)
+        if (DifficultyManager.Instance == null || DifficultyManager.Instance.configs == null) return;
+
+        _oneMinToggled = !_oneMinToggled;
+        var cfgs = DifficultyManager.Instance.configs;
+
+        if (_oneMinToggled)
         {
-            var cfgs = DifficultyManager.Instance.configs;
-            for (int i = 0; i < cfgs.Length; i++)
-                cfgs[i].minutes = 1;
-            ToastManager.Show("[测试] 所有副本时间已设为 1 分钟");
+            // 备份原值 → 全部设为 1
+            _originalMinutes = new int[cfgs.Length];
+            for (int i = 0; i < cfgs.Length; i++) _originalMinutes[i] = cfgs[i].minutes;
+            for (int i = 0; i < cfgs.Length; i++) cfgs[i].minutes = 1;
+            ToastManager.Show("[测试] 所有副本时间 → 1分钟");
         }
         else
         {
-            ToastManager.Show("[测试] 未找到 DifficultyManager");
+            // 恢复原值
+            if (_originalMinutes != null)
+                for (int i = 0; i < Mathf.Min(cfgs.Length, _originalMinutes.Length); i++)
+                    cfgs[i].minutes = _originalMinutes[i];
+            ToastManager.Show("[测试] 副本时间已恢复");
+        }
+
+        UpdateOneMinButtonVisual();
+    }
+
+    private void UpdateOneMinButtonVisual()
+    {
+        if (_oneMinBtnGo == null) return;
+        var img   = _oneMinBtnGo.GetComponent<Image>();
+        var label = _oneMinBtnGo.GetComponentInChildren<Text>();
+        if (_oneMinToggled)
+        {
+            if (img   != null) img.color = new Color(0.1f, 0.5f, 0.15f, 0.9f); // 绿色 = 已激活
+            if (label != null) label.text = "副本时间: 1分钟";
+        }
+        else
+        {
+            if (img   != null) img.color = new Color(0.28f, 0.08f, 0.10f, 0.9f); // 深红 = 已关闭
+            if (label != null) label.text = "副本时间: 正常";
         }
     }
 
