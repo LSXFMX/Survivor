@@ -311,11 +311,11 @@ public class EquipmentInitializer : MonoBehaviour
             ToastManager.Show("[装备] 月牙之剑：攻击力＋20");
         }
 
-        // N10 通关装备 25：月圆之甲 - 移动速度＋2
+        // N10 通关装备 25：月圆之甲 - 防御力＋2
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 25))
         {
-            if (player != null) player.speed += 2;
-            ToastManager.Show("[装备] 月圆之甲：移动速度＋2");
+            if (player != null) player.def += 2;
+            ToastManager.Show("[装备] 月圆之甲：防御力＋2");
         }
 
         // N10 通关装备 26：月球之心 - 自然回血＋2
