@@ -157,6 +157,8 @@ public class SkillSporeField : Skillbase
                 b.damage      = damage;
                 b.targetEnemy = en;
                 b.playerAttr  = player.GetComponent<Attribute>();
+                // 亡者领域：复活友军 → 治疗孢子（不伤害）
+                b._isHealSpore = en._mindControlledFlag;
             }
         }
 
@@ -192,13 +194,21 @@ public class SkillSporeField : Skillbase
             enemy en = e.GetComponent<enemy>();
             if (en == null) continue;
             if (en.rolestate == enemy.state.dead) continue;
-            // 亡者领域：不伤害已经被控制为友军的敌人（直接读 flag，省 GetComponent）
-            if (en._mindControlledFlag) continue;
 
             Vector3 d = e.position - center;
-            // 平面距离：场景是 XZ 平面，孢子领域是圆，y 差异忽略
             float sq = d.x * d.x + d.z * d.z;
-            if (sq <= radiusSq) result.Add(e);
+            if (sq > radiusSq) continue;
+
+            // 亡者领域：复活友军也在孢子范围内 → 标为治疗孢子（不跳过）
+            if (en._mindControlledFlag)
+            {
+                // 用负号标记这是治疗目标（Useskill中还原）
+                result.Add(e);
+            }
+            else
+            {
+                result.Add(e);
+            }
         }
         return result;
     }

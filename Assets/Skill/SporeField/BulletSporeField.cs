@@ -15,6 +15,7 @@ public class BulletSporeField : MonoBehaviour
     [HideInInspector] public int     damage;
     [HideInInspector] public enemy   targetEnemy;
     [HideInInspector] public Attribute playerAttr;
+    [HideInInspector] public bool    _isHealSpore; // true=治疗复活友军, false=伤害敌人
 
     private void Start()
     {
@@ -92,8 +93,9 @@ public class BulletSporeField : MonoBehaviour
                 int dealt = (int)finalDamage;
 
                 // 亡者领域：若目标已是复活友军（MindControlled），孢子治疗而非伤害
-                if (targetEnemy.GetComponent<MindControlled>() != null)
+                if (_isHealSpore)
                 {
+                    // 治疗孢子：命中复活友军 → 回血 + 绿色飘字
                     int before = targetEnemy.health;
                     targetEnemy.health = Mathf.Min(targetEnemy.healthmax, targetEnemy.health + dealt);
                     int actualHeal = targetEnemy.health - before;
@@ -119,13 +121,11 @@ public class BulletSporeField : MonoBehaviour
                 }
                 // 标记：在死亡前一段时间内受过孢子领域伤害（用于亡者领域复活判定）
                 TombDomainHook.MarkSporeDamage(targetEnemy);
-                // SSR_10 饮血剑：全局吸血（孢子领域 / 亡者领域伤害也吃 1%）
+                // SSR_10 饮血剑：全局吸血
                 EquipmentInitializer.TryAllSourceLifesteal(dealt, targetEnemy.atknumber, targetEnemy.transform.position);
 
                 if (targetEnemy.health <= 0)
                 {
-                    // 亡者领域复活判定已统一移至 enemy.Destroy1 / WorldBossBase.Destroy1，
-                    // 这里只需正常调用 Destroy1，由其内部决定走死亡流程还是复活为友军。
                     targetEnemy.Destroy1();
                 }
             }
