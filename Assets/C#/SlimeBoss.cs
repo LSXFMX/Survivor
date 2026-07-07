@@ -110,7 +110,7 @@ public class SlimeBoss : enemy
         anim = GetComponent<Animator>();
         _sr  = GetComponent<SpriteRenderer>();
         var rb = GetComponent<Rigidbody>();
-        if (rb != null) rb.mass = 500f;
+        if (rb != null) rb.mass = 501f;
 
         if (DifficultyManager.Instance != null)
         {

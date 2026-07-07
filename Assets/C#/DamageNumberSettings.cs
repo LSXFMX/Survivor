@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// 伤害飘字显示开关 + 大小档位：全局静态状态 + PlayerPrefs 持久化。
-/// 大小档位：0=小 (×0.45), 1=中 (×0.7), 2=大 (×1.0, 默认)
+/// 大小档位：0=小 (×0.30), 1=中 (×0.50), 2=大 (×0.70, 默认)
 /// </summary>
 public static class DamageNumberSettings
 {
@@ -25,8 +25,8 @@ public static class DamageNumberSettings
         set { _size = Mathf.Clamp(value, 0, 2); PlayerPrefs.SetInt(KEY_SIZE, _size); PlayerPrefs.Save(); }
     }
 
-    /// <summary>0 → ×0.45, 1 → ×0.7, 2 → ×1.0</summary>
-    public static float SizeScale => Size switch { 0 => 0.45f, 1 => 0.7f, _ => 1.0f };
+    /// <summary>0 → ×0.30, 1 → ×0.50, 2 → ×0.70</summary>
+    public static float SizeScale => Size switch { 0 => 0.30f, 1 => 0.50f, _ => 0.70f };
 
     public static string SizeLabel => Size switch { 0 => "小", 1 => "中", _ => "大" };
 

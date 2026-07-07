@@ -168,7 +168,7 @@ public class Player : Attribute
     void Start()
     {
         rb = GetComponent<Rigidbody>();
-        rb.mass = 100f; // 高质量防推：避免被普通小怪（mass=1）和友军小怪（mass=0.1）推着走
+        rb.mass = 500f; // 与Boss同级质量，确保不被小怪(10)和友军(5)推动
         Physics.gravity = new Vector3(0, -30f, 0);
 
         // ===== 分身（tag="Clone"）物理处理 =====

@@ -501,8 +501,8 @@ public class MindControlled : MonoBehaviour
         int before = en.health;
         en.health = Mathf.Min(en.healthmax, en.health + heal);
         int actual = en.health - before;
-        // 无论小怪还是Boss，被复活后攻击=治疗，统一弹出绿色治愈数字
-        if (actual > 0) SpawnAllyHealNumber(en, actual);
+        // 只有被控制的Boss弹出绿色治愈数字，小怪不弹
+        if (actual > 0 && isWorldBoss) SpawnAllyHealNumber(en, actual);
         // 亡者领域：标记"被友军治疗过"，让它在 Destroy1 时进入"友军击杀复活链路"（20%）
         TombDomainHook.MarkAllyDamage(en);
     }

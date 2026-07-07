@@ -99,7 +99,7 @@ public class enemy : Attribute
 
         // 物理质量：Boss(500) > 玩家(100) > 小怪(10) > 复活Boss(5) > 复活小怪(1)
         var rb = GetComponent<Rigidbody>();
-        if (rb != null) { rb.mass = 10f; rb.useGravity = true; }
+        if (rb != null) { rb.mass = 5f; rb.useGravity = true; }
 
         ApplySporeMutationColor();
     }

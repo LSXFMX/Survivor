@@ -55,7 +55,7 @@ public class BossBat : enemy
         _ani = GetComponent<Animator>();
 
         var rb = GetComponent<Rigidbody>();
-        if (rb != null) rb.mass = 500f;
+        if (rb != null) rb.mass = 501f;
         _rb  = GetComponent<Rigidbody>();
 
         if (DifficultyManager.Instance != null)
