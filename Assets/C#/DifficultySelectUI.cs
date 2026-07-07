@@ -24,19 +24,19 @@ public class DifficultySelectUI : MonoBehaviour
     // 每个难度对应的开放功能描述（与 DifficultyManager.configs 顺序一致）
     private static readonly string[] FeatureDescriptions = new string[]
     {
-        "基础三选一玩法",           // N1
-        "蘑菇人Boss&开始解锁通关装备",  // N2
-        "开放奇遇功能",             // N3
-        "加入蝙蝠敌人",             // N4
-        "开放门挑战",               // N5
-        "蘑菇Boss × 2",            // N6
-        "蝙蝠社群Boss登场",         // N7
-        "解锁世界Boss",             // N8
-        "新增N9通关装备",           // N9
-        "新增N10通关装备",          // N10
-        "新增N11通关装备",          // N11
-        "新增N12通关装备",          // N12
-        "终极难度·新增N13通关装备", // N13
+        "基础三选一玩法·无Boss",              // N1
+        "关底:蘑菇人Boss·解锁通关装备",         // N2
+        "开放奇遇功能·关底:蘑菇人Boss",         // N3
+        "加入蝙蝠敌人·关底:蘑菇人Boss",         // N4
+        "开放门挑战·关底:蘑菇人Boss",           // N5
+        "关底:蘑菇Boss×2",                    // N6
+        "关底:吸血鬼Boss·世界:蘑菇世界Boss",    // N7
+        "关底:吸血鬼Boss·世界:蘑菇世界Boss",    // N8
+        "关底:狼人Boss·世界:吸血鬼+蘑菇",       // N9
+        "关底:狼人Boss·世界:三社群Boss",        // N10
+        "关底:史莱姆Boss·世界:三社群Boss",      // N11
+        "关底:史莱姆Boss×2·世界:四社群Boss",    // N12
+        "终极难度·关底:蘑菇人Boss",             // N13
     };
 
     // OverlayLayer 化的运行时占位
