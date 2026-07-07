@@ -11,7 +11,7 @@ public class WorldBossSlime : SlimeBoss
     [Header("世界Boss设置")]
     public float       activateRange            = 15f;
     public FactionType faction                  = FactionType.Slime;
-    [Range(0f, 0.5f)] public float naturalHealPctPerSecond = 0.2f; // 20%/s 回血
+    [Range(0f, 0.5f)] public float naturalHealPctPerSecond = 0.01f; // 1%/s 回血
     [Range(0f, 0.01f)]public float lifestealPct           = 0.001f; // 0.1% 全能吸血
     private float _healAccum;
 

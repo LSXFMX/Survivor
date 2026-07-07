@@ -9,7 +9,7 @@ public class WorldBossWolf : WolfBoss
     [Header("世界Boss设置")]
     public float       activateRange            = 15f;
     public FactionType faction                  = FactionType.Wolf;
-    [Range(0f, 0.5f)] public float naturalHealPctPerSecond = 0.2f;
+    [Range(0f, 0.5f)] public float naturalHealPctPerSecond = 0.01f;
     [Range(0f, 0.01f)]public float lifestealPct           = 0.001f;
     private float _healAccum;
 

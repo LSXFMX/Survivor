@@ -278,7 +278,7 @@ MonoBehaviour:
   rolestate: 0
   role: {fileID: 0}
   Sca: 5
-  naturalHealPctPerSecond: 0.2
+  naturalHealPctPerSecond: 0.01
   material: {fileID: -876546973899608171, guid: 8bef114c142cd4743948e426f1da55a1,
     type: 3}
   red: {fileID: -876546973899608171, guid: 006fb32767b8c5341bff9e7812b46530, type: 3}
