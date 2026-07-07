@@ -228,6 +228,7 @@ public class GachaManager : MonoBehaviour
 
         // SSR_11 气运之子 (equipmentSystemId=36)：累计抽卡 550 次后加入卡池
         //   注：equipmentId=14 已被 N6 通关装备「夯子之心」占用，故用 36（0-35 全占）
+        //   poolCount=1 与其他 SSR 一致（一次性道具，不可重复抽到）
         if (ssrItems != null && !RarityIdExists(ssrItems, 11))
         {
             ssrItems.Add(new GachaItemData
@@ -236,7 +237,7 @@ public class GachaManager : MonoBehaviour
                 rarity = GachaRarity.SSR,
                 rarityId = 11,
                 equipmentSystemId = 36,
-                poolCount = 100,
+                poolCount = 1,
                 unlockThreshold = 550,
                 poolRefillEveryDraws = 0,
                 poolRefillAmount = 0,
