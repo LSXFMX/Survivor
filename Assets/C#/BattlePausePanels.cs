@@ -22,6 +22,7 @@ public class SettingsPanelUI : MonoBehaviour
     public Toggle attackRangeToggle;
     public Toggle cloneAttackRangeToggle;
     public Toggle damageNumberToggle;
+    public Button  damageSizeButton;      // 伤害数字大小切换（大/中/小）
     public Slider bgmSlider;
     public Slider sfxSlider;
     public Button closeButton;
@@ -65,6 +66,12 @@ public class SettingsPanelUI : MonoBehaviour
             damageNumberToggle.onValueChanged.RemoveListener(OnDamageNumberChanged);
             damageNumberToggle.onValueChanged.AddListener(OnDamageNumberChanged);
         }
+        if (damageSizeButton != null)
+        {
+            UpdateDamageSizeButtonText();
+            damageSizeButton.onClick.RemoveListener(OnDamageSizeChanged);
+            damageSizeButton.onClick.AddListener(OnDamageSizeChanged);
+        }
         if (bgmSlider != null)
         {
             bgmSlider.minValue = 0f; bgmSlider.maxValue = 1f;
@@ -88,7 +95,20 @@ public class SettingsPanelUI : MonoBehaviour
 
     private void OnAttackRangeChanged(bool v) { AttackRangeIndicatorManager.Visible = v; }
     private void OnCloneAttackRangeChanged(bool v) { AttackRangeIndicatorManager.CloneVisible = v; }
-    private void OnDamageNumberChanged(bool v) { DamageNumberSettings.Visible = v; }
+    private void OnDamageNumberChanged(bool v)  { DamageNumberSettings.Visible = v; }
+    private void OnDamageSizeChanged()
+    {
+        DamageNumberSettings.Size = (DamageNumberSettings.Size + 1) % 3;
+        UpdateDamageSizeButtonText();
+    }
+    private void UpdateDamageSizeButtonText()
+    {
+        if (damageSizeButton == null) return;
+        var txt = damageSizeButton.GetComponentInChildren<TextMeshProUGUI>();
+        if (txt != null) txt.text = "伤害数字大小: " + DamageNumberSettings.SizeLabel;
+    }
+
+
     private void OnBgmChanged(float v)        { AudioManager.SetBgmVolume(v); }
     private void OnSfxChanged(float v)        { AudioManager.SetSfxVolume(v); }
 
@@ -149,6 +169,14 @@ public class SettingsPanelUI : MonoBehaviour
         {
             damageNumberToggle = UIBuilder.CreateToggle(rt, "DamageNumberToggle", "显示伤害数字",
                 new Vector2(60f, y0 - 2 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
+        }
+
+        // 行 3.5：伤害数字大小
+        if (damageSizeButton == null)
+        {
+            damageSizeButton = UIBuilder.CreateButton(rt, "DamageSizeBtn", "伤害数字大小: " + DamageNumberSettings.SizeLabel,
+                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(60f, y0 - 2 * rowH - 72f), new Vector2(autoBuildSize.x - 120f, 52f), font);
         }
 
         // 行 4：BGM

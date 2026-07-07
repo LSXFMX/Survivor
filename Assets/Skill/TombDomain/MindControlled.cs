@@ -501,7 +501,7 @@ public class MindControlled : MonoBehaviour
         int before = en.health;
         en.health = Mathf.Min(en.healthmax, en.health + heal);
         int actual = en.health - before;
-        if (actual > 0) SpawnAllyHealNumber(en, actual);
+        if (actual > 0 && isWorldBoss) SpawnAllyHealNumber(en, actual);
         // 亡者领域：标记"被友军治疗过"，让它在 Destroy1 时进入"友军击杀复活链路"（20%）
         TombDomainHook.MarkAllyDamage(en);
     }
@@ -518,7 +518,7 @@ public class MindControlled : MonoBehaviour
         else            pos.y += 0.6f;
 
         GameObject num = Object.Instantiate(victim.atknumber, pos, Quaternion.identity);
-        num.transform.localScale *= 0.65f;
+        num.transform.localScale *= DamageNumberSettings.SizeScale;
         var txt = num.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
         if (txt != null)
         {
@@ -543,8 +543,7 @@ public class MindControlled : MonoBehaviour
         else            pos.y += 0.6f;
 
         GameObject num = Object.Instantiate(victim.atknumber, pos, Quaternion.identity);
-        // 缩小 0.65×（原1.4×被缩小一半），让飘字不遮挡战斗视野
-        num.transform.localScale *= 0.65f;
+        num.transform.localScale *= DamageNumberSettings.SizeScale;
         var txt = num.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
         if (txt != null)
         {
