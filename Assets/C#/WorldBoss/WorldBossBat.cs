@@ -3,7 +3,7 @@ using UnityEngine;
 public class WorldBossBat : BossBat
 {
     [Header("世界Boss设置")]
-    public float       activateRange   = 15f;
+    public float       activateRange   = 45f;
     public FactionType faction         = FactionType.Bat;
     [Range(0f, 0.01f)]public float lifestealPct = 0.001f;
 

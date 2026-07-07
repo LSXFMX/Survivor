@@ -291,7 +291,7 @@ MonoBehaviour:
   bossScale: 20
   dashWarningLine: {fileID: 3838744749374712635}
   battleUI: {fileID: 0}
-  activateRange: 8
+  activateRange: 24
   faction: 0
   worldBossManager: {fileID: 0}
 --- !u!54 &8158424446488990521

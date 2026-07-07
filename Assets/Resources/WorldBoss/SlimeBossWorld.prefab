@@ -177,7 +177,7 @@ MonoBehaviour:
   breathSpeed: 9
   breathLifetime: 3
   breathDamageMul: 1
-  activateRange: 15
+  activateRange: 45
   faction: 2
   worldBossManager: {fileID: 0}
 --- !u!54 &8713925415675215983

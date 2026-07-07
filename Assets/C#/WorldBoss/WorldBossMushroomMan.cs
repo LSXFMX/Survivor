@@ -4,7 +4,7 @@ using UnityEngine;
 public class WorldBossMushroomMan : BossMushroomMan
 {
     [Header("世界Boss设置")]
-    public float       activateRange   = 15f;
+    public float       activateRange   = 24f;
     public FactionType faction         = FactionType.Mushroom;
     [Range(0f, 0.01f)]public float lifestealPct = 0.001f;
 

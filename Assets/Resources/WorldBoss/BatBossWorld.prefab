@@ -157,7 +157,7 @@ MonoBehaviour:
   batPrefab: {fileID: 3001585549931319299, guid: adad04921e4089941805a10cb073a13a,
     type: 3}
   battleUI: {fileID: 0}
-  activateRange: 15
+  activateRange: 45
   faction: 1
   worldBossManager: {fileID: 0}
 --- !u!54 &7000000000000000006
