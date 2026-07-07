@@ -455,8 +455,21 @@ public class title : MonoBehaviour
     private bool _oneMinToggled = false;
     private int[] _originalMinutes; // 开关 OFF→ON 时备份原值
 
+    // 默认副本时间（如果 _originalMinutes 为 null 时用来还原）
+    private static readonly int[] DefaultMinutes =
+    {
+        1, 7, 8, 9, 10, 11, 12, 13, 13, 13, 13, 13, 13
+    };
+
     private void EnsureOneMinuteButton()
     {
+        // 从 DifficultyManager 同步实际状态（防止场景重载导致按钮状态与数据不一致）
+        if (DifficultyManager.Instance != null && DifficultyManager.Instance.configs != null)
+        {
+            _oneMinToggled = DifficultyManager.Instance.configs.Length > 1
+                          && DifficultyManager.Instance.configs[1].minutes == 1;
+        }
+
         if (_oneMinBtnGo != null) { UpdateOneMinButtonVisual(); _oneMinBtnGo.SetActive(true); return; }
 
         Canvas hostCanvas = FindMainMenuCanvas();
@@ -511,7 +524,7 @@ public class title : MonoBehaviour
 
         if (_oneMinToggled)
         {
-            // 备份原值 → 全部设为 1
+            // 备份当前值 → 全部设为 1
             _originalMinutes = new int[cfgs.Length];
             for (int i = 0; i < cfgs.Length; i++) _originalMinutes[i] = cfgs[i].minutes;
             for (int i = 0; i < cfgs.Length; i++) cfgs[i].minutes = 1;
@@ -519,10 +532,10 @@ public class title : MonoBehaviour
         }
         else
         {
-            // 恢复原值
-            if (_originalMinutes != null)
-                for (int i = 0; i < Mathf.Min(cfgs.Length, _originalMinutes.Length); i++)
-                    cfgs[i].minutes = _originalMinutes[i];
+            // 恢复：优先用备份值，其次用代码默认值
+            int[] restore = _originalMinutes ?? DefaultMinutes;
+            for (int i = 0; i < Mathf.Min(cfgs.Length, restore.Length); i++)
+                cfgs[i].minutes = restore[i];
             ToastManager.Show("[测试] 副本时间已恢复");
         }
 

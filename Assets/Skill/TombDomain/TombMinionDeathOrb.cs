@@ -171,7 +171,7 @@ public class TombMinionDeathOrb : MonoBehaviour
         if (_playerComp == null || _playerComp.health <= 0) return;
         int heal = Mathf.Max(1, Mathf.RoundToInt(_playerComp.healthmax * HealRatio));
         _playerComp.health = Mathf.Min(_playerComp.healthmax, _playerComp.health + heal);
-        AudioManager.PlaySfx(AudioManager.SfxKey.TombHeal);
+        // 回血音效已移除（TombHeal 过于突兀）
     }
 
     private void AdvanceEnergyFrame()
