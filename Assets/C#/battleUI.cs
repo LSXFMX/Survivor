@@ -104,9 +104,6 @@ public class battleUI : MonoBehaviour
 
         // 角色头像 + 玩家升级进度 UI（运行时构造，无需场景拖拽）
         EnsureCharacterPanel();
-
-        // N12 开局生成史莱姆社群Boss方便测试（延迟1帧确保场景初始化完成）
-        StartCoroutine(SpawnN12DebugBossNextFrame());
     }
 
     /// <summary>从 speedButtonText 父级自动取 Button，避免新增字段 / 修改场景。</summary>
@@ -212,26 +209,6 @@ public class battleUI : MonoBehaviour
     {
         yield return null;
         starttime();
-    }
-
-    /// <summary>N12 测试用：延迟1帧开局生成史莱姆Boss（不受 Spawnpoint 序列化问题影响）</summary>
-    private IEnumerator SpawnN12DebugBossNextFrame()
-    {
-        yield return null;
-        yield return null; // 双帧保险，确保 enemylayer / DifficultyManager 均就绪
-        if (DifficultyManager.Instance == null) yield break;
-        if (DifficultyManager.Instance.Current.label != "N12") yield break;
-        GameObject prefab = slimeBossPrefab != null ? slimeBossPrefab
-                          : Resources.Load<GameObject>("WorldBoss/SlimeBoss");
-        if (prefab == null) { Debug.LogWarning("[SlimeBoss Debug] 找不到史莱姆Boss prefab（Resources/WorldBoss/SlimeBoss）"); yield break; }
-
-        Vector3 pos = bossSpawnPoint != null ? bossSpawnPoint.position
-                    : (player != null ? player.transform.position + Vector3.right * 5f : Vector3.zero);
-        var obj = Instantiate(prefab, pos, Quaternion.Euler(45, 0, 0),
-            enemylayer != null ? enemylayer : null);
-        var boss = obj.GetComponent<SlimeBoss>();
-        if (boss != null) boss.battleUI = this;
-        Debug.Log("[SlimeBoss] N12 开局测试Boss已生成（battleUI）");
     }
 
     public void RefreshSkill()
