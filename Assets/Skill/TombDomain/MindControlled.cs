@@ -53,6 +53,10 @@ public class MindControlled : MonoBehaviour
     /// </summary>
     public float bossTeleportFactor = 2f;
 
+    /// <summary>被控制的世界Boss每2分钟扣除50%当前生命值（一次性扣除）。</summary>
+    public float bossHpDecayInterval = 120f;
+    private float _bossDecayTimer = 0f;
+
     /// <summary>
     /// 步行回归时的速度（unit/秒）。取 max(_en.speed, this) 后再乘 _allySpeedMultiplier，
     /// 确保即使原 boss 速度很慢，回归玩家时也不会"龟爬"。
@@ -294,6 +298,19 @@ public class MindControlled : MonoBehaviour
             if (_aliveTimer >= minionLifetime) { _en.Destroy1(); return; }
         }
 
+        // 世界Boss：每2分钟一次性扣除50%当前生命值
+        if (isWorldBoss)
+        {
+            _bossDecayTimer += Time.fixedDeltaTime;
+            if (_bossDecayTimer >= bossHpDecayInterval)
+            {
+                _bossDecayTimer = 0f;
+                int decay = Mathf.Max(1, _en.health / 2);
+                _en.health -= decay;
+                if (_en.health <= 0) { _en.Destroy1(); return; }
+            }
+        }
+
         // 世界 Boss 的 leash 行为（2026-06 二次重构）：
         //   旧版：超过 leash 距离直接瞬移到 leash 边缘 → 玩家在中等距离脱离时也会看到顿挫的传送。
         //   新版分两段：
@@ -454,20 +471,22 @@ public class MindControlled : MonoBehaviour
         Transform layer = GetEnemyLayer();
         if (layer == null) return null;
         Transform best = null;
-        float bestSq = float.MaxValue;
+        float bestScore = float.MaxValue;
         Vector3 self = transform.position;
         int n = layer.childCount;
         for (int i = 0; i < n; i++)
         {
             Transform e = layer.GetChild(i);
             if (e == null || e == transform) continue;
-            // 一次 GetComponent<enemy> 同时拿到死亡判定 + 友军判定（_mindControlledFlag），
-            // 比之前 GetComponent<enemy> + GetComponent<MindControlled> 两次快一倍。
             enemy en = e.GetComponent<enemy>();
             if (en == null || en.health <= 0 || en.rolestate == enemy.state.dead) continue;
             if (en._mindControlledFlag) continue; // 是友军就跳过
             float sq = (e.position - self).sqrMagnitude;
-            if (sq < bestSq) { bestSq = sq; best = e; }
+            // 优先攻击敌方Boss（权值×0.3，距离感知更近）
+            bool isBoss = en is BossMushroomMan || en is BossBat || en is WolfBoss || en is SlimeBoss
+                       || en is WorldBossMushroomMan || en is WorldBossBat || en is WorldBossWolf || en is WorldBossSlime;
+            float score = isBoss ? sq * 0.3f : sq;
+            if (score < bestScore) { bestScore = score; best = e; }
         }
         return best;
     }

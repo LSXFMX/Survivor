@@ -111,6 +111,13 @@ public class enemy : Attribute
 
     private bool IsMushroomEnemy() => _isMushroomEnemyCached;
 
+    /// <summary>Boss类有专属死亡动画（Mushroom/Bat/Wolf/Slime），不走变红倒下演出。</summary>
+    private bool HasBossDeathAnimation()
+    {
+        return this is BossMushroomMan || this is BossBat || this is WolfBoss || this is SlimeBoss
+            || this is WorldBossMushroomMan || this is WorldBossBat || this is WorldBossWolf || this is WorldBossSlime;
+    }
+
     private void ApplySporeMutationColor()
     {
         if (!IsMushroomEnemy()) return;
@@ -447,8 +454,8 @@ public class enemy : Attribute
         // 变红 + 倒下（Z 轴旋转 90°）的通用死亡演出。
         // 对于没有专用死亡精灵/动画的敌人（如狼人小怪、史莱姆），不再只是"定格站着 2 秒后消失"，
         // 而是有一个视觉上可辨识的倒地效果。
-        // 蘑菇人（Shoom）等有正经死亡动画的敌人跳过此效果。
-        if (!IsMushroomEnemy())
+        // 蘑菇人（Shoom）、Boss（Mushroom/Bat/Wolf/Slime）有专属死亡动画，跳过倒地效果
+        if (!IsMushroomEnemy() && !HasBossDeathAnimation())
         {
             SpriteRenderer sr = _cachedSpriteRenderer;
             if (sr == null) sr = GetComponent<SpriteRenderer>();

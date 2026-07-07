@@ -89,8 +89,16 @@ public class BossBat : enemy
         if (_state == BossState.dead) return;
         if (_busy) return; // 协程运行中，不干预
 
-        // 亡者领域：被控制为友军后，行为完全交给 MindControlled
-        if (GetComponent<MindControlled>() != null) return;
+        // 亡者领域：被控制为友军后，只保留召唤逻辑（让召唤的蝙蝠也是被控状态）
+        bool mindControlled = GetComponent<MindControlled>() != null;
+        if (mindControlled)
+        {
+            _summonTimer += Time.fixedDeltaTime;
+            float hDist = Mathf.Abs(transform.position.x - (role != null ? role.transform.position.x : transform.position.x));
+            if (hDist >= summonRange && _summonTimer >= summonCooldown)
+                StartCoroutine(SummonRoutine());
+            return; // 移动/索敌/回血交给 MindControlled
+        }
 
         // 自然回血：每秒按 healthmax 的百分比恢复。
         //   • 放在 MindControlled 短路之后 → 被亡者领域操控时不再 tick，等价于"失去自然回血词条"。
@@ -195,6 +203,7 @@ public class BossBat : enemy
 
         if (batPrefab != null && _batLayer != null)
         {
+            var mc = GetComponent<MindControlled>();
             for (int i = 0; i < summonCount; i++)
             {
                 float offsetX = (i % 2 == 0 ? 1f : -1f) * (i / 2 + 1) * 3f;
@@ -202,7 +211,18 @@ public class BossBat : enemy
                     transform.position.x + offsetX,
                     _fixedY,
                     transform.position.z);
-                Instantiate(batPrefab, pos, Quaternion.Euler(45, 0, 0), _batLayer);
+                GameObject obj = Instantiate(batPrefab, pos, Quaternion.Euler(45, 0, 0), _batLayer);
+                // 如果Boss被亡者领域控制，召唤的蝙蝠也变为被控友军
+                if (mc != null && obj != null)
+                {
+                    var batEn = obj.GetComponent<enemy>();
+                    if (batEn != null)
+                    {
+                        batEn._mindControlledFlag = true;
+                        var batMC = obj.AddComponent<MindControlled>();
+                        batMC.isWorldBoss = false;
+                    }
+                }
             }
         }
 

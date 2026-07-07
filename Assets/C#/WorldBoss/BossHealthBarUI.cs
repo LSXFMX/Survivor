@@ -99,7 +99,9 @@ public class BossHealthBarUI : MonoBehaviour
             if (e.bossSR != null && e.bossSR.sprite != null)
                 e.avatar.sprite = e.bossSR.sprite;
 
-            if (e.boss.health <= 0 || e.boss.rolestate == enemy.state.dead)
+            // 被亡者领域复活后，移除常规血条（有专属 ResurrectedBossHUD）
+            if (e.boss.health <= 0 || e.boss.rolestate == enemy.state.dead
+                || e.boss.GetComponent<MindControlled>() != null)
                 e.dead = true;
         }
 
@@ -119,6 +121,9 @@ public class BossHealthBarUI : MonoBehaviour
 
     public static void Register(enemy boss)
     {
+        if (boss == null) return;
+        // 已被亡者领域控制 → 由 ResurrectedBossHUD 显示
+        if (boss.GetComponent<MindControlled>() != null) return;
         if (Instance == null) EnsureInstance();
         if (Instance == null) return;
         Instance.DoRegister(boss);

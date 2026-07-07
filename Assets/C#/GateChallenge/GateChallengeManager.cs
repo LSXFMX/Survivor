@@ -79,11 +79,12 @@ public class GateChallengeManager : MonoBehaviour
     {
         if (_unlockedThisRun) return;
 
-        // 仅 N5 及以上难度才开放门挑战
+        // N5 及以上难度才开放门挑战
         if (DifficultyManager.Instance != null)
         {
             string label = DifficultyManager.Instance.Current.label;
-            if (label != "N5" && label != "N6" && label != "N7" && label != "N8") return;
+            if (label.StartsWith("N") && int.TryParse(label.Substring(1), out int n) && n >= 5) { }
+            else return;
         }
 
         _unlockedThisRun = true;
