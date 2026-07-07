@@ -37,6 +37,7 @@ public class WorldBossWolf : WolfBoss
                 {
                     _activated = true;
                     ToastManager.Show("世界Boss已激活！");
+                    BossHealthBarUI.Register(this);
                 }
             }
             if (!_activated) return;

@@ -43,6 +43,7 @@ public class WorldBossMushroomMan : BossMushroomMan
             {
                 _activated = true;
                 ToastManager.Show("世界Boss已激活！");
+                BossHealthBarUI.Register(this);
             }
             _lastHealth = health;
 
@@ -55,6 +56,7 @@ public class WorldBossMushroomMan : BossMushroomMan
                 {
                     _activated = true;
                     ToastManager.Show("世界Boss已激活！");
+                    BossHealthBarUI.Register(this);
                 }
             }
             if (!_activated) return;

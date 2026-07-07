@@ -175,9 +175,8 @@ public class WorldBossManager : MonoBehaviour
                 wbSlime.worldBossManager = this;
             }
 
-            // 头顶血条：在此处统一挂载，确保所有世界Boss都能显示（v9 关键修复）
-            if (obj.GetComponent<WorldBossHealthBar>() == null)
-                obj.AddComponent<WorldBossHealthBar>();
+            // UI Boss 血条：世界 Boss 激活后由各自 Activate/FixedUpdate 调用 BossHealthBarUI.Register
+            // （不在此处注册——此时还未激活，只有靠近/受击后才需要显示血条）
 
             Debug.Log($"[WorldBoss] {entry.faction} 世界Boss已生成");
         }

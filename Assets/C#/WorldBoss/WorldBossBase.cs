@@ -41,12 +41,7 @@ public class WorldBossBase : enemy
         // 世界Boss不受难度倍率影响，保持 prefab 原始数值
         // （如需倍率可在子类 override）
 
-        // 头顶血条：无论是否被亡者领域控制都要显示。
-        //   组件 LateUpdate 自驱动，只读 health/healthmax，不依赖任何"是否被控制"状态——
-        //   被 MindControlled 接管后 GameObject 不变、字段仍在，血条照常更新。
-        //   用 GetComponent + AddComponent 兜底：避免重复挂（重启场景或子类 OnEnable 二次触发）。
-        if (GetComponent<WorldBossHealthBar>() == null)
-            gameObject.AddComponent<WorldBossHealthBar>();
+        // UI Boss 血条由 BossHealthBarUI 管理（激活后注册），不再挂世界空间小血条
     }
 
     protected override void FixedUpdate()
@@ -95,6 +90,7 @@ public class WorldBossBase : enemy
         _activated = true;
         ToastManager.Show($"世界Boss已激活！");
         Debug.Log($"[WorldBoss] {faction} 世界Boss激活");
+        BossHealthBarUI.Register(this);
     }
 
     public override void Destroy1()

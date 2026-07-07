@@ -718,7 +718,7 @@ public class battleUI : MonoBehaviour
             GameObject obj = Instantiate(prefab, pos, Quaternion.Euler(45, 0, 0),
                 enemylayer != null ? enemylayer : null);
             spawnedSlimeBoss = obj.GetComponent<SlimeBoss>();
-            if (spawnedSlimeBoss != null) spawnedSlimeBoss.battleUI = this;
+            if (spawnedSlimeBoss != null) { spawnedSlimeBoss.battleUI = this; BossHealthBarUI.Register(spawnedSlimeBoss); }
             Debug.Log("[Boss] 史莱姆社群Boss已生成");
         }
         else if (isWolfBoss)
@@ -728,7 +728,7 @@ public class battleUI : MonoBehaviour
             GameObject obj = Instantiate(wolfBossPrefab, pos, Quaternion.Euler(45, 0, 0),
                 enemylayer != null ? enemylayer : null);
             spawnedWolfBoss = obj.GetComponent<WolfBoss>();
-            if (spawnedWolfBoss != null) spawnedWolfBoss.battleUI = this;
+            if (spawnedWolfBoss != null) { spawnedWolfBoss.battleUI = this; BossHealthBarUI.Register(spawnedWolfBoss); }
             Debug.Log("[Boss] 狼人社群Boss已生成");
         }
         else if (isBatBoss)
@@ -738,7 +738,7 @@ public class battleUI : MonoBehaviour
             GameObject obj = Instantiate(batBossPrefab, pos, Quaternion.Euler(45, 0, 0),
                 enemylayer != null ? enemylayer : null);
             spawnedBatBoss = obj.GetComponent<BossBat>();
-            if (spawnedBatBoss != null) spawnedBatBoss.battleUI = this;
+            if (spawnedBatBoss != null) { spawnedBatBoss.battleUI = this; BossHealthBarUI.Register(spawnedBatBoss); }
             Debug.Log("[Boss] 蝙蝠Boss已生成");
         }
         else if (isDoubleBoss)
@@ -752,7 +752,7 @@ public class battleUI : MonoBehaviour
                 GameObject obj = Instantiate(bossPrefab, pos, Quaternion.Euler(45, 0, 0),
                     enemylayer != null ? enemylayer : null);
                 BossMushroomMan b = obj.GetComponent<BossMushroomMan>();
-                if (b != null) b.battleUI = this;
+                if (b != null) { b.battleUI = this; BossHealthBarUI.Register(b); }
             }
             Debug.Log("[Boss] 双蘑菇人Boss已生成");
         }
@@ -763,7 +763,7 @@ public class battleUI : MonoBehaviour
             GameObject obj = Instantiate(bossPrefab, pos, Quaternion.Euler(45, 0, 0),
                 enemylayer != null ? enemylayer : null);
             spawnedBoss = obj.GetComponent<BossMushroomMan>();
-            if (spawnedBoss != null) spawnedBoss.battleUI = this;
+            if (spawnedBoss != null) { spawnedBoss.battleUI = this; BossHealthBarUI.Register(spawnedBoss); }
             Debug.Log("[Boss] 蘑菇人Boss已生成");
         }
     }

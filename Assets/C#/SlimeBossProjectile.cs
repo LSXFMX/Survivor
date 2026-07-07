@@ -32,10 +32,6 @@ public class SlimeBossProjectile : MonoBehaviour
 
         _baseTiltX = transform.rotation.eulerAngles.x;
         FaceDir();
-
-        // 朝向翻面：方向朝左时水平翻转 sprite，避免剑尖朝后
-        var sr = GetComponent<SpriteRenderer>();
-        if (sr != null) sr.flipX = _dir.x < 0f;
     }
 
     void Awake()
@@ -47,8 +43,24 @@ public class SlimeBossProjectile : MonoBehaviour
 
     private void FaceDir()
     {
+        // 用 XZ 平面角度设置 Z 轴旋转（sprite 默认朝右），朝左时翻转 Y scale
         float angle = Mathf.Atan2(_dir.z, _dir.x) * Mathf.Rad2Deg;
-        transform.rotation = Quaternion.Euler(_baseTiltX, 0f, angle);
+        bool faceLeft = Mathf.Abs(_dir.x) > 0.01f && _dir.x < 0f;
+        if (faceLeft)
+        {
+            // 朝左：镜像 + 修正角度（让开口朝左）
+            Vector3 s = transform.localScale;
+            s.y = -Mathf.Abs(s.y);
+            transform.localScale = s;
+            transform.rotation = Quaternion.Euler(_baseTiltX, 0f, 180f - angle);
+        }
+        else
+        {
+            Vector3 s = transform.localScale;
+            s.y = Mathf.Abs(s.y);
+            transform.localScale = s;
+            transform.rotation = Quaternion.Euler(_baseTiltX, 0f, angle);
+        }
     }
 
     void FixedUpdate()
