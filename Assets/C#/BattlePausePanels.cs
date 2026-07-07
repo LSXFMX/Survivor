@@ -223,7 +223,7 @@ public class SettingsPanelUI : MonoBehaviour
         if (damageSizeButton == null)
         {
             damageSizeButton = UIBuilder.CreateButton(rt, "DamageSizeBtn", "伤害数字大小: " + DamageNumberSettings.SizeLabel,
-                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
                 new Vector2(60f, y0 - 2 * rowH - 72f), new Vector2(autoBuildSize.x - 120f, 52f), font);
         }
 
@@ -253,7 +253,7 @@ public class SettingsPanelUI : MonoBehaviour
         {
             var r = ResolutionPresets[_currentResIndex];
             resolutionButton = UIBuilder.CreateButton(rt, "ResolutionBtn", "分辨率: " + r.label,
-                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
                 new Vector2(60f, y0 - 6 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
         }
 
