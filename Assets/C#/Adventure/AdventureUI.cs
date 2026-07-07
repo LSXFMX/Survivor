@@ -10,7 +10,7 @@ public class AdventureUI : MonoBehaviour
     public TextMeshProUGUI effectA;
     public Image iconA;
     public Button buttonA;
-    public GameObject rootA; // 可选：整个A容器（用于 SSR_11 解锁前隐藏A？默认隐藏C）
+    public GameObject rootA;
 
     [Header("选项 B")]
     public TextMeshProUGUI nameB;
@@ -20,13 +20,14 @@ public class AdventureUI : MonoBehaviour
     public Button buttonB;
     public GameObject rootB;
 
-    [Header("选项 C（SSR_11 气运之子 解锁后显示）")]
-    public TextMeshProUGUI nameC;
-    public TextMeshProUGUI descC;
-    public TextMeshProUGUI effectC;
-    public Image iconC;
-    public Button buttonC;
-    public GameObject rootC;
+    // 选项 C 由代码自动从 A/B 克隆，无需场景拖拽
+    private TextMeshProUGUI nameC;
+    private TextMeshProUGUI descC;
+    private TextMeshProUGUI effectC;
+    private Image iconC;
+    private Button buttonC;
+    private GameObject rootC;
+    private bool _cBuilt = false;
 
     public bool IsShowing => gameObject.activeSelf;
 
@@ -39,9 +40,50 @@ public class AdventureUI : MonoBehaviour
     {
         if (buttonA != null) buttonA.onClick.AddListener(OnClickA);
         if (buttonB != null) buttonB.onClick.AddListener(OnClickB);
-        if (buttonC != null) buttonC.onClick.AddListener(OnClickC);
-        // 默认隐藏C：场景里rootC不存在，Show时再激活
-        if (rootC != null) rootC.SetActive(false);
+    }
+
+    /// <summary>从 A 或 B 克隆出一个选项 C（仅首次、幂等）</summary>
+    private void EnsureOptionC()
+    {
+        if (_cBuilt || rootC != null) { _cBuilt = true; return; }
+        _cBuilt = true;
+
+        // 优先克隆 rootB（如果有），其次 rootA
+        GameObject template = rootB != null ? rootB : rootA;
+        if (template == null) return;
+
+        rootC = Instantiate(template, template.transform.parent);
+        rootC.name = "OptionC (auto)";
+        // 下移一个位置：取 B 的 anchoredPosition 再下移
+        RectTransform ta = rootA != null ? rootA.GetComponent<RectTransform>() : null;
+        RectTransform tb = rootB != null ? rootB.GetComponent<RectTransform>() : null;
+        RectTransform tc = rootC.GetComponent<RectTransform>();
+        if (tb != null && ta != null)
+        {
+            float dy = tb.anchoredPosition.y - ta.anchoredPosition.y;
+            tc.anchoredPosition = new Vector2(tb.anchoredPosition.x, tb.anchoredPosition.y + dy);
+        }
+
+        // 提取子控件
+        nameC   = FindTMPChild(rootC, "Name");
+        descC   = FindTMPChild(rootC, "Desc");
+        effectC = FindTMPChild(rootC, "Effect");
+        iconC   = rootC.GetComponentInChildren<Image>();
+        buttonC = rootC.GetComponent<Button>();
+        if (buttonC == null) buttonC = rootC.GetComponentInChildren<Button>();
+        if (buttonC != null)
+        {
+            buttonC.onClick.RemoveAllListeners();
+            buttonC.onClick.AddListener(OnClickC);
+        }
+        rootC.SetActive(false);
+    }
+
+    private static TextMeshProUGUI FindTMPChild(GameObject parent, string contains)
+    {
+        foreach (var t in parent.GetComponentsInChildren<TextMeshProUGUI>(true))
+            if (t.name.Contains(contains)) return t;
+        return null;
     }
 
     /// <summary>兼容旧调用：二选一</summary>
@@ -61,10 +103,14 @@ public class AdventureUI : MonoBehaviour
         FillOption(nameA, descA, effectA, iconA, rootA, optA);
         FillOption(nameB, descB, effectB, iconB, rootB, optB);
 
-        if (optC != null && rootC != null)
+        if (optC != null)
         {
-            FillOption(nameC, descC, effectC, iconC, rootC, optC);
-            rootC.SetActive(true);
+            EnsureOptionC();
+            if (rootC != null)
+            {
+                FillOption(nameC, descC, effectC, iconC, rootC, optC);
+                rootC.SetActive(true);
+            }
         }
         else if (rootC != null)
         {
@@ -90,12 +136,8 @@ public class AdventureUI : MonoBehaviour
     private void TryExecute(AdventureOptionBase option)
     {
         if (option == null) return;
-        // 源木在 AdventureEventManager.OnTriggerButtonClick 已扣除，这里不重复扣费。
         option.Execute();
-
-        // 第一次完成奇遇后解锁门挑战
         GateChallengeManager.Instance?.Unlock();
-
         Hide();
     }
 
