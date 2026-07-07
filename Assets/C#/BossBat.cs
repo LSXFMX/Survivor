@@ -28,7 +28,7 @@ public class BossBat : enemy
 
     [Header("自然回血")]
     [Tooltip("每秒按 healthmax 的百分比自然回血。被亡者领域操控后失效（MindControlled 一旦挂上，FixedUpdate 短路，回血不再 tick）。")]
-    public float naturalHealPctPerSecond = 0.02f; // 默认 2%/s
+    public float naturalHealPctPerSecond = 0f; // 关底蝙蝠Boss无回血（避免异常回血，吸血能力由世界Boss继承）
 
     [HideInInspector] public battleUI battleUI;
     // 累积小数血量，避免 RoundToInt 在 0.02×3000=60 这种整除场景之外丢精度

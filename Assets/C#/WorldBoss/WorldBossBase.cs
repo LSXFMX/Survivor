@@ -19,7 +19,14 @@ public class WorldBossBase : enemy
     public float       activateRange = 15f;
     public FactionType faction       = FactionType.Mushroom;
 
-    [Header("自然回血")]
+    [Header("世界Boss属性（v2：原关底Boss属性×2）")]
+    [Tooltip("激活时自动应用：原关底Boss血量×2 = 1000，攻击×2 = 100；世界Boss额外：+5%/s自然回血 + 0.1%吸血")]
+    public int   doubledHealthMax     = 1000;
+    public int   doubledAttack         = 100;
+    [Range(0f, 0.2f)] public float worldBossHealPctPerSecond = 0.05f; // +5%/s 回血
+    [Range(0f, 0.05f)] public float worldBossLifestealPct = 0.001f;  // 0.1% 吸血
+
+    [Header("自然回血（兼容旧字段）")]
     [Tooltip("每秒按 healthmax 的百分比自然回血；被亡者领域操控（MindControlled 挂载）后短路失效。仅激活后生效。")]
     public float naturalHealPctPerSecond = 0.02f;
     private float _healAccum;
@@ -38,8 +45,13 @@ public class WorldBossBase : enemy
 
         _ani = GetComponent<Animator>();
 
-        // 世界Boss不受难度倍率影响，保持 prefab 原始数值
-        // （如需倍率可在子类 override）
+        // 世界Boss属性应用：原关底Boss属性×2
+        // prefab 里保留原值（用于退回关底使用），世界Boss激活时强制覆盖为 ×2
+        healthmax = doubledHealthMax;
+        health    = healthmax;
+        atk       = doubledAttack;
+        // 世界Boss额外能力：+5%/s 自然回血
+        naturalHealPctPerSecond = worldBossHealPctPerSecond;
 
         // UI Boss 血条由 BossHealthBarUI 管理（激活后注册），不再挂世界空间小血条
     }
@@ -91,6 +103,43 @@ public class WorldBossBase : enemy
         ToastManager.Show($"世界Boss已激活！");
         Debug.Log($"[WorldBoss] {faction} 世界Boss激活");
         BossHealthBarUI.Register(this);
+    }
+
+    // 接触伤害：覆写以附加 0.1% 吸血
+    protected override void OnCollisionEnter(Collision collision)
+    {
+        if (rolestate == state.dead) return;
+        if (_mindControlledFlag) return;
+        if (GetComponent<MindControlled>() != null) return;
+        if (!collision.gameObject.CompareTag("Player")) { base.OnCollisionEnter(collision); return; }
+
+        Player p = collision.gameObject.GetComponent<Player>();
+        if (p == null || p.health <= 0) return;
+        if (p.IsDashInvincibleActive) return;
+        // 闪避
+        if (p.EVA > Random.value * 100f)
+        {
+            MissNumber.Show(atknumber, collision.transform.position);
+            return;
+        }
+        // 减伤
+        int dmg = Mathf.Max(1, (int)(atk - p.def));
+        p.health -= dmg;
+        if (DamageNumberSettings.Visible)
+        {
+            GameObject number = Instantiate(atknumber, collision.transform.position, default);
+            number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = dmg.ToString();
+        }
+        AudioManager.PlaySfx(AudioManager.SfxKey.Hit);
+        p.startturnred();
+        if (p.health <= 0) p.death();
+
+        // 0.1% 吸血
+        if (worldBossLifestealPct > 0f)
+        {
+            int heal = Mathf.Max(1, Mathf.RoundToInt(dmg * worldBossLifestealPct));
+            health = Mathf.Min(healthmax, health + heal);
+        }
     }
 
     public override void Destroy1()
