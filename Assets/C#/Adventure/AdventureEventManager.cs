@@ -70,10 +70,10 @@ public class AdventureEventManager : MonoBehaviour
         if (PlayerPrefs.GetInt("EQ_3_36", 0) == 1)
         {
             pickCount = 3; // SSR_11 气运之子：二选一变三选一
-            Debug.Log("[AdventureEventManager] SSR_11 气运之子已解锁，奇遇三选一");
         }
 
         var options = PickOptions(pickCount);
+        Debug.Log($"[AdventureEventManager] pickCount={pickCount} picked={options?.Count ?? 0}");
         if (options == null || options.Count < 2) return;
         if (pickCount >= 3 && options.Count >= 3)
             adventureUI?.Show(options[0], options[1], options[2], triggerThreshold);
