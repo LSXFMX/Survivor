@@ -90,21 +90,33 @@ public class BulletSporeField : MonoBehaviour
                 if (finalDamage < 1f) finalDamage = 1f;
 
                 int dealt = (int)finalDamage;
-                targetEnemy.health -= dealt;
 
-                if (targetEnemy.atknumber != null && DamageNumberSettings.Visible)
+                // 亡者领域：若目标已是复活友军（MindControlled），孢子治疗而非伤害
+                if (targetEnemy.GetComponent<MindControlled>() != null)
                 {
-                    GameObject num = Instantiate(
-                        targetEnemy.atknumber,
-                        targetEnemy.transform.position,
-                        Quaternion.identity);
-                    num.transform.localScale *= DamageNumberSettings.SizeScale;
-                    var txt = num.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
-                    txt.text = dealt.ToString();
-                    if (isCrit) txt.color = new Color32(255, 215, 0, 255);
+                    int before = targetEnemy.health;
+                    targetEnemy.health = Mathf.Min(targetEnemy.healthmax, targetEnemy.health + dealt);
+                    int actualHeal = targetEnemy.health - before;
+                    if (actualHeal > 0) MindControlled.SpawnAllyHealNumber(targetEnemy, actualHeal);
                 }
+                else
+                {
+                    targetEnemy.health -= dealt;
 
-                targetEnemy.startturnred();
+                    if (targetEnemy.atknumber != null && DamageNumberSettings.Visible)
+                    {
+                        GameObject num = Instantiate(
+                            targetEnemy.atknumber,
+                            targetEnemy.transform.position,
+                            Quaternion.identity);
+                        num.transform.localScale *= DamageNumberSettings.SizeScale;
+                        var txt = num.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
+                        txt.text = dealt.ToString();
+                        if (isCrit) txt.color = new Color32(255, 215, 0, 255);
+                    }
+
+                    targetEnemy.startturnred();
+                }
                 // 标记：在死亡前一段时间内受过孢子领域伤害（用于亡者领域复活判定）
                 TombDomainHook.MarkSporeDamage(targetEnemy);
                 // SSR_10 饮血剑：全局吸血（孢子领域 / 亡者领域伤害也吃 1%）
