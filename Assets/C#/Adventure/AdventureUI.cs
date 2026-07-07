@@ -55,6 +55,9 @@ public class AdventureUI : MonoBehaviour
         _optionC = optC;
         _cost = cost;
 
+        // 先激活面板，再设置子物体（避免父 inactive 时子 SetActive 被延迟）
+        gameObject.SetActive(true);
+
         FillOption(nameA, descA, effectA, iconA, rootA, optA);
         FillOption(nameB, descB, effectB, iconB, rootB, optB);
 
@@ -69,7 +72,6 @@ public class AdventureUI : MonoBehaviour
         }
 
         Time.timeScale = 0;
-        gameObject.SetActive(true);
     }
 
     public void Hide()
