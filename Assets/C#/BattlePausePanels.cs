@@ -10,6 +10,8 @@ using UnityEngine.UI;
 /// - 分身攻击范围显示开关（Toggle）→ AttackRangeIndicatorManager.CloneVisible
 /// - BGM 音量滑条 → AudioManager.SetBgmVolume
 /// - SFX 音量滑条 → AudioManager.SetSfxVolume
+/// - 窗口化 / 全屏切换（Toggle）
+/// - 分辨率切换按钮（循环切换常用分辨率）
 /// - 关闭按钮 → 自身 SetActive(false)
 ///
 /// 用法：
@@ -23,6 +25,8 @@ public class SettingsPanelUI : MonoBehaviour
     public Toggle cloneAttackRangeToggle;
     public Toggle damageNumberToggle;
     public Button  damageSizeButton;      // 伤害数字大小切换（大/中/小）
+    public Toggle fullscreenToggle;        // 窗口化/全屏
+    public Button  resolutionButton;       // 分辨率切换
     public Slider bgmSlider;
     public Slider sfxSlider;
     public Button closeButton;
@@ -31,7 +35,18 @@ public class SettingsPanelUI : MonoBehaviour
     [Tooltip("自动构建时使用的字体（null 则使用 TMP 默认字体）")]
     public TMP_FontAsset font;
     [Tooltip("自动构建时面板的尺寸（W,H）")]
-    public Vector2 autoBuildSize = new Vector2(700f, 720f);
+    public Vector2 autoBuildSize = new Vector2(700f, 850f);
+
+    // 常用分辨率预设
+    private static readonly (int w, int h, string label)[] ResolutionPresets =
+    {
+        (1920, 1080, "1920×1080"),
+        (1600, 900,  "1600×900"),
+        (1280, 720,  "1280×720"),
+        (1024, 768,  "1024×768"),
+        (800,  600,  "800×600"),
+    };
+    private int _currentResIndex = 0;
 
     private bool _built = false;
 
@@ -72,6 +87,18 @@ public class SettingsPanelUI : MonoBehaviour
             damageSizeButton.onClick.RemoveListener(OnDamageSizeChanged);
             damageSizeButton.onClick.AddListener(OnDamageSizeChanged);
         }
+        if (fullscreenToggle != null)
+        {
+            fullscreenToggle.SetIsOnWithoutNotify(Screen.fullScreen);
+            fullscreenToggle.onValueChanged.RemoveListener(OnFullscreenChanged);
+            fullscreenToggle.onValueChanged.AddListener(OnFullscreenChanged);
+        }
+        if (resolutionButton != null)
+        {
+            UpdateResolutionButtonText();
+            resolutionButton.onClick.RemoveListener(OnResolutionChanged);
+            resolutionButton.onClick.AddListener(OnResolutionChanged);
+        }
         if (bgmSlider != null)
         {
             bgmSlider.minValue = 0f; bgmSlider.maxValue = 1f;
@@ -108,9 +135,27 @@ public class SettingsPanelUI : MonoBehaviour
         if (txt != null) txt.text = "伤害数字大小: " + DamageNumberSettings.SizeLabel;
     }
 
+    private void OnFullscreenChanged(bool v)
+    {
+        Screen.fullScreen = v;
+    }
+    private void OnResolutionChanged()
+    {
+        _currentResIndex = (_currentResIndex + 1) % ResolutionPresets.Length;
+        var r = ResolutionPresets[_currentResIndex];
+        Screen.SetResolution(r.w, r.h, Screen.fullScreen);
+        UpdateResolutionButtonText();
+    }
+    private void UpdateResolutionButtonText()
+    {
+        if (resolutionButton == null) return;
+        var r = ResolutionPresets[_currentResIndex];
+        var txt = resolutionButton.GetComponentInChildren<TextMeshProUGUI>();
+        if (txt != null) txt.text = "分辨率: " + r.label;
+    }
 
-    private void OnBgmChanged(float v)        { AudioManager.SetBgmVolume(v); }
-    private void OnSfxChanged(float v)        { AudioManager.SetSfxVolume(v); }
+    private void OnBgmChanged(float v) { AudioManager.SetBgmVolume(v); }
+    private void OnSfxChanged(float v) { AudioManager.SetSfxVolume(v); }
 
     public void Close() { gameObject.SetActive(false); }
 
@@ -122,23 +167,23 @@ public class SettingsPanelUI : MonoBehaviour
         _built = true;
 
         // 已经全部拖好了就不构建
-        if (attackRangeToggle != null && cloneAttackRangeToggle != null && damageNumberToggle != null && bgmSlider != null && sfxSlider != null && closeButton != null) return;
+        if (attackRangeToggle != null && cloneAttackRangeToggle != null && damageNumberToggle != null
+            && fullscreenToggle != null && resolutionButton != null
+            && bgmSlider != null && sfxSlider != null && closeButton != null) return;
 
         var rt = GetComponent<RectTransform>();
         if (rt == null) rt = gameObject.AddComponent<RectTransform>();
-        // 撑满父级 + 居中（如果父级是 Canvas）
         rt.anchorMin = new Vector2(0.5f, 0.5f);
         rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0.5f);
         rt.anchoredPosition = Vector2.zero;
         rt.sizeDelta = autoBuildSize;
 
-        // 半透明黑色底板（覆盖整面板）
         if (GetComponent<Image>() == null)
         {
             var bg = gameObject.AddComponent<Image>();
             bg.color = new Color(0f, 0f, 0f, 0.78f);
-            bg.raycastTarget = true; // 拦截点击
+            bg.raycastTarget = true;
         }
 
         // 标题
@@ -147,7 +192,7 @@ public class SettingsPanelUI : MonoBehaviour
             new Vector2(0f, -50f), new Vector2(autoBuildSize.x - 40, 60), font);
 
         // 多行控件
-        float y0 = -130f;   // 第一行 Y（相对面板顶部）
+        float y0 = -130f;
         float rowH = 90f;
 
         // 行 1：攻击范围显示
@@ -191,6 +236,22 @@ public class SettingsPanelUI : MonoBehaviour
         {
             sfxSlider = UIBuilder.CreateSlider(rt, "SfxSlider", "音效音量",
                 new Vector2(60f, y0 - 4 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
+        }
+
+        // 行 6：窗口化切换
+        if (fullscreenToggle == null)
+        {
+            fullscreenToggle = UIBuilder.CreateToggle(rt, "FullscreenToggle", "全屏",
+                new Vector2(60f, y0 - 5 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
+        }
+
+        // 行 7：分辨率切换
+        if (resolutionButton == null)
+        {
+            var r = ResolutionPresets[_currentResIndex];
+            resolutionButton = UIBuilder.CreateButton(rt, "ResolutionBtn", "分辨率: " + r.label,
+                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(60f, y0 - 6 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
         }
 
         // 关闭按钮：右下角（避开所有控件行）
