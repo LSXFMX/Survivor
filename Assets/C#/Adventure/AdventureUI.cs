@@ -20,16 +20,13 @@ public class AdventureUI : MonoBehaviour
     public Button buttonB;
     public GameObject rootB;
 
-    [Header("选项 C（只需拖 rootC，子控件运行时自动查找）")]
+    [Header("选项 C — 拖任意子控件即可，缺的自动从 rootC 补齐")]
     public GameObject rootC;
-
-    // C 子控件从 rootC 运行时自动提取
-    private TextMeshProUGUI _nameC;
-    private TextMeshProUGUI _descC;
-    private TextMeshProUGUI _effectC;
-    private Image _iconC;
-    private Button _buttonC;
-    private bool _cResolved;
+    public TextMeshProUGUI nameC;
+    public TextMeshProUGUI descC;
+    public TextMeshProUGUI effectC;
+    public Image iconC;
+    public Button buttonC;
 
     public bool IsShowing => gameObject.activeSelf;
 
@@ -42,24 +39,28 @@ public class AdventureUI : MonoBehaviour
     {
         if (buttonA != null) buttonA.onClick.AddListener(OnClickA);
         if (buttonB != null) buttonB.onClick.AddListener(OnClickB);
+        ResolveOptionC();
         if (rootC != null) rootC.SetActive(false);
     }
 
     private void ResolveOptionC()
     {
-        if (_cResolved || rootC == null) return;
-        _cResolved = true;
+        if (rootC == null) return;
 
-        // 从 rootC 递归查找所有 TextMeshProUGUI 并按其名字匹配
-        foreach (var t in rootC.GetComponentsInChildren<TextMeshProUGUI>(true))
-        {
-            if (t.name.Contains("Name"))   _nameC   = t;
-            if (t.name.Contains("Desc"))   _descC   = t;
-            if (t.name.Contains("Effect")) _effectC = t;
-        }
-        _iconC   = rootC.GetComponentInChildren<Image>(true);
-        _buttonC = rootC.GetComponent<Button>() ?? rootC.GetComponentInChildren<Button>(true);
-        if (_buttonC != null) _buttonC.onClick.AddListener(OnClickC);
+        // 收集 rootC 下所有 TextMeshProUGUI，按层级/顺序补缺
+        var tmps = rootC.GetComponentsInChildren<TextMeshProUGUI>(true);
+        // 优先取直接子节点，不够再取孙子
+        var direct = new System.Collections.Generic.List<TextMeshProUGUI>();
+        foreach (var t in tmps) if (t.transform.parent == rootC.transform) direct.Add(t);
+        if (direct.Count == 0) direct.AddRange(tmps);
+
+        if (nameC   == null && direct.Count > 0) nameC   = direct[0];
+        if (descC   == null && direct.Count > 1) descC   = direct[1];
+        if (effectC == null && direct.Count > 2) effectC = direct[2];
+
+        if (iconC   == null) iconC   = rootC.GetComponentInChildren<Image>(true);
+        if (buttonC == null) buttonC = rootC.GetComponent<Button>() ?? rootC.GetComponentInChildren<Button>(true);
+        if (buttonC != null) buttonC.onClick.AddListener(OnClickC);
     }
 
     public void Show(AdventureOptionBase optA, AdventureOptionBase optB, int cost)
@@ -79,8 +80,7 @@ public class AdventureUI : MonoBehaviour
 
         if (optC != null && rootC != null)
         {
-            ResolveOptionC();
-            FillOption(_nameC, _descC, _effectC, _iconC, rootC, optC);
+            FillOption(nameC, descC, effectC, iconC, rootC, optC);
             rootC.SetActive(true);
         }
         else if (rootC != null)
