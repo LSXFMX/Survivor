@@ -70,12 +70,15 @@ public class AdventureEventManager : MonoBehaviour
             EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, SSR_FORTUNE_CHILD_ID))
         {
             pickCount = 3; // SSR_11 气运之子：二选一变三选一
+            Debug.Log("[AdventureEventManager] SSR_11 气运之子已解锁，奇遇三选一");
         }
 
         var options = PickOptions(pickCount);
         if (options == null || options.Count < 2) return;
-        if (pickCount == 3) adventureUI?.Show(options[0], options[1], options[2], triggerThreshold);
-        else                adventureUI?.Show(options[0], options[1], triggerThreshold);
+        if (pickCount >= 3 && options.Count >= 3)
+            adventureUI?.Show(options[0], options[1], options[2], triggerThreshold);
+        else
+            adventureUI?.Show(options[0], options[1], triggerThreshold);
     }
 
     private List<AdventureOptionBase> PickOptions(int count)
@@ -87,11 +90,16 @@ public class AdventureEventManager : MonoBehaviour
             if (opt.IsAvailableInCurrentDifficulty()) available.Add(opt);
         }
 
-        if (available.Count < 2)
+        // count 不能超过可用数量
+        count = Mathf.Min(count, available.Count);
+
+        if (count < 2)
         {
             Debug.LogWarning("[AdventureEventManager] 当前难度可用选项少于2个");
             return null;
         }
+
+        Debug.Log($"[AdventureEventManager] PickOptions count={count} available={available.Count}");
 
         List<AdventureOptionBase> picked = new List<AdventureOptionBase>();
         for (int i = 0; i < count; i++)
@@ -99,7 +107,6 @@ public class AdventureEventManager : MonoBehaviour
             int idx = Random.Range(0, available.Count);
             picked.Add(available[idx]);
             available.RemoveAt(idx);
-            if (available.Count == 0) break;
         }
         return picked;
     }
