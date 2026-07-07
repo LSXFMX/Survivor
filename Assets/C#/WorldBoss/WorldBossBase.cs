@@ -45,6 +45,9 @@ public class WorldBossBase : enemy
 
         _ani = GetComponent<Animator>();
 
+        var rb = GetComponent<Rigidbody>();
+        if (rb != null) rb.mass = 500f; // 世界Boss质量 > 玩家(100)
+
         // 世界Boss属性应用：原关底Boss属性×2
         // prefab 里保留原值（用于退回关底使用），世界Boss激活时强制覆盖为 ×2
         healthmax = doubledHealthMax;

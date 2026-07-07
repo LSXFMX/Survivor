@@ -109,6 +109,8 @@ public class SlimeBoss : enemy
         playerlayer = GameObject.Find("playerlayer")?.transform;
         anim = GetComponent<Animator>();
         _sr  = GetComponent<SpriteRenderer>();
+        var rb = GetComponent<Rigidbody>();
+        if (rb != null) rb.mass = 500f;
 
         if (DifficultyManager.Instance != null)
         {

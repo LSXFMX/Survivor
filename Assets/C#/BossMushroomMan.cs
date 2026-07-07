@@ -61,6 +61,9 @@ public class BossMushroomMan : enemy
 
         cachedAni = GetComponent<Animator>();
 
+        var rb = GetComponent<Rigidbody>();
+        if (rb != null) rb.mass = 500f; // Boss质量 > 玩家(100)
+
         if (DifficultyManager.Instance != null)
         {
             var cfg = DifficultyManager.Instance.Current;

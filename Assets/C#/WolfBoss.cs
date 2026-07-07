@@ -87,6 +87,8 @@ public class WolfBoss : enemy
         playerlayer = GameObject.Find("playerlayer")?.transform;
         anim = GetComponent<Animator>();
         _sr  = GetComponent<SpriteRenderer>();
+        var rb = GetComponent<Rigidbody>();
+        if (rb != null) rb.mass = 500f;
         // 缓存"实体（非 Trigger 且启用）"碰撞盒，冲刺时临时切 Trigger 让 Boss 穿过玩家而不顶推
         _bodyCol = null;
         foreach (var c in GetComponents<Collider>())

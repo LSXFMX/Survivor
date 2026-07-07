@@ -53,6 +53,9 @@ public class BossBat : enemy
         playerlayer = GameObject.Find("playerlayer")?.transform;
 
         _ani = GetComponent<Animator>();
+
+        var rb = GetComponent<Rigidbody>();
+        if (rb != null) rb.mass = 500f;
         _rb  = GetComponent<Rigidbody>();
 
         if (DifficultyManager.Instance != null)
