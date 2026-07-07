@@ -99,6 +99,8 @@ public class SettingsPanelUI : MonoBehaviour
             UpdateResolutionButtonText();
             resolutionButton.onClick.RemoveListener(OnResolutionChanged);
             resolutionButton.onClick.AddListener(OnResolutionChanged);
+            // 全屏时分辨率锁定原生，按钮灰掉；窗口化时可切换
+            RefreshResolutionInteractable();
         }
         if (bgmSlider != null)
         {
@@ -139,20 +141,38 @@ public class SettingsPanelUI : MonoBehaviour
     private void OnFullscreenChanged(bool v)
     {
         Screen.fullScreen = v;
+        // 全屏→窗口化时：设为原生分辨率；更新按钮状态
+        if (!v) Screen.SetResolution(Screen.currentResolution.width, Screen.currentResolution.height, false);
+        UpdateResolutionButtonText();
+        RefreshResolutionInteractable();
     }
     private void OnResolutionChanged()
     {
+        if (Screen.fullScreen) return; // 全屏不可切换分辨率
         _currentResIndex = (_currentResIndex + 1) % ResolutionPresets.Length;
         var r = ResolutionPresets[_currentResIndex];
-        Screen.SetResolution(r.w, r.h, Screen.fullScreen);
+        Screen.SetResolution(r.w, r.h, false);
         UpdateResolutionButtonText();
+    }
+    private void RefreshResolutionInteractable()
+    {
+        if (resolutionButton != null)
+            resolutionButton.interactable = !Screen.fullScreen;
     }
     private void UpdateResolutionButtonText()
     {
         if (resolutionButton == null) return;
-        var r = ResolutionPresets[_currentResIndex];
         var txt = resolutionButton.GetComponentInChildren<TextMeshProUGUI>();
-        if (txt != null) txt.text = "分辨率: " + r.label;
+        if (txt != null)
+        {
+            if (Screen.fullScreen)
+                txt.text = "分辨率: " + Screen.currentResolution.width + "×" + Screen.currentResolution.height + " (原生)";
+            else
+            {
+                var r = ResolutionPresets[_currentResIndex];
+                txt.text = "分辨率: " + r.label;
+            }
+        }
     }
 
     private void OnBgmChanged(float v) { AudioManager.SetBgmVolume(v); }
