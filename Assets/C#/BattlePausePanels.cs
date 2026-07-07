@@ -35,19 +35,17 @@ public class SettingsPanelUI : MonoBehaviour
     [Tooltip("自动构建时使用的字体（null 则使用 TMP 默认字体）")]
     public TMP_FontAsset font;
     [Tooltip("自动构建时面板的尺寸（W,H）")]
-    public Vector2 autoBuildSize = new Vector2(700f, 850f);
+    public Vector2 autoBuildSize = new Vector2(720f, 960f);
 
     // 常用分辨率预设
     private static readonly (int w, int h, string label)[] ResolutionPresets =
     {
+        (2560, 1440, "2K 2560×1440"),
         (1920, 1080, "1920×1080"),
         (1680, 1050, "1680×1050"),
         (1600, 900,  "1600×900"),
-        (1440, 900,  "1440×900"),
         (1366, 768,  "1366×768"),
         (1280, 720,  "1280×720"),
-        (1024, 768,  "1024×768"),
-        (800,  600,  "800×600"),
     };
     private int _currentResIndex = 0;
 
@@ -169,11 +167,7 @@ public class SettingsPanelUI : MonoBehaviour
         if (_built) return;
         _built = true;
 
-        // 已经全部拖好了就不构建
-        if (attackRangeToggle != null && cloneAttackRangeToggle != null && damageNumberToggle != null
-            && fullscreenToggle != null && resolutionButton != null
-            && bgmSlider != null && sfxSlider != null && closeButton != null) return;
-
+        // 永远同步 sizeDelta 到最新 autoBuildSize（即使控件已拖好，背景框也要扩展）
         var rt = GetComponent<RectTransform>();
         if (rt == null) rt = gameObject.AddComponent<RectTransform>();
         rt.anchorMin = new Vector2(0.5f, 0.5f);
@@ -181,6 +175,11 @@ public class SettingsPanelUI : MonoBehaviour
         rt.pivot = new Vector2(0.5f, 0.5f);
         rt.anchoredPosition = Vector2.zero;
         rt.sizeDelta = autoBuildSize;
+
+        // 已经全部拖好了就只更新背景框大小，不再创建重复控件
+        if (attackRangeToggle != null && cloneAttackRangeToggle != null && damageNumberToggle != null
+            && fullscreenToggle != null && resolutionButton != null
+            && bgmSlider != null && sfxSlider != null && closeButton != null) return;
 
         if (GetComponent<Image>() == null)
         {
