@@ -66,8 +66,8 @@ public class AdventureEventManager : MonoBehaviour
         if (adventureUI != null && adventureUI.IsShowing) return;
 
         int pickCount = 2;
-        if (EquipmentSystem.Instance != null &&
-            EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, SSR_FORTUNE_CHILD_ID))
+        // 直读 PlayerPrefs 绕过 EquipmentSystem singleton 初始化时序问题
+        if (PlayerPrefs.GetInt("EQ_3_36", 0) == 1)
         {
             pickCount = 3; // SSR_11 气运之子：二选一变三选一
             Debug.Log("[AdventureEventManager] SSR_11 气运之子已解锁，奇遇三选一");
