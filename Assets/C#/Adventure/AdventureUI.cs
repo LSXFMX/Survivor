@@ -20,13 +20,13 @@ public class AdventureUI : MonoBehaviour
     public Button buttonB;
     public GameObject rootB;
 
-    [Header("选项 C — 拖任意子控件即可，缺的自动从 rootC 补齐")]
-    public GameObject rootC;
+    [Header("选项 C（SSR_11 气运之子）")]
     public TextMeshProUGUI nameC;
     public TextMeshProUGUI descC;
     public TextMeshProUGUI effectC;
     public Image iconC;
     public Button buttonC;
+    public GameObject rootC;
 
     public bool IsShowing => gameObject.activeSelf;
 
@@ -39,28 +39,8 @@ public class AdventureUI : MonoBehaviour
     {
         if (buttonA != null) buttonA.onClick.AddListener(OnClickA);
         if (buttonB != null) buttonB.onClick.AddListener(OnClickB);
-        ResolveOptionC();
-        if (rootC != null) rootC.SetActive(false);
-    }
-
-    private void ResolveOptionC()
-    {
-        if (rootC == null) return;
-
-        // 收集 rootC 下所有 TextMeshProUGUI，按层级/顺序补缺
-        var tmps = rootC.GetComponentsInChildren<TextMeshProUGUI>(true);
-        // 优先取直接子节点，不够再取孙子
-        var direct = new System.Collections.Generic.List<TextMeshProUGUI>();
-        foreach (var t in tmps) if (t.transform.parent == rootC.transform) direct.Add(t);
-        if (direct.Count == 0) direct.AddRange(tmps);
-
-        if (nameC   == null && direct.Count > 0) nameC   = direct[0];
-        if (descC   == null && direct.Count > 1) descC   = direct[1];
-        if (effectC == null && direct.Count > 2) effectC = direct[2];
-
-        if (iconC   == null) iconC   = rootC.GetComponentInChildren<Image>(true);
-        if (buttonC == null) buttonC = rootC.GetComponent<Button>() ?? rootC.GetComponentInChildren<Button>(true);
         if (buttonC != null) buttonC.onClick.AddListener(OnClickC);
+        if (rootC != null) rootC.SetActive(false);
     }
 
     public void Show(AdventureOptionBase optA, AdventureOptionBase optB, int cost)
