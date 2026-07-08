@@ -120,3 +120,21 @@ tmp_*.ps1
 
 # CodeBuddy / 工作区元数据
 .codebuddy/
+
+# node 临时工具（抠图/音频合成/素材生成脚本）
+node_modules/
+chroma_dragon.js
+dragon_assets.js
+dragon_fx2.js
+dragon_fx3.js
+fix_gold.js
+gen_dragon_audio.js
+gen_dragon_bgm.js
+probe.js
+
+# image_gen / 抠图原始绿幕/洋红幕素材（最终透明产物已在 Resources/Dragon/）
+Assets/Resources/Dragon/_raw/
+Assets/Resources/Dragon/_raw2/
+Assets/Resources/Dragon/_p/
+Assets/Resources/Dragon/_p2/
+Assets/Resources/Dragon/_p3/

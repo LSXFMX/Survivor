@@ -44,12 +44,16 @@ public class AudioManager : MonoBehaviour
         XpPickup,      // 经验拾取.wav —— 经验石（轻量替代 Pickup，可按需切换）
         UiHover,       // 按键悬停.wav —— UI 悬停
         BossAppear,    // Boss出现.wav —— 普通 Boss 入场预警
+
+        DragonFlap,    // 龙翼扇动.wav —— 龙王进场翅膀扇动 whoosh
+        DragonRoar,    // 龙吼.wav —— 龙王咆哮
     }
 
     public enum BgmKey
     {
-        Main,    // 主BGM.mp3
-        Battle,  // 战斗BGM.mp3
+        Main,        // 主BGM.mp3
+        Battle,      // 战斗BGM.mp3
+        DragonBattle,// 龙王战.wav —— 最终龙王战斗曲（程序化合成，激昂）
     }
 
     private const string ResAudioRoot = "Audio/";
@@ -72,12 +76,15 @@ public class AudioManager : MonoBehaviour
         { SfxKey.XpPickup,     "经验拾取" },
         { SfxKey.UiHover,      "按键悬停" },
         { SfxKey.BossAppear,   "Boss出现" },
+        { SfxKey.DragonFlap,   "龙翼扇动" },
+        { SfxKey.DragonRoar,   "龙吼" },
     };
 
     private static readonly Dictionary<BgmKey, string> BgmFile = new Dictionary<BgmKey, string>
     {
-        { BgmKey.Main,   "主BGM" },
-        { BgmKey.Battle, "战斗BGM" },
+        { BgmKey.Main,         "主BGM" },
+        { BgmKey.Battle,       "战斗BGM" },
+        { BgmKey.DragonBattle, "龙王战" },
     };
 
     public static AudioManager Instance { get; private set; }

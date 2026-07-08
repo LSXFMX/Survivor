@@ -119,7 +119,8 @@ public class enemy : Attribute
     private bool HasBossDeathAnimation()
     {
         return this is BossMushroomMan || this is BossBat || this is WolfBoss || this is SlimeBoss
-            || this is WorldBossMushroomMan || this is WorldBossBat || this is WorldBossWolf || this is WorldBossSlime;
+            || this is WorldBossMushroomMan || this is WorldBossBat || this is WorldBossWolf || this is WorldBossSlime
+            || this is DragonBoss;
     }
 
     private void ApplySporeMutationColor()

@@ -49,6 +49,16 @@ public class battleUI : MonoBehaviour
     private float bossTimer = 0f;
     private const float BOSS_TIME_LIMIT = 90f;
 
+    // 龙王战：无时间限制，倒计时文本由 DragonBoss 接管（"呵呵" + 分阶段文字/颜色）
+    private bool _dragonBossMode = false;
+    /// <summary>进入龙王战模式：关闭 Boss 计时上限，倒计时文本交给 DragonBoss 控制。</summary>
+    public void EnterDragonBossMode() { _dragonBossMode = true; }
+    /// <summary>由 DragonBoss 设置倒计时区显示的文字与颜色。</summary>
+    public void SetBossCountdownText(string text, Color color)
+    {
+        if (timeui != null) { timeui.text = text; timeui.color = color; }
+    }
+
     [Header("难度限制对象")]
     public GameObject adventureUIRoot;  // 奇遇UI根对象（N1/N2隐藏）
     public GameObject yuanmuUIRoot;     // 源木UI根对象（N1/N2隐藏）
@@ -426,13 +436,17 @@ public class battleUI : MonoBehaviour
 
         if (bossPhase)
         {
-            bossTimer -= Time.deltaTime;
-            if (timeui != null)
-                timeui.text = "Boss: " + Mathf.CeilToInt(Mathf.Max(0, bossTimer)).ToString();
-            if (bossTimer <= 0f)
+            // 龙王战无时间限制：不倒计时、不因超时失败；倒计时文本由 DragonBoss 接管
+            if (!_dragonBossMode)
             {
-                bossPhase = false;
-                StartCoroutine(ReturnToMain(false));
+                bossTimer -= Time.deltaTime;
+                if (timeui != null)
+                    timeui.text = "Boss: " + Mathf.CeilToInt(Mathf.Max(0, bossTimer)).ToString();
+                if (bossTimer <= 0f)
+                {
+                    bossPhase = false;
+                    StartCoroutine(ReturnToMain(false));
+                }
             }
         }
 
@@ -677,6 +691,7 @@ public class battleUI : MonoBehaviour
 
         // N11/N12 生成史莱姆社群Boss，N9/N10 生成狼人社群Boss，N7/N8 生成吸血鬼Boss，
         // N6 / N12 生成双Boss，其余生成单蘑菇人Boss
+        bool isDragonBoss = label == "N13"; // N13 关底 = 最终龙王
         bool isSlimeBoss  = label == "N11" || label == "N12";
         bool isWolfBoss   = label == "N9"  || label == "N10";
         bool isBatBoss    = label == "N7"  || label == "N8";
@@ -687,7 +702,14 @@ public class battleUI : MonoBehaviour
         bossTimer   = BOSS_TIME_LIMIT;
         startcount  = false;
 
-        if (isDoubleBoss)
+        if (isDragonBoss)
+        {
+            // N13 关底：最终龙王（5 元素形态状态机，纯代码构建，借用蘑菇 bossPrefab 的 atknumber/expstone/material/red）
+            Vector3 pos = GetBossSpawnPos(0, 1);
+            DragonBoss dragon = DragonBossBuilder.Build(pos, enemylayer, bossPrefab, this);
+            if (dragon == null) Debug.LogWarning("[Boss] 最终龙王构建失败");
+        }
+        else if (isDoubleBoss)
         {
             // N6 → 双蘑菇boss，N12 → 双史莱姆boss
             GameObject prefab = null;
