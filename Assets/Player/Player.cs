@@ -51,6 +51,9 @@ public class Player : Attribute
     // 死亡防重入：避免多个敌人同帧打死时重复触发返回主菜单协程
     private bool _isDead = false;
 
+    /// <summary>复活时重置死亡防重入标志。公开方法替代反射（反射在 IL2CPP 剥离下会失败）。</summary>
+    public void ResetDeadFlag() { _isDead = false; }
+
     // ===== 分身跟随主体 =====
     /// <summary>分身的主体引用（由 AdventurePersonalityDissolve 在 clone 激活后设定）。</summary>
     [HideInInspector] public Player cloneOwner;

@@ -41,24 +41,17 @@ public class Bat : enemy
     // 友军蝙蝠保留原有"飞行+俯冲"行为，只是攻击目标从 Player 换成最近敌人。
     [System.NonSerialized] public bool isAllyMode = false;
 
-    // 性能：把 enemy 私有 OnEnable 的 MethodInfo 缓存为 static，避免每只蝙蝠生成时都做一次
-    // GetMethod 反射查找。蝙蝠潮（N7+）会同屏几十只，反射开销叠加可见。
-    private static System.Reflection.MethodInfo _baseEnemyOnEnable;
-
     void Awake()
     {
         _rb  = GetComponent<Rigidbody>();
         _ani = GetComponent<Animator>();
     }
 
-    protected new void OnEnable()
+    // enemy.OnEnable 现在是 protected virtual，直接 base 调用即可，
+    // 不再用反射（反射在 IL2CPP 剥离下会失败，导致蝙蝠初始化被跳过、复活后什么都不做）。
+    protected override void OnEnable()
     {
-        if (_baseEnemyOnEnable == null)
-        {
-            _baseEnemyOnEnable = typeof(enemy).GetMethod("OnEnable",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        }
-        _baseEnemyOnEnable?.Invoke(this, null);
+        base.OnEnable();
 
         _rb  = GetComponent<Rigidbody>();
         // _ani 已在 Awake 赋值

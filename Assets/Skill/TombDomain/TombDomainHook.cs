@@ -142,8 +142,11 @@ public static class TombDomainHook
         Debug.Log($"[亡者领域·复活] {en.gameObject.name} 概率判定通过 [{reason}] (roll={roll:F2} <= {chance:F2})");
 
         // 世界 Boss 判定：注意 WorldBossBat/WorldBossMushroomMan 实际继承自 BossBat/BossMushroomMan，
-        // 与孤立的 WorldBossBase 没有继承关系——不能用 `is WorldBossBase` 来判定。
-        bool isWorldBoss = (en is WorldBossBat) || (en is WorldBossMushroomMan) || (en is WorldBossBase);
+        // WorldBossWolf 继承自 WolfBoss，都与孤立的 WorldBossBase 没有继承关系——必须逐一列举。
+        // ★ 修复：之前漏了 WorldBossWolf → 狼人被当小怪走"每秒掉血 + 15s 强制 Destroy1"分支，
+        //   表现为"复活之后又死了/乱复活"。
+        bool isWorldBoss = (en is WorldBossBat) || (en is WorldBossMushroomMan)
+                        || (en is WorldBossWolf) || (en is WorldBossBase);
 
         // === 2026-06-12：亡者领域对关底 Boss 无效，只对世界 Boss 有效 ===
         // 关底 Boss（BossBat / BossMushroomMan 实例但不是世界 Boss 版本）不能被复活。

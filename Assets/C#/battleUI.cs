@@ -706,8 +706,7 @@ public class battleUI : MonoBehaviour
         {
             // N13 关底：最终龙王（5 元素形态状态机，纯代码构建，借用蘑菇 bossPrefab 的 atknumber/expstone/material/red）
             Vector3 pos = GetBossSpawnPos(0, 1);
-            DragonBoss dragon = DragonBossBuilder.Build(pos, enemylayer, bossPrefab, this);
-            if (dragon == null) Debug.LogWarning("[Boss] 最终龙王构建失败");
+            DragonBossBuilder.Build(pos, enemylayer, bossPrefab, this);
         }
         else if (isDoubleBoss)
         {
@@ -796,6 +795,8 @@ public class battleUI : MonoBehaviour
 
     public void Click_menu()
     {
+        // 三选一升级进行中不允许打开暂停菜单
+        if (choiceUI != null && choiceUI.activeSelf) return;
         // 奇遇选择中不允许打开暂停菜单
         if (AdventureEventManager.Instance != null &&
             AdventureEventManager.Instance.adventureUI != null &&
@@ -883,6 +884,7 @@ public class battleUI : MonoBehaviour
 
     private void ReturnToTitle()
     {
+        AudioManager.StopBgm();
         Time.timeScale = 1f;
         UnityEngine.SceneManagement.SceneManager.LoadScene(
             UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);

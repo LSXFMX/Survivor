@@ -36,6 +36,9 @@ public class DragonBoss : enemy
     [System.NonSerialized] public Sprite redDartSprite, fireBreathSprite, burnFlameSprite;
     // 蝙蝠血刃「毒镖」/ 黄金龙死亡全屏特效两帧
     [System.NonSerialized] public Sprite bloodBladeSprite, goldDeath1Sprite, goldDeath2Sprite;
+    // 史莱姆龙复用「史莱姆世界Boss」的手持武器资产（吞噬 5 次得剑、10 次得弓）
+    [System.NonSerialized] public Sprite     slimeSwordSprite, slimeBowSprite;
+    [System.NonSerialized] public GameObject slimeSwordQiPrefab, slimeArrowPrefab;
     [HideInInspector] public battleUI battleUI;
 
     public GameObject AtkNumberPrefab => atknumber;
@@ -63,6 +66,31 @@ public class DragonBoss : enemy
     private float _dmgMul = 1f;         // 黄金龙狂暴伤害倍率
     private float _healAccum;
     private static readonly int[] FLAP_SEQ = { 0, 1, 0, 2 }; // 扑翼循环
+
+    // ── 碰撞忽略：龙与其它单位（含被控制的友军）互不物理碰撞 ──
+    private Collider _selfCol; private float _ignoreColCd;
+    private void RefreshIgnoreCollisions()
+    {
+        if (_selfCol == null) _selfCol = GetComponent<Collider>();
+        if (_selfCol == null) return;
+        int myLayer = gameObject.layer;   // 敌人层：被控制的友军仍在此层
+        var hits = Physics.OverlapSphere(transform.position, 20f);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            var h = hits[i];
+            if (h == null || h == _selfCol) continue;
+            // 仅忽略同为敌人层的单位（友军/其它怪），不影响玩家层/子弹层对龙的命中判定
+            if (h.gameObject.layer != myLayer) continue;
+            Physics.IgnoreCollision(_selfCol, h, true);
+        }
+    }
+
+    // ── 史莱姆龙：吞噬增益 + 环绕武器（无限吞噬，剑/弓交替生成，绕 Boss 均匀公转防重叠）──
+    private int   _absorbedCount;
+    private float _cdDevour;
+    private readonly System.Collections.Generic.List<DragonSlimeWeapon> _slimeWeapons = new System.Collections.Generic.List<DragonSlimeWeapon>();
+    private float _orbitPhase;
+    private const float WEAPON_ORBIT_RADIUS = 5.5f;
 
     private static readonly Color FIRE_COL  = new Color(1f, 0.45f, 0.1f, 1f);
     private static readonly Color BAT_COL   = new Color(0.75f, 0.1f, 0.2f, 1f);
@@ -129,7 +157,6 @@ public class DragonBoss : enemy
         battleUI?.EnterDragonBossMode();
         battleUI?.SetBossCountdownText("呵呵", new Color(1f, 0.05f, 0.05f));
         AudioManager.StopBgm();
-        ToastManager.Show("<color=#FF2020>时间已到……最终龙王正在逼近！</color>");
 
         getrole();
         Vector3 ground = transform.position;
@@ -163,7 +190,6 @@ public class DragonBoss : enemy
 
         // 龙吼
         AudioManager.PlaySfx(AudioManager.SfxKey.DragonRoar);
-        ToastManager.Show("<color=#FF3010>—— 龙 吼 ——</color>");
         yield return new WaitForSeconds(0.5f);
 
         // 约2s 从天而降
@@ -204,6 +230,10 @@ public class DragonBoss : enemy
         float dt = Time.fixedDeltaTime;
         TickNaturalHeal(dt);
 
+        // 与友军/其它单位彻底不发生物理碰撞（防止被控制的友军把龙挤到天上）
+        _ignoreColCd -= dt;
+        if (_ignoreColCd <= 0f) { _ignoreColCd = 0.5f; RefreshIgnoreCollisions(); }
+
         if (_busy)
         {
             _busyWatchdog += dt;
@@ -211,6 +241,7 @@ public class DragonBoss : enemy
             {
                 StopAllCoroutines();
                 _busy = false; _transitioning = false; _invincible = false;
+                RestorePinnedSprite();
                 SetPlayersMovementLocked(false);
                 _cdA = 1f; _cdB = 1f; _busyWatchdog = 0f;
             }
@@ -222,15 +253,179 @@ public class DragonBoss : enemy
         if (role == null) { getrole(); return; }
         FaceTarget();
 
+        // 朝玩家移动但保持一定距离，不贴到玩家脸上
         Vector3 to = role.transform.position - transform.position; to.y = 0f;
-        if (to.magnitude > 3f)
+        if (to.magnitude > 6f)
             transform.position += to.normalized * moveSpeed * dt;
 
         TickContactDamage(dt);
 
+        // 史莱姆形态：吞噬增益 + 手持武器（独立于 A/B 技能）
+        if (_phase == DragonPhase.Slime) TickSlimeAbilities(dt);
+
         _cdA -= dt; _cdB -= dt;
         if (_cdA <= 0f) { TriggerSkillA(); }
         else if (_cdB <= 0f) { TriggerSkillB(); }
+    }
+
+    // ═══════════════════════ 史莱姆龙：吞噬增益 + 环绕武器 ═══════════════════════
+    private void TickSlimeAbilities(float dt)
+    {
+        // 吞噬：定时吸收史莱姆精华 → 永久 +5% 最大生命上限并同步回血，累计吞噬次数
+        _cdDevour -= dt;
+        if (_cdDevour <= 0f) { _cdDevour = 4.5f; DoDevour(); }
+
+        // 无限生成：每满 5 次吞噬生成一件武器（剑/弓交替：5剑 10弓 15剑 20弓 …），排上环绕轨道
+        int shouldHave = _absorbedCount / 5;
+        while (_slimeWeapons.Count < shouldHave)
+        {
+            bool isBow = (_slimeWeapons.Count % 2) == 1; // 0剑 1弓 2剑 3弓…
+            SpawnSlimeWeapon(isBow);
+        }
+
+        // 逐个武器到点开火
+        for (int i = 0; i < _slimeWeapons.Count; i++)
+        {
+            var w = _slimeWeapons[i];
+            if (w == null || w.busy) continue;
+            w.fireCd -= dt;
+            if (w.fireCd <= 0f)
+            {
+                w.fireCd = 6f;
+                if (w.isBow) StartCoroutine(SlimeBowDraw(w));
+                else StartCoroutine(SlimeSwordSwing(w));
+            }
+        }
+    }
+
+    private void DoDevour()
+    {
+        int hpGain = Mathf.Max(1, Mathf.RoundToInt(healthmax * 0.02f));
+        healthmax += hpGain;
+        health = Mathf.Min(healthmax, health + hpGain);
+        if (_invincible) _lockedHealth = health;
+        atk = Mathf.Max(atk + 1f, atk * 1.02f);
+        _absorbedCount++;
+        SpawnRingFx(transform.position, SLIME_COL, 5f);
+    }
+
+    // 生成一件环绕武器（世界空间，不作 Boss 子物体，避免受 Boss 翻转/缩放影响；由 LateUpdate 排布轨道）
+    private void SpawnSlimeWeapon(bool isBow)
+    {
+        Sprite spr = isBow ? slimeBowSprite : slimeSwordSprite;
+        var go = new GameObject(isBow ? "SlimeOrbitBow" : "SlimeOrbitSword");
+        go.transform.position = transform.position;
+        go.transform.rotation = Quaternion.Euler(45f, 0f, 0f);
+        float baseSize = spr != null ? Mathf.Max(0.01f, spr.bounds.size.x) : 1f;
+        float targetW = isBow ? 1.4f : 2.4f;   // 弓比剑小，避免过大喧宾夺主
+        float s = targetW / baseSize;
+        go.transform.localScale = new Vector3(s, s, s);
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = spr;
+        sr.material = new Material(Shader.Find("Sprites/Default"));
+        sr.sortingOrder = (_sr != null ? _sr.sortingOrder : 5) + 2;
+        var w = go.AddComponent<DragonSlimeWeapon>();
+        w.isBow = isBow; w.sr = sr;
+        w.fireCd = 2.5f + _slimeWeapons.Count * 0.4f; // 错开各武器首次开火
+        _slimeWeapons.Add(w);
+    }
+
+    // 每帧把武器均匀排在 Boss 周围的公转轨道上（防重叠）
+    private void UpdateSlimeWeaponOrbit()
+    {
+        int n = _slimeWeapons.Count;
+        if (n == 0) return;
+        _orbitPhase += Time.deltaTime * 40f; // 度/秒 公转
+        for (int i = 0; i < n; i++)
+        {
+            var w = _slimeWeapons[i];
+            if (w == null) continue;
+            if (w.busy) continue; // 开火演出期间不强制归位
+            float ang = (_orbitPhase + i * (360f / n)) * Mathf.Deg2Rad;
+            w.transform.position = transform.position +
+                new Vector3(Mathf.Cos(ang) * WEAPON_ORBIT_RADIUS, 0.8f, Mathf.Sin(ang) * WEAPON_ORBIT_RADIUS);
+        }
+    }
+
+    private IEnumerator SlimeSwordSwing(DragonSlimeWeapon w)
+    {
+        if (w == null) yield break;
+        w.busy = true;
+        Transform tr = w.transform;
+        yield return LerpWeaponZ(tr, 0f, -85f, 0.14f);   // 蓄力后仰
+        yield return LerpWeaponZ(tr, -85f, 90f, 0.12f);  // 猛挥
+        if (slimeSwordQiPrefab != null)
+        {
+            Vector3 dir = DirFromTo(tr.position, PlayerBodyPoint());
+            Vector3 spawnPos = tr.position + dir * 0.9f + Vector3.up * 0.3f;
+            var obj = Instantiate(slimeSwordQiPrefab, spawnPos, Quaternion.Euler(45, 0, 0));
+            var proj = obj.GetComponent<SlimeBossProjectile>();
+            if (proj != null) { proj.flipFacing = true; proj.Launch(dir, Dmg(1.2f), 12f, 1.6f); }
+        }
+        yield return LerpWeaponZ(tr, 90f, 0f, 0.18f);    // 收回
+        w.busy = false;
+    }
+
+    private IEnumerator SlimeBowDraw(DragonSlimeWeapon w)
+    {
+        if (w == null) yield break;
+        w.busy = true;
+        Transform tr = w.transform;
+        Vector3 baseScale = tr.localScale;
+        float t = 0f;
+        while (t < 0.28f && tr != null)
+        {
+            t += Time.deltaTime; float k = Mathf.Clamp01(t / 0.28f);
+            tr.localScale = new Vector3(baseScale.x * (1f - 0.15f * k), baseScale.y * (1f + 0.1f * k), baseScale.z);
+            yield return null;
+        }
+        if (slimeArrowPrefab != null && role != null)
+        {
+            Vector3 baseDir = DirFromTo(tr.position, PlayerBodyPoint());
+            float baseAng = Mathf.Atan2(baseDir.z, baseDir.x) * Mathf.Rad2Deg;
+            int cnt = 5; float spread = 35f;
+            float start = baseAng - spread * 0.5f, stepA = spread / (cnt - 1);
+            Vector3 spawnPos = tr.position + baseDir * 0.9f + Vector3.up * 0.3f;
+            int dmg = Dmg(0.6f);
+            for (int i = 0; i < cnt; i++)
+            {
+                float ang = (start + stepA * i) * Mathf.Deg2Rad;
+                Vector3 d = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang));
+                var obj = Instantiate(slimeArrowPrefab, spawnPos, Quaternion.Euler(45, 0, 0));
+                var proj = obj.GetComponent<SlimeBossProjectile>();
+                if (proj != null) proj.Launch(d, dmg, 18f, 3f);
+            }
+        }
+        if (tr != null) tr.localScale = baseScale;
+        w.busy = false;
+    }
+
+    private Vector3 PlayerBodyPoint()
+        => role != null ? role.transform.position + Vector3.up * 1.0f : transform.position + new Vector3(_facing, 0, 0);
+    private Vector3 DirFromTo(Vector3 from, Vector3 to)
+    {
+        Vector3 d = to - from; d.y = 0;
+        return d.sqrMagnitude > 0.01f ? d.normalized : new Vector3(_facing, 0, 0);
+    }
+
+    // 保留 X=45° 斜视角倾斜，绕 Z 旋转做挥砍
+    private IEnumerator LerpWeaponZ(Transform tr, float from, float to, float dur)
+    {
+        float t = 0f;
+        while (t < dur && tr != null)
+        {
+            t += Time.deltaTime;
+            tr.rotation = Quaternion.Euler(45f, 0f, Mathf.Lerp(from, to, Mathf.Clamp01(t / dur)));
+            yield return null;
+        }
+        if (tr != null) tr.rotation = Quaternion.Euler(45f, 0f, to);
+    }
+
+    private void DestroySlimeWeapons()
+    {
+        for (int i = 0; i < _slimeWeapons.Count; i++)
+            if (_slimeWeapons[i] != null) Destroy(_slimeWeapons[i].gameObject);
+        _slimeWeapons.Clear();
     }
 
     private void TriggerSkillA()
@@ -241,7 +436,7 @@ public class DragonBoss : enemy
             case DragonPhase.Bat:   _cdA = 10f; StartCoroutine(SkBatGrab());     break;
             case DragonPhase.Steel: _cdA = 10f; StartCoroutine(SkTornado());     break;
             case DragonPhase.Slime: _cdA = 7f;  StartCoroutine(SkSlimeSummon()); break;
-            case DragonPhase.Gold:  _cdA = 6f;  StartCoroutine(SkGoldControl()); break;
+            case DragonPhase.Gold:  _cdA = IsInnocencePlayer() ? 10f : 6f;  StartCoroutine(SkGoldControl()); break;
         }
     }
     private void TriggerSkillB()
@@ -299,6 +494,9 @@ public class DragonBoss : enemy
 
         float cur = (_phase == DragonPhase.Gold) ? goldScale : bossScale;
         transform.localScale = new Vector3(_facing * cur, cur, cur);
+
+        // 史莱姆环绕武器公转排布（防重叠）
+        if (_phase == DragonPhase.Slime && _slimeWeapons.Count > 0) UpdateSlimeWeaponOrbit();
     }
 
     private void FaceTarget()
@@ -324,8 +522,16 @@ public class DragonBoss : enemy
         Sca    = (_phase == DragonPhase.Gold) ? goldScale : bossScale;
         if (_phase == DragonPhase.Gold) moveSpeed = 6.5f;
 
+        // 进入史莱姆形态：重置吞噬计数（首次吞噬稍作缓冲）；其它形态清理环绕武器
+        if (_phase == DragonPhase.Slime)
+        {
+            _absorbedCount = 0;
+            _cdDevour = 3f;
+            DestroySlimeWeapons();
+        }
+        else DestroySlimeWeapons();
+
         battleUI?.SetBossCountdownText(PHASE_TEXT[_phaseIndex], PHASE_TEXT_COL[_phaseIndex]);
-        ToastManager.Show($"<color=#FF6060>龙王形态：{PHASE_TEXT[_phaseIndex]}</color>");
     }
 
     public override void Destroy1()
@@ -335,6 +541,8 @@ public class DragonBoss : enemy
 
         StopAllCoroutines();
         _busy = false;
+        RestorePinnedSprite();          // 兜底：被击杀打断钢化抓取时恢复玩家精灵角度
+        SetPlayersMovementLocked(false);
 
         if (_phaseIndex < LAST_COMBAT_PHASE) StartCoroutine(PhaseTransitionRoutine(_phaseIndex + 1));
         else StartCoroutine(DeathRoutine());
@@ -370,7 +578,7 @@ public class DragonBoss : enemy
         // 切换形态
         bool berserk = (nextIdx == 4);
         EnterPhase(nextIdx);
-        if (berserk) { DragonScreenFx.Flash(GOLD_COL, 1.0f); ToastManager.Show("<color=#FFD24A>黄金真龙觉醒——狂暴！</color>"); }
+        if (berserk) { DragonScreenFx.Flash(GOLD_COL, 1.0f); }
 
         // 从天而降
         getrole();
@@ -401,12 +609,13 @@ public class DragonBoss : enemy
     {
         _phase = DragonPhase.Dead; rolestate = state.dead;
         _busy = true; _invincible = false;
+        RestorePinnedSprite();
+        DestroySlimeWeapons();
         SetPlayersMovementLocked(false);
         battleUI?.OnBossDefeated();
         foreach (var col in GetComponents<Collider>()) col.enabled = false;
 
-        // 停战斗 BGM，让死亡演出更聚焦
-        AudioManager.StopBgm();
+        // 不在此处停止 BGM——BGM 持续到返回主菜单才停
         AudioManager.PlaySfx(AudioManager.SfxKey.DragonRoar);
         AudioManager.PlaySfx(AudioManager.SfxKey.TombRevive);
 
@@ -459,8 +668,8 @@ public class DragonBoss : enemy
                 if (tick <= 0f)
                 {
                     tick = 0.22f;
-                    SpawnBreathFx(dir, FIRE_COL, 9f, 0.4f);
-                    DamagePlayersInCone(transform.position, dir, 10f, 26f, Dmg(0.55f), 0f, true);
+                    SpawnBreathFx(dir, FIRE_COL, 18f, 0.4f);   // 火焰束尺寸翻倍
+                    DamagePlayersInCone(transform.position, dir, 14f, 28f, Dmg(0.55f), 0f, true);
                 }
                 yield return new WaitForFixedUpdate();
             }
@@ -497,6 +706,23 @@ public class DragonBoss : enemy
         {
             Player pl; Transform pt;
             if (!GetNearestPlayer(out pl, out pt)) yield break;
+
+            // 距离过远（>10 单位）抓空：只自己起跳落下，不抓玩家、无伤害/回血
+            Vector3 flatB = new Vector3(transform.position.x, 0f, transform.position.z);
+            Vector3 flatP = new Vector3(pt.position.x, 0f, pt.position.z);
+            if (Vector3.Distance(flatB, flatP) > 10f)
+            {
+                Vector3 jBase = transform.position; float jt = 0f;
+                while (jt < 0.7f)
+                {
+                    jt += Time.deltaTime; float k = jt / 0.7f;
+                    transform.position = jBase + new Vector3(0f, Mathf.Sin(k * Mathf.PI) * 6f, 0f); // 起跳-落下抛物线
+                    yield return null;
+                }
+                transform.position = jBase;
+                yield break;
+            }
+
             grabbed = pt; restoreY = pt.position.y;
             pl.movementLocked = true;
 
@@ -519,7 +745,9 @@ public class DragonBoss : enemy
             if (pl != null && pt != null && pl.health > 0)
             {
                 int d = Mathf.Max(1, Dmg(1.5f) - (int)pl.def);
-                pl.health -= d; ShowDamageNumber(pt.position, d); HealBoss(d); pl.startturnred();
+                pl.health -= d; ShowDamageNumber(pt.position, d); pl.startturnred();
+                // 空中绞杀：额外回复 Boss 5% 最大生命（叠加伤害吸血）
+                HealBoss(d + Mathf.Max(1, Mathf.RoundToInt(healthmax * 0.05f)));
                 DragonDrainDebuff.Apply(pl, this, Mathf.Max(1, Mathf.RoundToInt(atk * 0.12f)), 5f); // 吸血反噬 5s
                 if (pl.health <= 0) pl.death();
             }
@@ -555,7 +783,7 @@ public class DragonBoss : enemy
     }
 
     // ═══════════════════════ 钢化利爪龙技能 ═══════════════════════
-    // A：龙卷风追击
+    // A：连续释放 5 个龙卷风，一个比一个大（末个最大），路径带 3 次追踪修正
     private IEnumerator SkTornado()
     {
         _busy = true;
@@ -563,59 +791,99 @@ public class DragonBoss : enemy
         {
             FaceTarget();
             yield return new WaitForSeconds(0.3f);
-            SpawnTornado();
+            for (int i = 0; i < 5; i++)
+            {
+                float size = Mathf.Lerp(6f, 13f, i / 4f);  // 6 → 13，逐个增大，末个最大
+                SpawnTornado(size);
+                yield return new WaitForSeconds(0.4f);
+            }
         }
         finally { _busy = false; }
     }
-    // B：弹刺利爪震地固定（固定成功立即追加龙卷风）
+    // B：一小段冲刺 → 把玩家按在地上（玩家精灵按冲刺方向旋转90°，事后恢复；不位移玩家避免卡出地形）
+    private Transform _pinnedPlayerSprite; private Quaternion _pinnedSpriteOrigRot; private bool _pinnedSpriteSaved;
     private IEnumerator SkClawPin()
     {
         _busy = true;
+        Transform pinnedTf = null, pinnedSprite = null;
         try
         {
             FaceTarget();
             Vector3 dir = AimDir();
-            float t = 0f; // 后撤蓄力
-            while (t < 0.35f) { t += Time.fixedDeltaTime; transform.position -= dir * 4f * Time.fixedDeltaTime; yield return new WaitForFixedUpdate(); }
-            yield return new WaitForSeconds(0.12f);
-            // 瞬冲
-            t = 0f; bool pinned = false; Transform pinnedTf = null;
-            while (t < 0.32f)
+
+            // 后撤蓄力（一小段）
+            float t = 0f;
+            while (t < 0.28f) { t += Time.fixedDeltaTime; transform.position -= dir * 3.5f * Time.fixedDeltaTime; yield return new WaitForFixedUpdate(); }
+            yield return new WaitForSeconds(0.1f);
+
+            // 一小段冲刺：更大冲刺距离与抓取触发范围，仍限制总位移避免卡出地形
+            t = 0f; bool pinned = false;
+            float dashDist = 0f;
+            const float DASH_SPEED = 26f, DASH_MAX_DIST = 12f, GRAB_RANGE = 5.5f;
+            while (t < 0.46f && dashDist < DASH_MAX_DIST)
             {
-                t += Time.fixedDeltaTime;
-                transform.position += dir * 24f * Time.fixedDeltaTime;
+                float dd = DASH_SPEED * Time.fixedDeltaTime;
+                transform.position += dir * dd; dashDist += dd; t += Time.fixedDeltaTime;
                 if (playerlayer != null)
                     foreach (Transform p in playerlayer)
                     {
                         var pl = p.GetComponent<Player>();
                         if (pl == null || pl.health <= 0) continue;
-                        if (Vector3.Distance(p.position, transform.position) > 3f) continue;
-                        // 震地固定
-                        if (!pl.IsDashInvincibleActive)
+                        if (Vector3.Distance(p.position, transform.position) > GRAB_RANGE) continue;
+                        if (pl.IsDashInvincibleActive) continue;
+                        // 按倒：锁定移动 + 玩家精灵旋转90°（视觉躺倒，不动物理位置→不会卡出地形）
+                        pl.movementLocked = true; pinned = true; pinnedTf = p;
+                        if (p.childCount > 0)
                         {
-                            pl.movementLocked = true; pinned = true; pinnedTf = p;
-                            int d = Mathf.Max(1, Dmg(1.2f) - (int)pl.def);
-                            pl.health -= d; ShowDamageNumber(p.position, d); pl.startturnred();
-                            if (pl.health <= 0) pl.death();
+                            pinnedSprite = p.GetChild(0);
+                            _pinnedPlayerSprite = pinnedSprite;
+                            _pinnedSpriteOrigRot = pinnedSprite.localRotation;
+                            _pinnedSpriteSaved = true;
+                            // 倒下方向由 Boss 与玩家的 X 轴左右关系决定（玩家在 Boss 右侧→向右倒）
+                            float zRot = p.position.x >= transform.position.x ? -90f : 90f;
+                            pinnedSprite.localRotation = _pinnedSpriteOrigRot * Quaternion.Euler(0f, 0f, zRot);
                         }
+                        // 抓取处决：固定造成玩家「当前生命值」5% 的伤害（无视防御——已被按住）
+                        int d = Mathf.Max(1, Mathf.RoundToInt(pl.health * 0.05f));
+                        pl.health -= d; ShowDamageNumber(p.position, d); pl.startturnred();
+                        if (pl.health <= 0) pl.death();
+                        break;
                     }
                 if (pinned) break;
                 yield return new WaitForFixedUpdate();
             }
+
             SpawnRingFx(transform.position, STEEL_COL, 5f);
             if (pinned)
             {
                 SpawnTornado(); // 固定成功立即追加龙卷风
                 yield return new WaitForSeconds(1.2f);
-                if (pinnedTf != null) { var pl = pinnedTf.GetComponent<Player>(); if (pl != null) pl.movementLocked = false; }
             }
             else yield return new WaitForSeconds(0.3f);
         }
         finally
         {
+            // 恢复玩家精灵角度 + 解除固定
+            RestorePinnedSprite();
+            if (pinnedTf != null) { var pl = pinnedTf.GetComponent<Player>(); if (pl != null) pl.movementLocked = false; }
             SetPlayersMovementLocked(false);
             _busy = false;
         }
+    }
+
+    private void RestorePinnedSprite()
+    {
+        if (_pinnedSpriteSaved && _pinnedPlayerSprite != null)
+            _pinnedPlayerSprite.localRotation = _pinnedSpriteOrigRot;
+        _pinnedSpriteSaved = false; _pinnedPlayerSprite = null;
+    }
+
+    // 终极兜底：Boss 被 Destroy 时必然触发恢复，
+    // 修复"Boss 死亡/形态切换后玩家永久倒地不起"的 bug。
+    private void OnDestroy()
+    {
+        RestorePinnedSprite();
+        SetPlayersMovementLocked(false);
     }
 
     // ═══════════════════════ 史莱姆龙技能 ═══════════════════════
@@ -663,16 +931,49 @@ public class DragonBoss : enemy
         try
         {
             FaceTarget();
-            DragonScreenFx.Flash(GOLD_COL, 1.0f);
-            AudioManager.PlaySfx(AudioManager.SfxKey.DragonRoar);
-            SetPlayersMovementLocked(true);
-            // 伤害 + 强控 1s
-            DamagePlayersInRadius(transform.position, 20f, Dmg(0.8f), 0f, 0f, false);
-            yield return new WaitForSeconds(1.0f);
-            SetPlayersMovementLocked(false);
+            if (IsInnocencePlayer())
+            {
+                // 无罪反噬：不播金边控制动画、无罪不被控制；改播无罪复活瞪眼全屏动画，龙反被控制、限制移动3s
+                DragonScreenFx.Flash(GOLD_COL, 1.0f); // 纯装饰：金黄闪光，不影响控制逻辑
+                ReviveBossEffect.Spawn(transform, false);
+                AudioManager.PlaySfx(AudioManager.SfxKey.DragonRoar);
+                StunEffect.Attach(transform, 3f);   // 龙自己被控制：头顶眩晕转圈 3s
+                if (!_innocenceControlLineShown)
+                {
+                    _innocenceControlLineShown = true;
+                    GameConsole.ShowOnScreen("我不会再被这肮脏的囚笼控制哪怕一秒", 0.8f);
+                    yield return new WaitForSeconds(3.0f);   // 第一句 1.6s 消失 → 1.4s 空档 → 第二句出现
+                    GameConsole.ShowOnScreen("从今往后，只有我控制别人！", 2.0f);
+                    // 无需再等，合计 3s 龙被控制结束
+                }
+                else
+                {
+                    yield return new WaitForSeconds(3f);   // 龙被控制、限制移动3s
+                }
+            }
+            else
+            {
+                DragonScreenFx.Flash(GOLD_COL, 1.0f);
+                AudioManager.PlaySfx(AudioManager.SfxKey.DragonRoar);
+                SetPlayersMovementLocked(true);
+                // 伤害 + 强控 1s；被控制的玩家头顶出现眩晕转圈
+                DamagePlayersInRadius(transform.position, 20f, Dmg(0.8f), 0f, 0f, false);
+                if (playerlayer != null)
+                    foreach (Transform p in playerlayer)
+                    {
+                        var pl = p.GetComponent<Player>();
+                        if (pl != null && pl.health > 0) StunEffect.Attach(p, 1f);
+                    }
+                yield return new WaitForSeconds(1.0f);
+                SetPlayersMovementLocked(false);
+            }
         }
         finally { SetPlayersMovementLocked(false); _busy = false; }
     }
+
+    // 当前玩家是否为「无罪」(SKIN_TOMB==3)
+    private bool _innocenceControlLineShown = false;
+    private bool IsInnocencePlayer() => PlayerPrefs.GetInt("SelectedSkin", 0) == 3;
     // B：金龙鳞环射（成圈后追踪玩家）
     private IEnumerator SkGoldScaleRing()
     {
@@ -825,18 +1126,18 @@ public class DragonBoss : enemy
         proj.SetOrientToVelocity(true);   // 弹体箭头/形状始终朝向飞行方向
     }
 
-    private void SpawnTornado()
+    private void SpawnTornado(float size = 9f)
     {
         Vector3 spawn = transform.position + new Vector3(_facing * 1.5f, 0f, 0f);
         var go = new GameObject("DragonTornado");
         go.transform.position = spawn;
         var proj = go.AddComponent<DragonProjectile>();
-        // 龙卷风：钢蓝色笼罩、2 倍大小（9 单位）、较慢、命中减速、全程缓慢追踪玩家
+        // 龙卷风：钢蓝色笼罩、可变大小、较慢、命中减速；路径带 3 次追踪修正后直线
         proj.Init(this, role != null ? role.transform : null, tornadoSprite, new Color(0.55f, 0.75f, 1f, 0.92f),
-                  Dmg(0.7f), 5.5f, 2.5f, false, true, false, 9f);
+                  Dmg(0.7f), 5.5f, 2.5f, false, true, false, size);
         proj.SetOrientToVelocity(false);  // 龙卷风保持竖直漏斗，不随方向翻转
         proj.SetSpin(220f);               // 左右 churn 摆动营造旋卷感
-        proj.SetContinuousHoming(true);   // 全程追踪，缓慢逼近玩家
+        proj.SetCorrections(3);           // 飞行中修正 3 次追踪玩家，之后直线
     }
 
     private void SpawnBreathFx(Vector3 dir, Color col, float length, float life)

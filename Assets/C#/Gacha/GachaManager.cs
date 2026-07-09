@@ -228,9 +228,21 @@ public class GachaManager : MonoBehaviour
 
         // SSR_11 气运之子 (equipmentSystemId=36)：累计抽卡 550 次后加入卡池
         //   注：equipmentId=14 已被 N6 通关装备「夯子之心」占用，故用 36（0-35 全占）
-        //   poolCount=1 与其他 SSR 一致（一次性道具，不可重复抽到）
-        if (ssrItems != null && !RarityIdExists(ssrItems, 11))
+        //   poolCount=1（一次性道具，不可重复抽到）
+        //   ★ 修复"反复出现 + 乱填多份"：场景里 ssrItems 列表可能误填了多份 rarityId=11 条目
+        //     （手动编辑场景时复制粘贴遗留），导致卡池里出现 7 个"气运之子"占位。
+        //     这里先**清空所有 rarityId=11 的旧条目**，再插入唯一一份正确条目，
+        //     并清掉旧 PoolKey（避免 InitPool 用旧值）。
+        if (ssrItems != null)
         {
+            // 步骤 1：清掉所有 rarityId=11 的旧条目
+            int removed = ssrItems.RemoveAll(it => it != null && it.rarityId == 11);
+            if (removed > 1)
+                Debug.LogWarning($"[GachaManager] SSR_11 气运之子：检测到 {removed} 份重复条目，已合并为 1 份");
+            // 步骤 2：清掉可能错乱的 PoolKey（残留旧 poolCount/已抽出标记）
+            //   PoolKey 命名 = "GachaPool_SSR_11"，直接删除
+            PlayerPrefs.DeleteKey("GachaPool_SSR_11");
+            // 步骤 3：插入唯一一份正确条目
             ssrItems.Add(new GachaItemData
             {
                 itemName = "气运之子",
@@ -243,7 +255,7 @@ public class GachaManager : MonoBehaviour
                 poolRefillAmount = 0,
                 icon = null, // 由 EnsureSsrItemIcons 运行时注入
             });
-            Debug.Log("[GachaManager] 已补出 SSR_11 气运之子（场景未配，代码兜底）");
+            Debug.Log("[GachaManager] 已补出 SSR_11 气运之子（poolCount=1 一次性）");
         }
 
         // 确保所有 SSR/UR 条目的 icon 字段不为空（场景 Inspector 未拖入时运行时补全）
@@ -262,7 +274,13 @@ public class GachaManager : MonoBehaviour
             if (item == null || item.icon != null) continue;
             string path = GetSsrIconPath(item.equipmentSystemId);
             if (string.IsNullOrEmpty(path)) continue;
-            var tex = RuntimeAssetLoader.LoadTexture(null, null, path);
+            // ★ 修复：之前传 null 作为 Resources 路径 → 打包后图标加载完全失败。
+            //   现从 editor 路径（含 .png）自动推导 Resources 相对路径（去 .png + 去 Assets/Resources/ 前缀）。
+            //   同时保留 editorAssetsRelativePath 用于编辑器兜底。
+            string resourcesPath = null;
+            if (path.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase))
+                resourcesPath = path.Substring(0, path.Length - 4); // 去扩展名
+            var tex = RuntimeAssetLoader.LoadTexture(null, resourcesPath, path);
             if (tex != null)
                 item.icon = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
         }

@@ -76,6 +76,8 @@ public class MindControlled : MonoBehaviour
     // 友军伤害数字：在 45° 视角的绿色友军身体上，原 prefab 的红色字会被身体遮住、绿字又会和身体融色。
     // 改用高亮的"魔法紫"，并抬到敌人头顶上方一点，避免被友军挡住。
     private static readonly Color AllyDamageColor = new Color(0.95f, 0.55f, 1.00f, 1f);
+    // 复活世界Boss的伤害数字颜色：暗紫色，与小怪（亮紫）明确区分
+    private static readonly Color BossAllyDamageColor = new Color(0.35f, 0.10f, 0.55f, 1f);
     // 头顶"亡者徽记"颜色：与流光统一的紫色基底，呼吸只调 alpha
     private static readonly Color AllyMarkColor = new Color(0.85f, 0.45f, 1.00f, 1f);
     // 注意：脚下紫色光圈（AllyRingColor / ApplyAllyRing）已于 2026-06 移除——
@@ -87,6 +89,12 @@ public class MindControlled : MonoBehaviour
     // 后亲自驱动 `ismove` 参数（enemy 基类 FixedUpdate 在 WorldBossBase 第 45 行被短路了，
     // 不会再 SetBool）。Setup 里赋值，FixedUpdate 里移动/停止时同步设置。
     private Animator _aniRef;
+    // 是否已探测过该 Boss 的 Animator 具备哪些驱动方式（ismove 参数 / 具名行走·待机 state）。
+    private bool _animProbed;
+    private bool _hasIsMoveParam;
+    private int  _walkStateHash, _idleStateHash;
+    private bool _hasWalkState, _hasIdleState;
+
     private float _aliveTimer;
     private float _decayAccum;
     private float _attackCooldown;
@@ -263,6 +271,10 @@ public class MindControlled : MonoBehaviour
             //   解决：MindControlled 自己缓存 Animator，每次移动/停止时主动 SetBool。
             //   蝙蝠分支（_batSelfDriven）由 Bat 自己 SetMove，不在这里管。
             _aniRef = _en.GetComponent<Animator>();
+
+            // Boss 独有修复：亡者领域复活后重置为"基础形态"
+            //   史莱姆 Boss 死时可能是巨龙形态 →复活后不能以龙形态出现（啥也不干）。
+            if (_en is SlimeBoss slime) slime.ResetToSlimeForm();
         }
         ApplyShadowIslesOverlay();
         ApplyAllyHeadMark();
@@ -355,7 +367,7 @@ public class MindControlled : MonoBehaviour
                     // 朝向 + 行走动画：脸朝玩家，播 ismove
                     float sca = Mathf.Abs(_en != null && _en.Sca != 0 ? _en.Sca : 1f);
                     transform.localScale = new Vector3((dir.x >= 0 ? 1f : -1f) * sca, sca, sca);
-                    if (_aniRef != null) _aniRef.SetBool("ismove", true);
+                    DriveMoveAnim(true);
                 }
                 // d ≤ leash：什么都不做，让下方索敌 / 攻击逻辑自然接管
             }
@@ -400,23 +412,61 @@ public class MindControlled : MonoBehaviour
                 // Boss用MovePosition（推开障碍），小怪用transform.position（不推大怪）
                 if (isWorldBoss && _rb != null) _rb.MovePosition(newPos);
                 else transform.position = newPos;
-                // 驱动行走动画（修"被控制 boss 只播待机"）。Animator 可能为 null（无动画的简单怪），安全跳过。
-                if (_aniRef != null) _aniRef.SetBool("ismove", true);
+                // 驱动行走动画（兼容有/无 ismove 参数：狼人走具名 state）。
+                DriveMoveAnim(true);
             }
             else
             {
                 _attackCooldown -= Time.fixedDeltaTime;
                 if (_attackCooldown <= 0f) { _attackCooldown = _attackInterval; DealMeleeHit(tgt); }
                 // 进入近战范围 → 停下来打 → 切回待机动画
-                if (_aniRef != null) _aniRef.SetBool("ismove", false);
+                DriveMoveAnim(false);
             }
         }
         else
         {
             // 没有索敌目标 → 待机
-            if (_aniRef != null) _aniRef.SetBool("ismove", false);
+            DriveMoveAnim(false);
         }
         SyncOverlayFrameIfChanged();
+    }
+
+    /// <summary>
+    /// 统一驱动"行走/待机"动画。兼容三类 Boss 的不同 Animator：
+    ///   • 蘑菇/蝙蝠：有 bool 参数 "ismove" → SetBool；
+    ///   • 狼人：无参数、用具名 state（WolfWalk/HumanWalk 行走，无独立待机）→ Animator.Play 具名 state。
+    /// 首次调用惰性探测 Animator 能力并缓存，避免每帧字符串比较。
+    /// </summary>
+    private void DriveMoveAnim(bool moving)
+    {
+        if (_aniRef == null) return;
+
+        if (!_animProbed)
+        {
+            _animProbed = true;
+            // 探测 ismove 参数
+            var ps = _aniRef.parameters;
+            if (ps != null)
+                for (int i = 0; i < ps.Length; i++)
+                    if (ps[i].type == AnimatorControllerParameterType.Bool && ps[i].name == "ismove")
+                    { _hasIsMoveParam = true; break; }
+
+            // 探测具名 state（覆盖狼人 WolfWalk/HumanWalk、通用 move/idle 等）
+            foreach (string walk in new[] { "WolfWalk", "HumanWalk", "move", "move 0", "Move", "run", "Run" })
+                if (_aniRef.HasState(0, Animator.StringToHash(walk))) { _walkStateHash = Animator.StringToHash(walk); _hasWalkState = true; break; }
+            foreach (string idle in new[] { "Idel", "idle", "Idle", "WolfWalk", "HumanWalk" })
+                if (_aniRef.HasState(0, Animator.StringToHash(idle))) { _idleStateHash = Animator.StringToHash(idle); _hasIdleState = true; break; }
+        }
+
+        // 优先用 ismove 参数（蘑菇/蝙蝠 controller 有过渡动画，SetBool 最平滑）
+        if (_hasIsMoveParam) { _aniRef.SetBool("ismove", moving); return; }
+
+        // 无参数（狼人）：直接 Play 具名 state。避免每帧重复 Play 打断动画——仅在目标 state 改变时切。
+        int want = moving ? (_hasWalkState ? _walkStateHash : 0) : (_hasIdleState ? _idleStateHash : 0);
+        if (want == 0) return;
+        var cur = _aniRef.GetCurrentAnimatorStateInfo(0);
+        if (cur.shortNameHash != want && cur.fullPathHash != want)
+            _aniRef.Play(want, 0, 0f);
     }
 
     public static void HealAllControlledBosses(int amount)
@@ -500,12 +550,12 @@ public class MindControlled : MonoBehaviour
 
         if (isWorldBoss)
         {
-            // 复活Boss：攻击=治疗（tomb主题复活），弹绿色治愈数字
-            int before = en.health;
-            en.health = Mathf.Min(en.healthmax, en.health + dmg);
-            int actual = en.health - before;
-            if (actual > 0) SpawnAllyHealNumber(en, actual);
+            // 复活Boss：正常造成伤害 + 暗紫色伤害数字（与小怪亮紫色区分）
+            en.health -= dmg;
+            SpawnAllyDamageNumber(en, dmg, BossAllyDamageColor);
+            en.startturnred();
             TombDomainHook.MarkAllyDamage(en);
+            if (en.health <= 0) en.Destroy1();
         }
         else
         {
@@ -543,7 +593,8 @@ public class MindControlled : MonoBehaviour
     /// 友军造成伤害的飘字：抬到敌人头顶 + 高亮紫色，
     /// 由 MindControlled / Bat 友军模式 等共用——所以是 internal static。
     /// </summary>
-    public static void SpawnAllyDamageNumber(enemy victim, int dmg)
+    /// <param name="customColor">可选自定义颜色（null=小怪亮紫色；传入 BossAllyDamageColor=暗紫色区分）。</param>
+    public static void SpawnAllyDamageNumber(enemy victim, int dmg, Color? customColor = null)
     {
         if (victim == null || victim.atknumber == null) return;
         if (!DamageNumberSettings.Visible) return;
@@ -560,8 +611,7 @@ public class MindControlled : MonoBehaviour
         if (txt != null)
         {
             txt.text = dmg.ToString();
-            txt.color = AllyDamageColor;
-            // 字号也直接放大，部分 atknumber prefab localScale 可能被忽略
+            txt.color = customColor ?? AllyDamageColor;
             txt.fontSize *= 1.3f;
         }
     }

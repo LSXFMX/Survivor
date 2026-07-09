@@ -35,7 +35,6 @@ public static class DragonBossBuilder
             frames[i][0] = LoadBody(PhaseBase[i]);
             frames[i][1] = LoadBody(PhaseBase[i] + "_1");
             frames[i][2] = LoadBody(PhaseBase[i] + "_2");
-            if (frames[i][0] == null) Debug.LogWarning($"[DragonBoss] 形态精灵缺失：Resources/Dragon/{PhaseBase[i]}.png");
             if (frames[i][1] == null) frames[i][1] = frames[i][0]; // 帧缺失回退到基帧
             if (frames[i][2] == null) frames[i][2] = frames[i][0];
         }
@@ -66,7 +65,9 @@ public static class DragonBossBuilder
         var box = go.AddComponent<BoxCollider>();
         Vector2 spriteSize = frames[0][0] != null ? (Vector2)frames[0][0].bounds.size : new Vector2(8.5f, 8.5f);
         box.size = new Vector3(spriteSize.x * 0.5f, spriteSize.y * 0.62f, 2f);
-        box.center = Vector3.zero; box.isTrigger = false;
+        box.center = Vector3.zero;
+        // Trigger：不与玩家发生物理碰撞（不会推着玩家跑），但仍能被子弹 OnTriggerEnter 命中
+        box.isTrigger = true;
 
         var dragon = go.AddComponent<DragonBoss>();
         dragon.phaseFrames    = frames;
@@ -83,6 +84,22 @@ public static class DragonBossBuilder
         dragon.bloodBladeSprite = LoadProj("dragon_p_bloodblade");
         dragon.goldDeath1Sprite = LoadProj("dragon_gold_death1");
         dragon.goldDeath2Sprite = LoadProj("dragon_gold_death2");
+
+        // 史莱姆龙复用「史莱姆世界Boss」的手持武器资产（剑/弓精灵 + 剑气/箭矢 prefab）
+        var slimeTemplate = Resources.Load<GameObject>("WorldBoss/SlimeBoss");
+        if (slimeTemplate == null) slimeTemplate = Resources.Load<GameObject>("WorldBoss/SlimeBossWorld");
+        if (slimeTemplate != null)
+        {
+            var sb = slimeTemplate.GetComponent<SlimeBoss>();
+            if (sb != null)
+            {
+                dragon.slimeSwordSprite   = sb.heldSwordSprite;
+                dragon.slimeBowSprite     = sb.heldBowSprite;
+                dragon.slimeSwordQiPrefab = sb.swordQiPrefab;
+                dragon.slimeArrowPrefab   = sb.arrowPrefab;
+            }
+        }
+
         dragon.battleUI = ui;
 
         enemy tmpl = template != null ? template.GetComponent<enemy>() : null;
@@ -91,7 +108,6 @@ public static class DragonBossBuilder
             dragon.atknumber = tmpl.atknumber;
             dragon.expstone  = tmpl.expstone;
         }
-        else Debug.LogWarning("[DragonBoss] 模板 Boss 为空，atknumber/expstone 未注入");
 
         // 材质用龙王独立的无光照材质：normal=原色不受光照冲淡；red=红色 tint（命中短暂红闪后还原）。
         // 不再借用模板(蘑菇)材质——那会导致「发白」以及被持续攻击时「常驻红」。
@@ -102,7 +118,6 @@ public static class DragonBossBuilder
 
         go.SetActive(true);
         BossHealthBarUI.Register(dragon);
-        Debug.Log("[Boss] 最终龙王 Boss 已构建（N13 关底）");
         return dragon;
     }
 }

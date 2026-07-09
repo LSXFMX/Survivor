@@ -182,11 +182,11 @@ public class EquipmentInitializer : MonoBehaviour
             ToastManager.Show("[装备] 正常铁剑：攻击力 +5");
         }
 
-        // N4 通关装备 7：正常铁甲 - 生命值 +50
+        // N4 通关装备 7：正常铁甲 - 防御力+1
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 7))
         {
-            if (player != null) { player.healthmax += 50; player.health += 50; }
-            ToastManager.Show("[装备] 正常铁甲：生命值 +50");
+            if (player != null) player.def += 1;
+            ToastManager.Show("[装备] 正常铁甲：防御力 +1");
         }
 
         // N4 通关装备 8：恐惧之心 - 闪避率 +1
@@ -203,11 +203,11 @@ public class EquipmentInitializer : MonoBehaviour
             ToastManager.Show("[装备] 源木之剑：攻击力 +10");
         }
 
-        // N5 通关装备 10：源木轻甲 - 移动速度 +2
+        // N5 通关装备 10：源木轻甲 - 防御力+2
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 10))
         {
-            if (player != null) player.speed += 2;
-            ToastManager.Show("[装备] 源木轻甲：移动速度 +2");
+            if (player != null) player.def += 2;
+            ToastManager.Show("[装备] 源木轻甲：防御力 +2");
         }
 
         // N5 通关装备 11：好奇之心 - 暴击率 +2
@@ -224,11 +224,11 @@ public class EquipmentInitializer : MonoBehaviour
             ToastManager.Show("[装备] 蘑菇之剑：攻击力 +15");
         }
 
-        // N6 通关装备 13：蘑菇之甲 - 生命值+100
+        // N6 通关装备 13：蘑菇之甲 - 生命值+200
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 13))
         {
-            if (player != null) { player.healthmax += 100; player.health += 100; }
-            ToastManager.Show("[装备] 蘑菇之甲：生命值+100");
+            if (player != null) { player.healthmax += 200; player.health += 200; }
+            ToastManager.Show("[装备] 蘑菇之甲：生命值+200");
         }
 
         // N6 通关装备 14：孢子之心 - 自然回血 +1
@@ -245,11 +245,11 @@ public class EquipmentInitializer : MonoBehaviour
             ToastManager.Show("[装备] 熟练者之剑：攻击力＋15");
         }
 
-        // N7 通关装备 16：熟练者之甲 - 防御力＋1
+        // N7 通关装备 16：熟练者之甲 - 防御力＋2
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 16))
         {
-            if (player != null) player.def += 1;
-            ToastManager.Show("[装备] 熟练者之甲：防御力＋1");
+            if (player != null) player.def += 2;
+            ToastManager.Show("[装备] 熟练者之甲：防御力＋2");
         }
 
         // N7 通关装备 17：熟练者之心 - 经验效率＋1
@@ -333,11 +333,11 @@ public class EquipmentInitializer : MonoBehaviour
             ToastManager.Show("[装备] 粘液之剑：攻击力＋20");
         }
 
-        // N11 通关装备 28：粘液之甲 - 生命值＋100
+        // N11 通关装备 28：粘液之甲 - 生命值＋300
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 28))
         {
-            if (player != null) { player.healthmax += 100; player.health += 100; }
-            ToastManager.Show("[装备] 粘液之甲：生命值＋100");
+            if (player != null) { player.healthmax += 300; player.health += 300; }
+            ToastManager.Show("[装备] 粘液之甲：生命值＋300");
         }
 
         // N11 通关装备 29：粘液之心 - 经验效率＋2
@@ -682,6 +682,15 @@ public class EquipmentInitializer : MonoBehaviour
 
         // R_0：remake 的刷新次数由 ChoiceUI 直接读取存档数量并同步，避免初始化时序导致丢失。
 
+        // R_1：量子源木 - 每件开局源木 +1（每抽到一件就在开局时多获得 1 点源木）
+        //   修复：之前 ApplyGachaEquipments 里完全没处理 R_1，导致抽到量子源木后没有任何效果。
+        int quantumYuanMuCount = GachaManager.Instance.GetItemCount(GachaRarity.R, 1);
+        if (quantumYuanMuCount > 0)
+        {
+            YuanMuManager.Instance?.Add(quantumYuanMuCount);
+            ToastManager.Show($"[抽卡] 量子源木 ×{quantumYuanMuCount}：开局源木 +{quantumYuanMuCount}");
+        }
+
         // SR_0：经验灵果 - 每叠加一个，经验效率 DR +0.1
         int fruitCount = GachaManager.Instance.GetItemCount(GachaRarity.SR, 0);
         if (fruitCount > 0 && player != null)
@@ -731,17 +740,16 @@ public class EquipmentInitializer : MonoBehaviour
             ToastManager.Show($"[抽卡] 暴伤灵果 ×{cdFruitCount}：暴击伤害 +{cdFruitCount * 0.1f:F1}");
         }
 
-        // SR_6：速度灵果 - 每叠加一个，移动速度 +0.05（满池 100 件 = +5 移速）
-        //   注意：Attribute.speed 是 int，无法直接 += 0.05f；
-        //   采用「累积法」：count × 0.05 = 加成数值，向下取整后整体一次性加到 player.speed。
-        //   例：count=20 → +1；count=100 → +5；count=15 → +0（不足 20 累计不取整）。
-        //   这样数值含义与 SR_3 生命灵果（每件 +1）类似但分母更细，符合策划"100 个池"的设计。
+        // SR_6：速度灵果 - 每叠加一个，移动速度 +0.03（满池 100 件 = +3 移速）
+        //   注意：Attribute.speed 是 int，无法直接 += 0.03f；
+        //   采用「累积法」：count × 0.03 = 加成数值，向下取整后整体一次性加到 player.speed。
+        //   例：count=34 → +1；count=100 → +3；count=33 → +0。
         int spdFruitCount = GachaManager.Instance.GetItemCount(GachaRarity.SR, 6);
         if (spdFruitCount > 0 && player != null)
         {
-            int spdBonus = Mathf.FloorToInt(spdFruitCount * 0.05f);
+            int spdBonus = Mathf.FloorToInt(spdFruitCount * 0.03f);
             if (spdBonus > 0) player.speed += spdBonus;
-            ToastManager.Show($"[抽卡] 速度灵果 ×{spdFruitCount}：移动速度 +{spdBonus}（每20件+1）");
+            ToastManager.Show($"[抽卡] 速度灵果 ×{spdFruitCount}：移动速度 +{spdBonus}（每34件+1）");
         }
 
         // R_2：读档币 - 每张可在死亡时原地复活一次，每局仅可使用一次。

@@ -66,7 +66,10 @@ public class enemy : Attribute
         move,
         dead,
     }
-    void OnEnable()
+    // 改为 protected virtual：让子类（如 Bat）可直接 base.OnEnable() 调用，
+    // 避免用反射 GetMethod("OnEnable", NonPublic) —— 后者在 IL2CPP 构建 + 代码剥离下
+    // 会因方法被 strip 而反射失败（返回 null），导致复活的蝙蝠初始化被跳过、什么都不做。
+    protected virtual void OnEnable()
     {
         _sporeMutationRollDecided = false;
         _sporeMutationUseColor = false;
@@ -270,6 +273,8 @@ public class enemy : Attribute
                     }
                     AudioManager.PlaySfx(AudioManager.SfxKey.Hit);
                     collision.gameObject.GetComponent<Player>().startturnred();
+                    // 史莱姆粘液：命中使玩家速度 -1，持续 2s（重复命中刷新时长）
+                    if (rolename == "史莱姆") SlimeSlowDebuff.Apply(Player);
                     if (Player.health <= 0)
                     {
                         Player.death();

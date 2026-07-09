@@ -44,16 +44,22 @@ public class DragonProjectile : MonoBehaviour
     private float _spin;
     private float _baseScaleX = 1f, _baseScaleY = 1f;
 
-    // 追踪修正窗口：发射后前若干秒持续朝玩家身体中心修正（会俯冲下压），之后锁定方向直线飞。
-    private bool  _continuousHoming = false; // 龙卷风：全程追踪
-    private const float HOMING_WINDOW = 0.65f;
-    private float _homingTimer;
+    // 两段式追踪：发射后仅在两个时刻朝玩家身体中心「修正」一次方向，之后完全直线。
+    // 这样命中概率高、但不是持续强追踪（玩家仍可通过走位/闪避躲开）。
+    private bool  _continuousHoming = false; // 龙卷风：全程缓慢追踪（例外）
+    private int   _correctionsLeft;           // 剩余修正次数（普通弹=2）
+    private float _correctionTimer;           // 距下次修正的计时
+    private const float FIRST_CORRECTION_DELAY = 0.12f; // 首次修正延迟
+    private const float CORRECTION_INTERVAL    = 0.24f; // 两次修正间隔
+    private const float CORRECTION_STRENGTH     = 0.7f;  // 单次朝目标转向的比例（<1 → 非强追踪）
     private static readonly Vector3 BODY_OFFSET = new Vector3(0f, 1.0f, 0f); // 玩家身体中心（脚底 pivot 上抬）
 
     public void SetOrientToVelocity(bool v) { _orientToVel = v; }
     public void SetSpin(float degPerSec) { _spinDegPerSec = degPerSec; }
     /// <summary>龙卷风：全程缓慢追踪玩家（不锁方向）。</summary>
     public void SetContinuousHoming(bool v) { _continuousHoming = v; }
+    /// <summary>设置飞行中追踪修正次数（超过默认 2 次，如龙卷风 3 次）。</summary>
+    public void SetCorrections(int n) { _correctionsLeft = Mathf.Max(0, n); _correctionTimer = FIRST_CORRECTION_DELAY; }
 
     public void Init(DragonBoss owner, Transform target, Sprite sprite, Color tint,
                      int dmg, float speed, float slowSec, bool lifesteal, bool homing, bool burn, float worldSize = 1.3f)
@@ -69,6 +75,8 @@ public class DragonProjectile : MonoBehaviour
         transform.rotation = Quaternion.Euler(45f, 0f, 0f);
         FitScale();
         _hitRadius = Mathf.Clamp(_worldSize * 0.6f, 1.2f, 3.5f);
+        _correctionsLeft = _homing ? 2 : 0;   // 普通追踪弹：飞行中修正两次
+        _correctionTimer = FIRST_CORRECTION_DELAY;
 
         // 初始方向：朝玩家身体中心（含 Y）→ 弹体会从 Boss 高处斜向下冲，最终能落到玩家身上
         if (_target != null)
@@ -116,24 +124,30 @@ public class DragonProjectile : MonoBehaviour
         float dt = Time.deltaTime;
         _life -= dt;
 
-        // 追踪修正：全程（龙卷风）或初始窗口内，朝玩家身体中心（3D，含 Y）转向 → 会俯冲下压
-        bool doHome = false;
-        if (_target != null)
+        // 追踪修正：龙卷风全程缓慢追踪；普通弹在两个时刻各修正一次方向（含 Y → 俯冲下压），之后直线
+        if (_continuousHoming && _target != null)
         {
             var plc = _target.GetComponent<Player>();
             if (plc != null && plc.health > 0)
             {
-                if (_continuousHoming) doHome = true;
-                else if (_homing && _homingTimer < HOMING_WINDOW) { doHome = true; _homingTimer += dt; }
+                Vector3 d = TargetPoint() - transform.position;
+                if (d.sqrMagnitude > 0.001f) _dir = Vector3.Slerp(_dir, d.normalized, 3f * dt).normalized;
             }
         }
-        if (doHome)
+        else if (_correctionsLeft > 0 && _target != null)
         {
-            Vector3 d = TargetPoint() - transform.position;
-            if (d.sqrMagnitude > 0.001f)
+            _correctionTimer -= dt;
+            if (_correctionTimer <= 0f)
             {
-                float rate = _continuousHoming ? 3f : 9f; // 窗口内强修正，保证下压命中
-                _dir = Vector3.Slerp(_dir, d.normalized, rate * dt).normalized;
+                var plc = _target.GetComponent<Player>();
+                if (plc != null && plc.health > 0)
+                {
+                    Vector3 d = TargetPoint() - transform.position;
+                    if (d.sqrMagnitude > 0.001f)
+                        _dir = Vector3.Slerp(_dir, d.normalized, CORRECTION_STRENGTH).normalized; // 单次修正（非强追踪）
+                }
+                _correctionsLeft--;
+                _correctionTimer = CORRECTION_INTERVAL;
             }
         }
 
@@ -233,6 +247,86 @@ public class DragonScreenFx : MonoBehaviour
 }
 
 /// <summary>
+/// 头顶「眩晕转圈」特效：在目标头顶生成一圈旋转的星星环（世界空间独立物体，每帧跟随目标头顶），
+/// 用于表现被控制（无论敌我）的眩晕状态。素材 Resources/Effects/StunStars。
+/// duration>0 到期自毁；duration≤0 则常驻，需外部 Destroy。目标销毁时自动清理。
+/// </summary>
+public class StunEffect : MonoBehaviour
+{
+    private Transform _target;
+    private float _life, _spin, _bob;
+    private SpriteRenderer _sr;
+    private static Sprite _shared; private static bool _loaded;
+
+    public static StunEffect Attach(Transform target, float duration)
+    {
+        if (target == null) return null;
+        var go = new GameObject("StunEffect");
+        var fx = go.AddComponent<StunEffect>();
+        fx.Init(target, duration);
+        return fx;
+    }
+
+    private void Init(Transform target, float duration)
+    {
+        _target = target; _life = duration;
+        _sr = gameObject.AddComponent<SpriteRenderer>();
+        _sr.sprite = LoadSprite();
+        _sr.material = new Material(Shader.Find("Sprites/Default"));
+        _sr.color = new Color(1f, 1f, 1f, 0.95f);
+        _sr.sortingOrder = 32760;
+        float baseSize = _sr.sprite != null ? Mathf.Max(0.01f, _sr.sprite.bounds.size.x) : 1f;
+        float s = 2f / baseSize;   // 星星环直径约 2 世界单位
+        transform.localScale = new Vector3(s, s, s);
+        UpdatePose(0f);
+    }
+
+    private static Sprite LoadSprite()
+    {
+        if (!_loaded) { _shared = Resources.Load<Sprite>("Effects/StunStars"); _loaded = true; }
+        return _shared;
+    }
+
+    private float HeadWorldY()
+    {
+        float top = _target.position.y + 1f;
+        var rends = _target.GetComponentsInChildren<SpriteRenderer>();
+        for (int i = 0; i < rends.Length; i++)
+        {
+            if (rends[i] == _sr) continue;
+            float m = rends[i].bounds.max.y;
+            if (m > top) top = m;
+        }
+        return top + 0.6f;
+    }
+
+    private void UpdatePose(float dt)
+    {
+        _bob += dt; _spin += 200f * dt;
+        float y = HeadWorldY() + Mathf.Sin(_bob * 3f) * 0.12f;
+        transform.position = new Vector3(_target.position.x, y, _target.position.z);
+        // X=45° 斜视角倾斜 + 绕 Z 自旋 → 头顶星星环呈椭圆绕圈（经典眩晕表现）
+        transform.rotation = Quaternion.Euler(45f, 0f, _spin);
+    }
+
+    private void LateUpdate()
+    {
+        if (_target == null) { Destroy(gameObject); return; }
+        UpdatePose(Time.deltaTime);
+        if (_life > 0f) { _life -= Time.deltaTime; if (_life <= 0f) Destroy(gameObject); }
+    }
+}
+
+/// <summary>史莱姆龙环绕武器：仅承载状态（是否为弓 / 开火冷却 / 是否正在开火演出），位置由 DragonBoss 排布。</summary>
+public class DragonSlimeWeapon : MonoBehaviour
+{
+    public bool  isBow;
+    public float fireCd;
+    public bool  busy;
+    [System.NonSerialized] public SpriteRenderer sr;
+}
+
+/// <summary>
 /// 全屏 AI 特效叠层：把一张特效精灵铺满屏幕（ScreenSpaceOverlay），随时间缩放/旋转/淡入淡出。
 /// 用于黄金龙死亡演出（金色大爆炸 + 旋转光芒），不受 Time.timeScale 影响。
 /// </summary>
@@ -301,6 +395,30 @@ public class DragonSlowDebuff : MonoBehaviour
         _pl = pl;
         if (!_applied) { _originalSpeed = pl.speed; pl.speed = Mathf.Max(1, Mathf.RoundToInt(_originalSpeed * Mathf.Clamp01(factor))); _applied = true; }
         _timer = Mathf.Max(_timer, duration);
+    }
+    private void Update() { if (!_applied) return; _timer -= Time.deltaTime; if (_timer <= 0f) Restore(); }
+    private void Restore() { if (_applied && _pl != null) _pl.speed = _originalSpeed; _applied = false; Destroy(this); }
+    private void OnDisable() { if (_applied && _pl != null) _pl.speed = _originalSpeed; _applied = false; }
+}
+
+/// <summary>史莱姆粘液减速：每次受史莱姆小怪碰撞伤害时，速度 -1 持续 2s，重复命中刷新时长。</summary>
+public class SlimeSlowDebuff : MonoBehaviour
+{
+    private Player _pl; private int _originalSpeed; private float _timer; private bool _applied;
+    private const float DURATION = 2f;
+    private const int SLOW_AMOUNT = 1;
+
+    public static void Apply(Player pl)
+    {
+        if (pl == null) return;
+        var d = pl.GetComponent<SlimeSlowDebuff>() ?? pl.gameObject.AddComponent<SlimeSlowDebuff>();
+        d.Begin(pl);
+    }
+    private void Begin(Player pl)
+    {
+        _pl = pl;
+        if (!_applied) { _originalSpeed = pl.speed; pl.speed = Mathf.Max(1, _originalSpeed - SLOW_AMOUNT); _applied = true; }
+        _timer = Mathf.Max(_timer, DURATION);
     }
     private void Update() { if (!_applied) return; _timer -= Time.deltaTime; if (_timer <= 0f) Restore(); }
     private void Restore() { if (_applied && _pl != null) _pl.speed = _originalSpeed; _applied = false; Destroy(this); }

@@ -81,6 +81,22 @@ public class WolfBoss : enemy
     private float dashHitCd    = 0f;
     private float busyWatchdog = 0f; // busy 卡死看门狗（协程异常/timeScale=0复活弹窗等极端情况兜底）
 
+    // 扑击抓取"按倒"玩家精灵的旋转恢复（各中断点兜底）
+    private Transform _pinnedSprite; private Quaternion _pinnedSpriteOrigRot = Quaternion.identity;
+    private void RestorePinnedSprite()
+    {
+        if (_pinnedSprite != null) _pinnedSprite.localRotation = _pinnedSpriteOrigRot;
+        _pinnedSprite = null;
+    }
+
+    // 终极兜底：Boss 被 Destroy 时必然触发恢复（即使 StopAllCoroutines 跳过了 finally），
+    // 修复"Boss 死亡后玩家永久倒地不起"的 bug。
+    private void OnDestroy()
+    {
+        RestorePinnedSprite();
+        SetPlayersMovementLocked(false);
+    }
+
     // ── 生命周期 ──
     protected new void OnEnable()
     {
@@ -131,6 +147,11 @@ public class WolfBoss : enemy
     protected override void LateUpdate()
     {
         base.LateUpdate();
+        // 被亡者领域控制为友军后：行为完全交给 MindControlled，
+        // 不再锁血(invincible)、不再按 role 采样地面/施加脚本重力（role 已被 MindControlled 置空），
+        // 否则会与复活逻辑冲突导致"复活又死/悬空遁地"。
+        if (GetComponent<MindControlled>() != null) return;
+
         if (invincible) health = lockedHealth;
 
         // 地面 Y 基准：从玩家所在平面采样（玩家永远站在正确地面上）。
@@ -186,6 +207,7 @@ public class WolfBoss : enemy
                 invincible = false;
                 busyWatchdog = 0f;
                 if (anim != null) anim.speed = 1f;
+                RestorePinnedSprite();
                 SetPlayersMovementLocked(false);
                 curAnim = ""; // 强制 PlayAnim 重新播放，避免卡在冻结帧
                 PlayAnim(phase == Phase.Human ? "HumanWalk" : "WolfWalk");
@@ -399,6 +421,14 @@ public class WolfBoss : enemy
             // ═══ 第二段：抓取处决（Boss 与玩家同时定身）═══
             hitPlayer.movementLocked = true;
             lockedPlayer = hitTf;
+            // 把玩家按倒：精灵旋转90°，方向由 Boss 与玩家的 X 轴左右关系决定（玩家在 Boss 右侧→向右倒）
+            if (hitTf.childCount > 0)
+            {
+                _pinnedSprite = hitTf.GetChild(0);
+                _pinnedSpriteOrigRot = _pinnedSprite.localRotation;
+                float zRot = hitTf.position.x >= transform.position.x ? -90f : 90f;
+                _pinnedSprite.localRotation = _pinnedSpriteOrigRot * Quaternion.Euler(0f, 0f, zRot);
+            }
             // Boss 贴身零距离"咬住"视觉
             Vector3 pp = hitTf.position;
             float side = (transform.position.x <= pp.x) ? -0.3f : 0.3f;
@@ -429,7 +459,8 @@ public class WolfBoss : enemy
         }
         finally
         {
-            // 无论正常结束还是异常/中断：解锁玩家、复位状态、回到行走
+            // 无论正常结束还是异常/中断：恢复玩家精灵角度、解锁玩家、复位状态、回到行走
+            RestorePinnedSprite();
             if (lockedPlayer != null)
             {
                 var pl = lockedPlayer.GetComponent<Player>();
@@ -656,6 +687,7 @@ public class WolfBoss : enemy
         rolestate = state.dead;
         busy = true;
         StopAllCoroutines();
+        RestorePinnedSprite();           // 防止死亡打断扑击时玩家精灵停在躺倒角度
         SetPlayersMovementLocked(false); // 防止死亡时玩家仍被定身
         battleUI?.OnBossDefeated();      // 作为关底Boss：死亡即触发胜利结算
         PlayAnim("Death");

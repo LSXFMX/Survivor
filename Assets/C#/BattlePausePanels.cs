@@ -27,6 +27,7 @@ public class SettingsPanelUI : MonoBehaviour
     public Button  damageSizeButton;      // 伤害数字大小切换（大/中/小）
     public Toggle fullscreenToggle;        // 窗口化/全屏
     public Button  resolutionButton;       // 分辨率切换
+    public Toggle consoleToggle;           // 控制台输出开关
     public Slider bgmSlider;
     public Slider sfxSlider;
     public Button closeButton;
@@ -35,7 +36,7 @@ public class SettingsPanelUI : MonoBehaviour
     [Tooltip("自动构建时使用的字体（null 则使用 TMP 默认字体）")]
     public TMP_FontAsset font;
     [Tooltip("自动构建时面板的尺寸（W,H）")]
-    public Vector2 autoBuildSize = new Vector2(720f, 960f);
+    public Vector2 autoBuildSize = new Vector2(840f, 926.4153f);
 
     // 常用分辨率预设
     private static readonly (int w, int h, string label)[] ResolutionPresets =
@@ -102,6 +103,12 @@ public class SettingsPanelUI : MonoBehaviour
             // 全屏时分辨率锁定原生，按钮灰掉；窗口化时可切换
             RefreshResolutionInteractable();
         }
+        if (consoleToggle != null)
+        {
+            consoleToggle.SetIsOnWithoutNotify(GameConsole.Enabled);
+            consoleToggle.onValueChanged.RemoveListener(OnConsoleChanged);
+            consoleToggle.onValueChanged.AddListener(OnConsoleChanged);
+        }
         if (bgmSlider != null)
         {
             bgmSlider.minValue = 0f; bgmSlider.maxValue = 1f;
@@ -137,6 +144,8 @@ public class SettingsPanelUI : MonoBehaviour
         var txt = damageSizeButton.GetComponentInChildren<TextMeshProUGUI>();
         if (txt != null) txt.text = "伤害数字大小: " + DamageNumberSettings.SizeLabel;
     }
+
+    private void OnConsoleChanged(bool v) { GameConsole.Enabled = v; }
 
     private void OnFullscreenChanged(bool v)
     {
@@ -190,15 +199,34 @@ public class SettingsPanelUI : MonoBehaviour
         // 永远同步 sizeDelta 到最新 autoBuildSize（即使控件已拖好，背景框也要扩展）
         var rt = GetComponent<RectTransform>();
         if (rt == null) rt = gameObject.AddComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f, 0.5f);
-        rt.anchorMax = new Vector2(0.5f, 0.5f);
-        rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.anchoredPosition = Vector2.zero;
-        rt.sizeDelta = autoBuildSize;
+        // 顶部居中锚定：面板顶部与屏幕顶部对齐，向下 30px
+        rt.anchorMin = new Vector2(0.5f, 1f);
+        rt.anchorMax = new Vector2(0.5f, 1f);
+        rt.pivot = new Vector2(0.5f, 1f);
+        rt.anchoredPosition = new Vector2(0f, -30f);
+        // 用户硬性要求：高度固定 926.4153，宽度沿用 autoBuildSize.x。
+        // 之前直接用 autoBuildSize 被场景序列化的 (700, 560) 覆盖 → 高度改不动。
+        // 现在强制写死高度，autoBuildSize 字段的 .x 用于宽度。
+        rt.sizeDelta = new Vector2(autoBuildSize.x, 926.4153f);
+
+        // 关键：把面板自己的 Image 背景设为 stretch-to-parent（锚定四角 + offset 清零），
+        // 这样它永远紧贴面板矩形、自动跟随 sizeDelta 变化铺满整个面板。
+        // 之前错误地"stretch 所有子节点 Image"导致暂停菜单按钮（继续游戏/设置/关闭/操作说明/返回主菜单）
+        // 的红色背景被强行放大到 840x1000，把面板覆盖了、UI 全乱。
+        //   ★ 只动面板自己的 Image，不动任何子节点 Image（按钮/标题/装饰条各自有独立锚定，不应被外层强制改）。
+        var selfImg = GetComponent<Image>();
+        if (selfImg != null)
+        {
+            selfImg.rectTransform.anchorMin = new Vector2(0f, 0f);
+            selfImg.rectTransform.anchorMax = new Vector2(1f, 1f);
+            selfImg.rectTransform.pivot     = new Vector2(0.5f, 0.5f);
+            selfImg.rectTransform.offsetMin = Vector2.zero;
+            selfImg.rectTransform.offsetMax = Vector2.zero;
+        }
 
         // 已经全部拖好了就只更新背景框大小，不再创建重复控件
         if (attackRangeToggle != null && cloneAttackRangeToggle != null && damageNumberToggle != null
-            && fullscreenToggle != null && resolutionButton != null
+            && fullscreenToggle != null && resolutionButton != null && consoleToggle != null
             && bgmSlider != null && sfxSlider != null && closeButton != null) return;
 
         if (GetComponent<Image>() == null)
@@ -274,6 +302,13 @@ public class SettingsPanelUI : MonoBehaviour
             resolutionButton = UIBuilder.CreateButton(rt, "ResolutionBtn", "分辨率: " + r.label,
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
                 new Vector2(60f, y0 - 6 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
+        }
+
+        // 行 8：控制台输出开关
+        if (consoleToggle == null)
+        {
+            consoleToggle = UIBuilder.CreateToggle(rt, "ConsoleToggle", "控制台",
+                new Vector2(60f, y0 - 7 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
         }
 
         // 关闭按钮：面板内部底部居中，控件行之下

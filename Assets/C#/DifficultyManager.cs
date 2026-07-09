@@ -37,7 +37,7 @@ public class DifficultyManager : MonoBehaviour
     //     N10: + N10 装备 atk≈135-145 倍率12.5-13.5x
     //     N11: + N11 装备 atk≈160-175 倍率14.0-15.0x
     //     N12: + N12 装备 atk≈190-210 倍率16.0-17.0x
-    //     N13: + N13 装备 atk≈220-250 倍率18.0-20.0x（终极难度）
+    //     N13: + N13 装备 atk≈220-250 倍率18.0-20.0x（终极难度，但 ATK 倍率回退与 N12 持平 5.0）
     //
     //   设计目标：每个难度普通杂兵需 1-2 发清(技能)，BOSS 需玩家持续 6-12 秒输出。
     //   HP 缩放比 ATK 更激进 —— 玩家伤害膨胀很快，但玩家防御几乎不长。
@@ -73,11 +73,10 @@ public class DifficultyManager : MonoBehaviour
         new DifficultyConfig { label = "N10", hpMultiplier = 41.0f, atkMultiplier = 4.5f,  minutes = 13 },
         // N11：更高挑战，HP×52，ATK×5.0，13 分钟
         new DifficultyConfig { label = "N11", hpMultiplier = 52.0f, atkMultiplier = 5.0f,  minutes = 13 },
-        // N12：更高挑战，HP×65，ATK×5.5，13 分钟
-        new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.5f,  minutes = 13 },
-        // N13：终极挑战，HP×80，ATK×6.0，13 分钟
-        // 玩家满配 ~20x 倍率，怪 HP×80 才能撑住
-        new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 6.0f,  minutes = 13 },
+        // N12：更高挑战，HP×65，ATK×5.0，13 分钟
+        new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.0f,  minutes = 13 },
+        // N13：终极挑战，HP×80，ATK×5.0，13 分钟
+        new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 5.0f,  minutes = 13 },
     };
 
     // 当前选中的难度索引（0=N1 … 4=N5），默认 N3
@@ -102,8 +101,8 @@ public class DifficultyManager : MonoBehaviour
             expanded[8]  = new DifficultyConfig { label = "N9",  hpMultiplier = 32.0f, atkMultiplier = 4.0f, minutes = 13 };
             expanded[9]  = new DifficultyConfig { label = "N10", hpMultiplier = 41.0f, atkMultiplier = 4.5f, minutes = 13 };
             expanded[10] = new DifficultyConfig { label = "N11", hpMultiplier = 52.0f, atkMultiplier = 5.0f, minutes = 13 };
-            expanded[11] = new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.5f, minutes = 13 };
-            expanded[12] = new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 6.0f, minutes = 13 };
+            expanded[11] = new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.0f, minutes = 13 };
+            expanded[12] = new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 5.0f, minutes = 13 };
             configs = expanded;
             Debug.LogWarning($"[难度管理] 场景 configs 只有 {oldLen} 个条目，已自动扩展到 13 个（N1-N13）");
         }

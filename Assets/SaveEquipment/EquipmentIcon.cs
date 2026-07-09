@@ -95,6 +95,10 @@ public class EquipmentIcon : MonoBehaviour
         // 思路同上：场景里没手工拖图标节点也能正常显示。
         ApplyForcedGachaRSrOverrides();
 
+        // N4~N7 通关装备 7/10/13/16（正常铁甲/源木轻甲/蘑菇之甲/熟练者之甲）的文本覆盖。
+        // 场景里这些装备的 description 可能落后于策划最新数值，这里强制同步。
+        ApplyForcedClearEquipmentN4toN7Overrides();
+
         // N8 通关装备 18/19/20（和平之剑/甲/心）的文本兜底。
         // 这三件图标是 ArchiveManager.EnsureClearEquipmentN8IconsExist() 在运行时
         // 用 N7 EquipmentIcon 做模板克隆出来的，初始字段都被清空，
@@ -122,6 +126,12 @@ public class EquipmentIcon : MonoBehaviour
             description = "解锁世界boss奖励\n\n不止可以开门，还可以让boss摆脱宿命，或许他们会感激你？";
             howToGet = "初次进行门挑战";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/成就装备/003钥匙剑/3.钥匙剑_最终.png");
+        }
+        else if (equipmentId == 4)
+        {
+            equipmentName = "沙漏";
+            description = "解锁三倍速\n\n无限流玩家的必需品，血族血脉的最爱。";
+            howToGet = "使用500次抽卡（一次性计数）";
         }
         else if (equipmentId == 7)
         {
@@ -232,10 +242,22 @@ public class EquipmentIcon : MonoBehaviour
             if (!TrySetIconFromGachaManager(GachaRarity.R, 2))
                 SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/R/002.png");
         }
+        else if (gachaRarity == GachaRarity.R && equipmentId == 1)
+        {
+            equipmentName = "量子源木";
+            description = "每件开局源木 +1\n\n量子态的源木在开局时具现为可用资源，扩充冒险的资本。";
+            howToGet = "累计抽卡 200 次后加入卡池（共 100 个）";
+            if (!TrySetIconFromGachaManager(GachaRarity.R, 1))
+                SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/R/001.png");
+            howToGet = "累计抽卡 200 次后加入卡池（每 20 抽追加 1 张）";
+            // 优先用挂在 GachaManager 上的静态 Sprite（走标准 Unity 资源管线，避免运行时 LoadImage 偏色）
+            if (!TrySetIconFromGachaManager(GachaRarity.R, 2))
+                SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/R/002.png");
+        }
         else if (gachaRarity == GachaRarity.SR && equipmentId == 6)
         {
             equipmentName = "速度灵果";
-            description = "每件移动速度 +0.05（每累计 20 件 = +1 移速，满池 100 件 = +5）\n\n步履匆匆，无人能追。";
+            description = "每件移动速度 +0.03（每累计 34 件 = +1 移速，满池 100 件 = +3）\n\n步履匆匆，无人能追。";
             howToGet = "累计抽卡 300 次后加入卡池（共 100 个）";
             if (!TrySetIconFromGachaManager(GachaRarity.SR, 6))
                 SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/SR/6.png");
@@ -264,6 +286,33 @@ public class EquipmentIcon : MonoBehaviour
         iconImage.type = Image.Type.Simple;
         iconImage.preserveAspect = true;
         return true;
+    }
+
+    /// <summary>
+    /// N4~N7 通关装备 7/10/13/16 的文本强制覆盖。
+    /// 这些装备的 description 设在场景 prefab 里，可能落后策划最新数值，
+    /// 这里按 equipmentId 无条件覆盖，保证显示与 EquipmentInitializer 实际效果一致。
+    /// </summary>
+    private void ApplyForcedClearEquipmentN4toN7Overrides()
+    {
+        if (equipmentType != EquipmentType.ClearEquipment) return;
+
+        if (equipmentId == 7)
+        {
+            description = "防御力＋1\n\n重，但是很安心。";
+        }
+        else if (equipmentId == 10)
+        {
+            description = "防御力＋2\n\n轻便又有韧劲。";
+        }
+        else if (equipmentId == 13)
+        {
+            description = "生命值＋200\n\n经典外观，实在防护。";
+        }
+        else if (equipmentId == 16)
+        {
+            description = "防御力＋2\n\n经历过磨练的铠甲。";
+        }
     }
 
     /// <summary>
@@ -313,7 +362,7 @@ public class EquipmentIcon : MonoBehaviour
     /// 策划数值（与 EquipmentInitializer.ApplyClearEquipments 保持一致）：
     ///   21 利爪之剑：攻击力+20     | 22 皮毛之甲：防御力+2      | 23 野兽之心：经验效率+2
     ///   24 月牙之剑：攻击力+20     | 25 月圆之甲：防御力+2      | 26 月球之心：自然回血+2
-    ///   27 粘液之剑：攻击力+20     | 28 粘液之甲：生命值+100    | 29 粘液之心：经验效率+2
+    ///   27 粘液之剑：攻击力+20     | 28 粘液之甲：生命值+300    | 29 粘液之心：经验效率+2
     ///   30 暗影之剑：攻击力+20     | 31 暗影之甲：防御力+2      | 32 暗影之心：暴击伤害+20
     ///   33 龙鳞之剑：攻击力+30     | 34 龙鳞之甲：防御力+10     | 35 黄金睛：暴击伤害+20
     /// </summary>
@@ -376,7 +425,7 @@ public class EquipmentIcon : MonoBehaviour
         else if (equipmentId == 28)
         {
             equipmentName = "粘液之甲";
-            description = "生命值＋100\n\n溶解之爱…";
+            description = "生命值＋300\n\n溶解之爱…";
             howToGet = "通关N11有概率掉落";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/028.png");
         }

@@ -630,11 +630,37 @@ public class BulletBloodlineBat : Bulletbase
         }
         e.startturnred();
         TryLifesteal(dealt, e.atknumber);
+        // 夏无专属：血族蝙蝠每次攻击 10% 概率增加玩家 1 点最大生命值
+        TryXiaWuBloodlineMaxHp(e.atknumber);
         // SSR_10 饮血剑：全局吸血（与血族吸血叠加生效）
         EquipmentInitializer.TryAllSourceLifesteal(dealt, e.atknumber, e.transform.position);
 
         if (e.health <= 0)
             e.Destroy1();
+    }
+
+    /// <summary>夏无专属：血族蝙蝠每次攻击命中 10% 概率增加玩家 1 点最大生命（同步回血 1）。</summary>
+    private void TryXiaWuBloodlineMaxHp(GameObject floatingTextPrefab)
+    {
+        if (PlayerSkinSkillBuff.CurrentSkinIndex != PlayerSkinSkillBuff.SKIN_XIAWU) return;
+        if (Random.value > 0.1f) return;
+        if (player == null) return;
+
+        var pl = player.GetComponent<Player>();
+        if (pl == null) pl = player.GetComponentInParent<Player>();
+        if (pl == null) return;
+
+        pl.healthmax += 1;
+        pl.health = Mathf.Min(pl.healthmax, pl.health + 1);
+
+        // 绿色飘字提示（借敌人的 atknumber prefab 来生成浮动数字）
+        if (floatingTextPrefab != null && DamageNumberSettings.Visible)
+        {
+            GameObject num = Instantiate(floatingTextPrefab, pl.transform.position, default);
+            num.transform.localScale *= DamageNumberSettings.SizeScale;
+            var tmp = num.transform.GetChild(0).GetComponent<TMPro.TextMeshProUGUI>();
+            if (tmp != null) { tmp.text = "+1 MHP"; tmp.color = new Color32(100, 255, 100, 255); }
+        }
     }
 
     private void TryLifesteal(int dealt, GameObject floatingTextPrefab)

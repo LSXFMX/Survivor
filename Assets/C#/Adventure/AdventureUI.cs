@@ -50,6 +50,10 @@ public class AdventureUI : MonoBehaviour
 
     public void Show(AdventureOptionBase optA, AdventureOptionBase optB, AdventureOptionBase optC, int cost)
     {
+        // 三选一升级进行中不允许打开奇遇面板
+        var bui = GameObject.Find("BattleUI")?.GetComponent<battleUI>();
+        if (bui != null && bui.choiceUI != null && bui.choiceUI.activeSelf) return;
+
         _optionA = optA;
         _optionB = optB;
         _optionC = optC;

@@ -14,6 +14,7 @@ public class SlimeBossProjectile : MonoBehaviour
     public float lifetime = 3.5f;
     public int   pass = 0;          // 额外穿透次数（0 = 命中一次即销毁）
     public float hitRadius = 0.9f;  // 命中判定半径（会随缩放放大）
+    public bool  flipFacing = false; // 素材朝向与飞行方向相反时 +180°（剑气=true；箭矢=false）
 
     private Vector3 _dir = Vector3.right;
     private bool _launched = false;
@@ -43,9 +44,9 @@ public class SlimeBossProjectile : MonoBehaviour
 
     private void FaceDir()
     {
-        // Z 旋转 = 方向角。angle=180°（向左）时旋转180°，月牙C自然从开口朝右翻转为开口朝左
-        // （与箭矢相同的Z旋转逻辑，保持一致）
+        // Z 旋转 = 方向角。剑气素材开口与飞行方向相反需 +180°；箭矢素材本身朝向正确，不翻转。
         float angle = Mathf.Atan2(_dir.z, _dir.x) * Mathf.Rad2Deg;
+        if (flipFacing) angle += 180f;
         transform.rotation = Quaternion.Euler(_baseTiltX, 0f, angle);
     }
 

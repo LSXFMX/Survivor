@@ -27,8 +27,8 @@ public class SlimeBoss : enemy
     [Header("合体吞噬（每 6s 吞噬小史莱姆合体）")]
     public float mergeInterval = 6f;
     public float mergeRadius   = 9f;
-    [Range(0f, 0.3f)] public float mergeHealthPct = 0.05f;
-    [Range(0f, 0.3f)] public float mergeAtkPct    = 0.05f;
+    [Range(0f, 0.3f)] public float mergeHealthPct = 0.02f;
+    [Range(0f, 0.3f)] public float mergeAtkPct    = 0.02f;
 
     [Header("手持武器 · 解锁条件")]
     public int swordUnlockCount = 5;    // 吸满 5 只 → 手持剑
@@ -74,6 +74,16 @@ public class SlimeBoss : enemy
 
     private enum Phase { Slime, Transforming, Dragon, Dead }
     private Phase phase = Phase.Slime;
+
+    /// <summary>亡者领域复活时强制重置为史莱姆形态（修复龙形态残留问题）。</summary>
+    public void ResetToSlimeForm()
+    {
+        phase = Phase.Slime;
+        Sca = bossScale;
+        speed = Mathf.RoundToInt(slimeSpeed);
+        transform.localScale = new Vector3(Sca, Sca, Sca);
+        if (anim != null) { anim.speed = 1f; PlayAnim("Walk"); }
+    }
 
     private Animator anim;
     private SpriteRenderer _sr;
@@ -344,7 +354,7 @@ public class SlimeBoss : enemy
             Vector3 spawnPos = transform.position + FacingDir() * 1.0f + Vector3.up * 0.5f;
             GameObject obj = Instantiate(swordQiPrefab, spawnPos, Quaternion.Euler(45, 0, 0));
             var proj = obj.GetComponent<SlimeBossProjectile>();
-            if (proj != null) proj.Launch(FacingDir(), Mathf.RoundToInt(atk * swordQiDamageMul), swordQiSpeed, swordQiLifetime);
+            if (proj != null) { proj.flipFacing = true; proj.Launch(FacingDir(), Mathf.RoundToInt(atk * swordQiDamageMul), swordQiSpeed, swordQiLifetime); }
         }
 
         // 收回

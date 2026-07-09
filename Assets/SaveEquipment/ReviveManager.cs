@@ -221,11 +221,9 @@ public class ReviveManager : MonoBehaviour
 
     private static void ResetPlayerDeadFlag(Player player)
     {
-        if (player == null) return;
-        var f = typeof(Player).GetField("_isDead",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        if (f != null)
-            f.SetValue(player, false);
+        // 直接调用公开方法，替代反射（反射设私有字段在 IL2CPP 代码剥离下可能失败，
+        // 导致复活后 _isDead 仍为 true → 玩家无法再次触发死亡/复活流程）。
+        if (player != null) player.ResetDeadFlag();
     }
 
     private static void RefreshAllReviveIconsInScene()

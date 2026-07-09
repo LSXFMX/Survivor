@@ -51,6 +51,10 @@ public class AdventureEventManager : MonoBehaviour
         if (YuanMuManager.Instance == null) return;
         if (YuanMuManager.Instance.Current < triggerThreshold) return;
 
+        // 三选一升级进行中不允许触发奇遇（连源木也不扣）
+        var bui = GameObject.Find("BattleUI")?.GetComponent<battleUI>();
+        if (bui != null && bui.choiceUI != null && bui.choiceUI.activeSelf) return;
+
         // 扣除源木
         YuanMuManager.Instance.Spend(triggerThreshold);
         TryTriggerEvent();
