@@ -76,6 +76,9 @@ public class Upgradeoptionsbase : MonoBehaviour
         if (ChoiceUI.Instance != null)
             ChoiceUI.Instance.ConsumeFirstUpgradeGuarantee();
 
+        // 累计升级选择次数 → 达 200 次解锁成就装备8「不可视之手」（自动选取升级）
+        UpgradeChoiceCounter.RecordChoice();
+
         battleUI.choiceUI.SetActive(false);
         if (battleUI.TryAdvanceGachaStartupChain())
             return;

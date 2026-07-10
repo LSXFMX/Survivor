@@ -37,6 +37,9 @@ public class skillupgrade : Upgradeoptionsbase
         {
             case skillAttribute.CDtime:
                 choiceskill.CDtime += upgradenumber; // 减少CD填负数，增加CD填正数
+                // 火球术 CD 下限 1.0s（防止 CD 被降到极值导致升级卡消失后仍能通过其他方式再降）
+                if (choiceskill.Skillname == "火球术")
+                    choiceskill.CDtime = Mathf.Max(1f, choiceskill.CDtime);
                 break;
             case skillAttribute.damage:
                 choiceskill.damage += (int)upgradenumber;
@@ -61,11 +64,21 @@ public class skillupgrade : Upgradeoptionsbase
                 break;
             case skillAttribute.attackRadius:
                 SkillWindArrow wa = choiceskill as SkillWindArrow;
-                // 2026-06 改动：亡者领域不再锁定风箭范围，风箭始终可被升级加范围
                 if (wa != null) wa.attackRadius += upgradenumber;
                 SkillSporeField sf = choiceskill as SkillSporeField;
-                // 亡者领域锁定后：孢子领域半径固定为 10，不再被升级改动
-                if (sf != null && !sf.IsLockedByTombDomain) sf.attackRadius += upgradenumber;
+                if (sf != null)
+                {
+                    if (sf.IsLockedByTombDomain)
+                    {
+                        // 亡者领域锁定后：范围升级转换为等值伤害升级
+                        choiceskill.damage += (int)upgradenumber;
+                        Debug.Log($"[亡者领域] 孢子领域范围升级 → 伤害 +{(int)upgradenumber}");
+                    }
+                    else
+                    {
+                        sf.attackRadius += upgradenumber;
+                    }
+                }
                 SkillBloodline bl = choiceskill as SkillBloodline;
                 if (bl != null) bl.attackRadius += upgradenumber;
                 break;
@@ -117,7 +130,13 @@ public class skillupgrade : Upgradeoptionsbase
                     SkillWindArrow cwa = s as SkillWindArrow;
                     if (cwa != null) cwa.attackRadius += scaledValue;
                     SkillSporeField csf = s as SkillSporeField;
-                    if (csf != null && !csf.IsLockedByTombDomain) csf.attackRadius += scaledValue;
+                    if (csf != null)
+                    {
+                        if (csf.IsLockedByTombDomain)
+                            s.damage += Mathf.RoundToInt(scaledValue);
+                        else
+                            csf.attackRadius += scaledValue;
+                    }
                     SkillBloodline cbl = s as SkillBloodline;
                     if (cbl != null) cbl.attackRadius += scaledValue;
                     break;

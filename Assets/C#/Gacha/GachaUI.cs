@@ -239,6 +239,7 @@ public class GachaUI : MonoBehaviour
         }
 
         Button close = CreateTextButton(treasurePanel.transform, "关闭", new Vector2(160, 52));
+        close.gameObject.AddComponent<RightClickCloseable>();
         RectTransform cr = close.GetComponent<RectTransform>();
         cr.anchorMin = new Vector2(0.5f, 0);
         cr.anchorMax = new Vector2(0.5f, 0);

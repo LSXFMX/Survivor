@@ -41,6 +41,10 @@ public class AdventureUI : MonoBehaviour
         if (buttonB != null) buttonB.onClick.AddListener(OnClickB);
         if (buttonC != null) buttonC.onClick.AddListener(OnClickC);
         if (rootC != null) rootC.SetActive(false);
+        // 选项名字过长（如「源木收集者」）时强制单行显示，避免 effectDescription 被挤到框外
+        if (nameA != null) nameA.enableWordWrapping = false;
+        if (nameB != null) nameB.enableWordWrapping = false;
+        if (nameC != null) nameC.enableWordWrapping = false;
     }
 
     public void Show(AdventureOptionBase optA, AdventureOptionBase optB, int cost)

@@ -17,6 +17,11 @@ public class DifficultyManager : MonoBehaviour
         public int   minutes;       // 对局时长（分钟）
     }
 
+    /// <summary>当前难度是否为「无尽」（正计时、每5分钟刷社群Boss+涨血量倍率、解锁所有功能）。</summary>
+    public bool IsEndless => CurrentIndex == EndlessIndex;
+    /// <summary>无尽难度在 configs 中的索引（= 最后一项）。</summary>
+    public int EndlessIndex => configs != null ? configs.Length - 1 : -1;
+
     // N1~N13 难度配置（在 Inspector 中可继续微调）
     //
     // 数值依据：
@@ -77,6 +82,8 @@ public class DifficultyManager : MonoBehaviour
         new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.0f,  minutes = 13 },
         // N13：终极挑战，HP×80，ATK×5.0，13 分钟
         new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 5.0f,  minutes = 13 },
+        // 无尽：正计时挂机模式。起始 HP×5，每 5 分钟 +5；ATK 固定 ×5。minutes=0 表示不倒计时。
+        new DifficultyConfig { label = "无尽", hpMultiplier = 5.0f,  atkMultiplier = 5.0f,  minutes = 0  },
     };
 
     // 当前选中的难度索引（0=N1 … 4=N5），默认 N3
@@ -90,21 +97,22 @@ public class DifficultyManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
 
-        // 修复：场景序列化数据可能只有8个条目（旧版本），运行时自动扩展到13个
-        if (configs != null && configs.Length < 13)
+        // 修复：场景序列化数据可能只有 8~13 个条目（旧版本），运行时自动扩展到 14 个（N1-N13 + 无尽）
+        if (configs != null && configs.Length < 14)
         {
             int oldLen = configs.Length;
-            var expanded = new DifficultyConfig[13];
-            for (int i = 0; i < oldLen; i++)
+            var expanded = new DifficultyConfig[14];
+            for (int i = 0; i < oldLen && i < 14; i++)
                 expanded[i] = configs[i];
-            // 填充缺失的 N9~N13 默认值
-            expanded[8]  = new DifficultyConfig { label = "N9",  hpMultiplier = 32.0f, atkMultiplier = 4.0f, minutes = 13 };
-            expanded[9]  = new DifficultyConfig { label = "N10", hpMultiplier = 41.0f, atkMultiplier = 4.5f, minutes = 13 };
-            expanded[10] = new DifficultyConfig { label = "N11", hpMultiplier = 52.0f, atkMultiplier = 5.0f, minutes = 13 };
-            expanded[11] = new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.0f, minutes = 13 };
-            expanded[12] = new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 5.0f, minutes = 13 };
+            // 填充缺失的 N9~N13 + 无尽默认值（仅补齐 index >= oldLen 的空位）
+            if (oldLen <= 8)  expanded[8]  = new DifficultyConfig { label = "N9",  hpMultiplier = 32.0f, atkMultiplier = 4.0f, minutes = 13 };
+            if (oldLen <= 9)  expanded[9]  = new DifficultyConfig { label = "N10", hpMultiplier = 41.0f, atkMultiplier = 4.5f, minutes = 13 };
+            if (oldLen <= 10) expanded[10] = new DifficultyConfig { label = "N11", hpMultiplier = 52.0f, atkMultiplier = 5.0f, minutes = 13 };
+            if (oldLen <= 11) expanded[11] = new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.0f, minutes = 13 };
+            if (oldLen <= 12) expanded[12] = new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 5.0f, minutes = 13 };
+            expanded[13] = new DifficultyConfig { label = "无尽", hpMultiplier = 5.0f, atkMultiplier = 5.0f, minutes = 0 };
             configs = expanded;
-            Debug.LogWarning($"[难度管理] 场景 configs 只有 {oldLen} 个条目，已自动扩展到 13 个（N1-N13）");
+            Debug.LogWarning($"[难度管理] 场景 configs 只有 {oldLen} 个条目，已自动扩展到 14 个（N1-N13 + 无尽）");
         }
     }
 

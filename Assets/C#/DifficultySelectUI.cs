@@ -30,13 +30,14 @@ public class DifficultySelectUI : MonoBehaviour
         "加入蝙蝠敌人",                   // N4
         "开放门挑战",                     // N5
         "解锁世界Boss",                  // N6
-        "关闭前作武器·开启新旅程",         // N7
+        "吸血鬼Boss登场·敌人血攻翻倍",         // N7
         "开启社群挑战",                   // N8
         "新增N9通关装备",                 // N9
         "新增N10通关装备",                // N10
         "新增N11通关装备",                // N11
         "新增N12通关装备",                // N12
         "终极难度·新增N13通关装备",        // N13
+        "正向记录时间·每5分钟随机生成已解锁社群Boss·每5分钟怪物血量倍率+5·攻击固定×5·每分钟扣除10%源木·每分钟+5装备积分·通关N8解锁", // 无尽
     };
 
     // OverlayLayer 化的运行时占位
@@ -105,7 +106,7 @@ public class DifficultySelectUI : MonoBehaviour
             {
                 if (!IsButtonUnlocked(idx))
                 {
-                    string prevLabel = DifficultyManager.Instance.configs[idx - 1].label;
+                    string prevLabel = GetUnlockPrereqLabel(idx);
                     ToastManager.Show($"请先通关 {prevLabel} 解锁该难度！");
                     return;
                 }
@@ -183,8 +184,18 @@ public class DifficultySelectUI : MonoBehaviour
         if (ClearRecordManager.Instance == null) return false;
         int total = DifficultyManager.Instance.configs.Length;
         if (index >= total) return false;
+        // 无尽模式（最后一项）：通关 N8 即解锁（而非默认的前一难度 N13）
+        if (index == DifficultyManager.Instance.EndlessIndex)
+            return ClearRecordManager.Instance.GetClearCount("N8") > 0;
         return ClearRecordManager.Instance.GetClearCount(
             DifficultyManager.Instance.configs[index - 1].label) > 0;
+    }
+
+    /// <summary>返回某难度按钮的「前置解锁难度」显示名（无尽特判为 N8）。</summary>
+    private string GetUnlockPrereqLabel(int index)
+    {
+        if (index == DifficultyManager.Instance.EndlessIndex) return "N8";
+        return DifficultyManager.Instance.configs[index - 1].label;
     }
 
     /// <summary>
@@ -282,6 +293,7 @@ public class DifficultySelectUI : MonoBehaviour
 
         // 统一用 IsButtonUnlocked 判断，避免散落多处逻辑不一致
         bool unlocked = IsButtonUnlocked(index);
+        bool isEndless = index == DifficultyManager.Instance.EndlessIndex;
 
         string feature = index < FeatureDescriptions.Length ? FeatureDescriptions[index] : "";
 
@@ -289,14 +301,14 @@ public class DifficultySelectUI : MonoBehaviour
         sb.AppendLine($"<b>{cfg.label}</b>");
         sb.AppendLine($"敌人血量：×{cfg.hpMultiplier:F1}");
         sb.AppendLine($"敌人攻击：×{cfg.atkMultiplier:F1}");
-        sb.AppendLine($"对局时长：{cfg.minutes} 分钟");
+        sb.AppendLine(isEndless ? "对局时长：正计时（无穷）" : $"对局时长：{cfg.minutes} 分钟");
 
         if (!string.IsNullOrEmpty(feature))
             sb.AppendLine($"<color=#FFD700>开放功能：{feature}</color>");
 
         if (!unlocked)
-            sb.AppendLine($"<color=grey>通关 {DifficultyManager.Instance.configs[index - 1].label} 后解锁</color>");
-        else
+            sb.AppendLine($"<color=grey>通关 {GetUnlockPrereqLabel(index)} 后解锁</color>");
+        else if (!isEndless)
             sb.AppendLine($"通关次数：{clearCount}");
 
         tooltipText.text = sb.ToString().TrimEnd();

@@ -59,8 +59,10 @@ public class Player : Attribute
     [HideInInspector] public Player cloneOwner;
     /// <summary>跟随速度倍率（相对自身 speed）。</summary>
     private const float CLONE_FOLLOW_SPEED_MULT = 0.95f;
-    /// <summary>跟随偏移（出生时与主体的相对偏移方向）。</summary>
-    private Vector3 _cloneFollowOffset = new Vector3(1.5f, 0f, 0f);
+    /// <summary>分身跟随偏移距离（单位）。</summary>
+    private const float CLONE_FOLLOW_DISTANCE = 1.5f;
+    /// <summary>分身相对于玩家的 X 偏移符号：-1=左侧，+1=右侧。</summary>
+    [HideInInspector] public int cloneFollowSide = -1;
     /// <summary>跟随死区——距目标点小于该值时停止移动，避免抖动。</summary>
     private const float CLONE_FOLLOW_DEADZONE = 0.3f;
     /// <summary>分身模型缩放比例：1=原大小，0.7=70%（一化三清专属）。</summary>
@@ -183,6 +185,41 @@ public class Player : Attribute
             rb.isKinematic = true;
             rb.velocity        = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
+            // 分身与主体之间彻底不发生物理碰撞（防止分身 collider 推动主玩家）
+            IgnoreCollisionWithMainPlayer();
+        }
+
+        // 经验石拾取范围圆圈（仅主玩家；分身不画，避免视觉混乱）
+        if (!gameObject.CompareTag("Clone") && GetComponent<ExpPickupRangeCircle>() == null)
+            gameObject.AddComponent<ExpPickupRangeCircle>();
+
+        // 记录主玩家出生点（供"脱离卡死"使用）
+        if (!gameObject.CompareTag("Clone") && !_mainSpawnSet)
+        {
+            _mainSpawnPosition = transform.position;
+            _mainSpawnSet = true;
+        }
+    }
+
+    /// <summary>分身启动时忽略与主玩家的所有碰撞（防止"分身推着主角跑"）。</summary>
+    private void IgnoreCollisionWithMainPlayer()
+    {
+        var myCols = GetComponentsInChildren<Collider>();
+        if (myCols == null) return;
+        // 向上查找 playerlayer → 遍历找 tag="Player"（主玩家）
+        Transform layer = transform.parent;
+        if (layer == null) return;
+        foreach (Transform t in layer)
+        {
+            if (t == transform || !t.CompareTag("Player")) continue;
+            var mainCols = t.GetComponentsInChildren<Collider>();
+            if (mainCols == null) continue;
+            foreach (var mc in mainCols)
+            {
+                if (mc == null) continue;
+                foreach (var cc in myCols)
+                    if (cc != null) Physics.IgnoreCollision(cc, mc, true);
+            }
         }
     }
 
@@ -256,7 +293,9 @@ public class Player : Attribute
             bool ssr9Active = _cloneSsr9Active;
             if (!ssr9Active && cloneOwner != null)
             {
-                Vector3 targetPos = cloneOwner.transform.position + _cloneFollowOffset;
+                // 分身跟随：cloneFollowSide=-1 → 玩家左侧，+1 → 右侧（世界空间，不随朝向翻转）
+                Vector3 followOffset = new Vector3(cloneFollowSide * CLONE_FOLLOW_DISTANCE, 0f, 0f);
+                Vector3 targetPos = cloneOwner.transform.position + followOffset;
                 targetPos.y = transform.position.y; // 保持同一水平面
                 float dist = Vector3.Distance(transform.position, targetPos);
                 if (dist > CLONE_FOLLOW_DEADZONE)
@@ -312,6 +351,9 @@ public class Player : Attribute
         float vmove = Input.GetAxis("Vertical");
         rb.velocity = new Vector3(hmove, 0, vmove).normalized * speed;
 
+        // 每帧兜底钳制地图边界（冲刺后已有额外钳制，此处为常规移动兜底）
+        ClampToMapBounds();
+
         if (hmove != 0 || vmove != 0)
             ani.SetBool("ismove", true);
         if (hmove == 0 && vmove == 0)
@@ -363,9 +405,12 @@ public class Player : Attribute
         _isDashing = true;
         _dashCDTimer = dashCooldown;
 
+        // ★ 修复"穿山丘卡出地图"：不再用 detectCollisions=false 全局关碰撞，
+        //   改用逐敌人 IgnoreCollision 穿怪（仅限敌方单位），地形/山丘/边界绝不穿透。
+        float yBeforeDash = transform.position.y;
         bool disableCollision = dashPhaseUnlocked;
-        bool prevDetectCollisions = rb != null && rb.detectCollisions;
-        if (disableCollision && rb != null) rb.detectCollisions = false;
+        if (disableCollision && rb != null)
+            DashIgnoreEnemyCollisions(true);
 
         float dashSpeed = dashDistance / dashDuration;
         float elapsed = 0f;
@@ -376,10 +421,73 @@ public class Player : Attribute
             yield return null;
         }
 
-        if (disableCollision && rb != null) rb.detectCollisions = prevDetectCollisions;
+        if (disableCollision && rb != null)
+            DashIgnoreEnemyCollisions(false);
         rb.velocity = Vector3.zero;
+
+        // 冲刺后安全钳：如果 Y 掉落过多（被挤出地图），立刻弹回冲刺前 Y。
+        const float SAFE_Y_FLOOR = -50f;
+        if (transform.position.y < SAFE_Y_FLOOR || transform.position.y < yBeforeDash - 10f)
+        {
+            var p = transform.position; p.y = yBeforeDash;
+            transform.position = p;
+        }
+        // 地图边界钳制（防卡出 ±85 范围）
+        ClampToMapBounds();
+
         _isDashing = false;
     }
+
+    private const float MAP_BOUND = 85f;
+
+    /// <summary>冲刺期间仅忽略与敌人单位碰撞，地形/山丘/边界保持不变。</summary>
+    private void DashIgnoreEnemyCollisions(bool ignore)
+    {
+        var myCols = GetComponentsInChildren<Collider>();
+        if (myCols == null || myCols.Length == 0) return;
+        Transform el = transform.parent; // playerlayer
+        if (el == null) return;
+        // 遍历 playerlayer 下所有子节点 ≠ 所有敌人；敌人在 enemylayer。这里通过
+        // Collider 的位置附近 OverlapSphere 更准，但为了性能直接用固定距离遍历兄弟节点不可行。
+        // 更好的做法：直接搜场景中所有 enemy 组件，忽略其 Collider。
+        var allEnemies = FindObjectsOfType<enemy>();
+        if (allEnemies == null) return;
+        foreach (var en in allEnemies)
+        {
+            if (en == null) continue;
+            var eCols = en.GetComponentsInChildren<Collider>();
+            if (eCols == null) continue;
+            foreach (var mc in eCols)
+            {
+                if (mc == null) continue;
+                foreach (var cc in myCols)
+                {
+                    if (cc == null) continue;
+                    if (ignore) Physics.IgnoreCollision(cc, mc, true);
+                    else { /* 冲刺结束不恢复——Ignored 状态已处理碰撞分离，强行恢复反而会重新陷入穿透 */ }
+                }
+            }
+        }
+        // 保持 detectCollisions=true，不让地形穿透
+    }
+
+    /// <summary>把玩家位置钳制在地图边界内（防卡出地图）。每帧 LateUpdate 也会调一次。</summary>
+    private void ClampToMapBounds()
+    {
+        var p = transform.position;
+        bool clamped = false;
+        if (p.x < -MAP_BOUND) { p.x = -MAP_BOUND; clamped = true; }
+        if (p.x >  MAP_BOUND) { p.x =  MAP_BOUND; clamped = true; }
+        if (p.z < -MAP_BOUND) { p.z = -MAP_BOUND; clamped = true; }
+        if (p.z >  MAP_BOUND) { p.z =  MAP_BOUND; clamped = true; }
+        if (clamped) transform.position = p;
+    }
+
+    /// <summary>主玩家的出生点（设置为脱离卡死使用）。</summary>
+    private static Vector3 _mainSpawnPosition = Vector3.zero;
+    private static bool    _mainSpawnSet = false;
+    public  static Vector3 MainSpawnPosition => _mainSpawnPosition;
+    public  static bool    HasSpawnPoint => _mainSpawnSet;
 
     public void startturnred()
     {

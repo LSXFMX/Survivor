@@ -22,12 +22,13 @@ public class SettingsPanelUI : MonoBehaviour
 {
     [Header("控件（可全部留空，会自动生成）")]
     public Toggle attackRangeToggle;
-    public Toggle cloneAttackRangeToggle;
     public Toggle damageNumberToggle;
     public Button  damageSizeButton;      // 伤害数字大小切换（大/中/小）
     public Toggle fullscreenToggle;        // 窗口化/全屏
     public Button  resolutionButton;       // 分辨率切换
     public Toggle consoleToggle;           // 控制台输出开关
+    public Toggle runInBackgroundToggle;   // 失去焦点继续运行
+    public Button unstuckButton;           // 脱离卡死（回到出生点）
     public Slider bgmSlider;
     public Slider sfxSlider;
     public Button closeButton;
@@ -55,12 +56,20 @@ public class SettingsPanelUI : MonoBehaviour
     void Awake()
     {
         EnsureBuilt();
+        // 构建后立刻隐藏（面板默认不可见），OnEnable 时再显示
+        if (closeButton != null) closeButton.gameObject.SetActive(false);
     }
 
     void OnEnable()
     {
         EnsureBuilt();
         Bind();
+        if (closeButton != null) closeButton.gameObject.SetActive(true);
+    }
+
+    void OnDisable()
+    {
+        if (closeButton != null) closeButton.gameObject.SetActive(false);
     }
 
     private void Bind()
@@ -70,12 +79,6 @@ public class SettingsPanelUI : MonoBehaviour
             attackRangeToggle.SetIsOnWithoutNotify(AttackRangeIndicatorManager.Visible);
             attackRangeToggle.onValueChanged.RemoveListener(OnAttackRangeChanged);
             attackRangeToggle.onValueChanged.AddListener(OnAttackRangeChanged);
-        }
-        if (cloneAttackRangeToggle != null)
-        {
-            cloneAttackRangeToggle.SetIsOnWithoutNotify(AttackRangeIndicatorManager.CloneVisible);
-            cloneAttackRangeToggle.onValueChanged.RemoveListener(OnCloneAttackRangeChanged);
-            cloneAttackRangeToggle.onValueChanged.AddListener(OnCloneAttackRangeChanged);
         }
         if (damageNumberToggle != null)
         {
@@ -109,6 +112,17 @@ public class SettingsPanelUI : MonoBehaviour
             consoleToggle.onValueChanged.RemoveListener(OnConsoleChanged);
             consoleToggle.onValueChanged.AddListener(OnConsoleChanged);
         }
+        if (runInBackgroundToggle != null)
+        {
+            runInBackgroundToggle.SetIsOnWithoutNotify(BackgroundRun.Enabled);
+            runInBackgroundToggle.onValueChanged.RemoveListener(OnRunInBackgroundChanged);
+            runInBackgroundToggle.onValueChanged.AddListener(OnRunInBackgroundChanged);
+        }
+        if (unstuckButton != null)
+        {
+            unstuckButton.onClick.RemoveListener(OnUnstuckClicked);
+            unstuckButton.onClick.AddListener(OnUnstuckClicked);
+        }
         if (bgmSlider != null)
         {
             bgmSlider.minValue = 0f; bgmSlider.maxValue = 1f;
@@ -131,7 +145,6 @@ public class SettingsPanelUI : MonoBehaviour
     }
 
     private void OnAttackRangeChanged(bool v) { AttackRangeIndicatorManager.Visible = v; }
-    private void OnCloneAttackRangeChanged(bool v) { AttackRangeIndicatorManager.CloneVisible = v; }
     private void OnDamageNumberChanged(bool v)  { DamageNumberSettings.Visible = v; }
     private void OnDamageSizeChanged()
     {
@@ -146,6 +159,25 @@ public class SettingsPanelUI : MonoBehaviour
     }
 
     private void OnConsoleChanged(bool v) { GameConsole.Enabled = v; }
+
+    private void OnRunInBackgroundChanged(bool v) { BackgroundRun.Enabled = v; }
+
+    private void OnUnstuckClicked()
+    {
+        if (Player.HasSpawnPoint)
+        {
+            var p = FindObjectOfType<Player>();
+            if (p != null && !p.gameObject.CompareTag("Clone"))
+            {
+                p.transform.position = Player.MainSpawnPosition;
+                ToastManager.Show("已回到出生点");
+            }
+        }
+        else
+        {
+            ToastManager.Show("无法找到出生点");
+        }
+    }
 
     private void OnFullscreenChanged(bool v)
     {
@@ -204,10 +236,9 @@ public class SettingsPanelUI : MonoBehaviour
         rt.anchorMax = new Vector2(0.5f, 1f);
         rt.pivot = new Vector2(0.5f, 1f);
         rt.anchoredPosition = new Vector2(0f, -30f);
-        // 用户硬性要求：高度固定 926.4153，宽度沿用 autoBuildSize.x。
-        // 之前直接用 autoBuildSize 被场景序列化的 (700, 560) 覆盖 → 高度改不动。
-        // 现在强制写死高度，autoBuildSize 字段的 .x 用于宽度。
-        rt.sizeDelta = new Vector2(autoBuildSize.x, 926.4153f);
+        // 高度硬编码（适配 9 行控件 + 标题 + 关闭按钮），宽度沿用 autoBuildSize.x。
+        // （之前直接用 autoBuildSize 被场景序列化的 (700,560) 覆盖 → 改不动）
+        rt.sizeDelta = new Vector2(autoBuildSize.x, 1050f);
 
         // 关键：把面板自己的 Image 背景设为 stretch-to-parent（锚定四角 + offset 清零），
         // 这样它永远紧贴面板矩形、自动跟随 sizeDelta 变化铺满整个面板。
@@ -225,8 +256,9 @@ public class SettingsPanelUI : MonoBehaviour
         }
 
         // 已经全部拖好了就只更新背景框大小，不再创建重复控件
-        if (attackRangeToggle != null && cloneAttackRangeToggle != null && damageNumberToggle != null
+        if (attackRangeToggle != null && damageNumberToggle != null
             && fullscreenToggle != null && resolutionButton != null && consoleToggle != null
+            && runInBackgroundToggle != null && unstuckButton != null
             && bgmSlider != null && sfxSlider != null && closeButton != null) return;
 
         if (GetComponent<Image>() == null)
@@ -252,71 +284,83 @@ public class SettingsPanelUI : MonoBehaviour
                 new Vector2(60f, y0 - 0 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
         }
 
-        // 行 2：分身攻击范围显示
-        if (cloneAttackRangeToggle == null)
-        {
-            cloneAttackRangeToggle = UIBuilder.CreateToggle(rt, "CloneAttackRangeToggle", "显示分身攻击范围",
-                new Vector2(60f, y0 - 1 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
-        }
-
-        // 行 3：伤害数字
+        // 行 2：伤害数字
         if (damageNumberToggle == null)
         {
             damageNumberToggle = UIBuilder.CreateToggle(rt, "DamageNumberToggle", "显示伤害数字",
-                new Vector2(60f, y0 - 2 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
+                new Vector2(60f, y0 - 1 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
         }
 
-        // 行 3.5：伤害数字大小
+        // 行 2.5：伤害数字大小
         if (damageSizeButton == null)
         {
             damageSizeButton = UIBuilder.CreateButton(rt, "DamageSizeBtn", "伤害数字大小: " + DamageNumberSettings.SizeLabel,
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(60f, y0 - 2 * rowH - 72f), new Vector2(autoBuildSize.x - 120f, 52f), font);
+                new Vector2(60f, y0 - 1 * rowH - 72f), new Vector2(autoBuildSize.x - 120f, 52f), font);
         }
 
-        // 行 4：BGM
+        // 行 3：BGM
         if (bgmSlider == null)
         {
             bgmSlider = UIBuilder.CreateSlider(rt, "BgmSlider", "BGM 音量",
-                new Vector2(60f, y0 - 3 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
+                new Vector2(60f, y0 - 2 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
         }
 
-        // 行 5：SFX
+        // 行 4：SFX
         if (sfxSlider == null)
         {
             sfxSlider = UIBuilder.CreateSlider(rt, "SfxSlider", "音效音量",
-                new Vector2(60f, y0 - 4 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
+                new Vector2(60f, y0 - 3 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
         }
 
-        // 行 6：窗口化切换
+        // 行 5：窗口化切换
         if (fullscreenToggle == null)
         {
             fullscreenToggle = UIBuilder.CreateToggle(rt, "FullscreenToggle", "全屏",
-                new Vector2(60f, y0 - 5 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
+                new Vector2(60f, y0 - 4 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
         }
 
-        // 行 7：分辨率切换
+        // 行 6：分辨率切换
         if (resolutionButton == null)
         {
             var r = ResolutionPresets[_currentResIndex];
             resolutionButton = UIBuilder.CreateButton(rt, "ResolutionBtn", "分辨率: " + r.label,
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(60f, y0 - 6 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
+                new Vector2(60f, y0 - 5 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
         }
 
-        // 行 8：控制台输出开关
+        // 行 7：控制台输出开关
         if (consoleToggle == null)
         {
             consoleToggle = UIBuilder.CreateToggle(rt, "ConsoleToggle", "控制台",
+                new Vector2(60f, y0 - 6 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
+        }
+
+        // 行 8：失去焦点继续运行
+        if (runInBackgroundToggle == null)
+        {
+            runInBackgroundToggle = UIBuilder.CreateToggle(rt, "RunInBackgroundToggle", "后台运行",
                 new Vector2(60f, y0 - 7 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
         }
 
-        // 关闭按钮：面板内部底部居中，控件行之下
-        if (closeButton == null)
+        // 行 9：脱离卡死（回到出生点）
+        if (unstuckButton == null)
         {
-            closeButton = UIBuilder.CreateButton(rt, "CloseButton", "关闭",
-                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(0f, 40f), new Vector2(200f, 64f), font);
+            unstuckButton = UIBuilder.CreateButton(rt, "UnstuckButton", "脱离卡死",
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(60f, y0 - 8 * rowH), new Vector2(autoBuildSize.x - 120f, 60f), font);
+        }
+
+        // 关闭按钮：挂到面板父节点（Canvas 层），锚在屏幕底部居中，不受面板高度限制
+        if (closeButton == null && rt.parent != null)
+        {
+            var parentRt = rt.parent as RectTransform;
+            if (parentRt != null)
+            {
+                closeButton = UIBuilder.CreateButton(parentRt, "SettingsCloseButton", "关闭",
+                    new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                    new Vector2(0f, 40f), new Vector2(200f, 64f), font);
+            }
         }
     }
 }

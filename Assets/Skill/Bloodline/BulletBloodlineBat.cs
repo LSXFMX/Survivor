@@ -652,15 +652,6 @@ public class BulletBloodlineBat : Bulletbase
 
         pl.healthmax += 1;
         pl.health = Mathf.Min(pl.healthmax, pl.health + 1);
-
-        // 绿色飘字提示（借敌人的 atknumber prefab 来生成浮动数字）
-        if (floatingTextPrefab != null && DamageNumberSettings.Visible)
-        {
-            GameObject num = Instantiate(floatingTextPrefab, pl.transform.position, default);
-            num.transform.localScale *= DamageNumberSettings.SizeScale;
-            var tmp = num.transform.GetChild(0).GetComponent<TMPro.TextMeshProUGUI>();
-            if (tmp != null) { tmp.text = "+1 MHP"; tmp.color = new Color32(100, 255, 100, 255); }
-        }
     }
 
     private void TryLifesteal(int dealt, GameObject floatingTextPrefab)

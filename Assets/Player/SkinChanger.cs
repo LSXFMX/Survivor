@@ -93,20 +93,23 @@ public class SkinChanger : MonoBehaviour
         "<color=#FFD37A>本命技能加成 · 血族血统</color>\n" +
         "  • 蝙蝠使魔数量：1 → <color=#7FFFB0>5</color>\n" +
         "  • 自带吸血 <color=#7FFFB0>10%</color>（装备[血族之力]后提升至 <color=#7FFFB0>20%</color>）\n" +
+        "  • 蝙蝠每次攻击 <color=#7FFFB0>10%</color> 概率：最大生命值 +<color=#7FFFB0>1</color>\n" +
         "<color=#FFD37A>额外特性</color>\n" +
         "  • <color=#7FFFB0>开局自动获得</color>[火球术]（火球 ×3）\n" +
-        "<color=#A0A0A0>持续输出 + 持续回复，越打越凶。【适合在解锁血族血统后游玩】</color>",
+        "  • 风箭多重：<color=#7FFFB0>×2</color>\n" +
+        "<color=#A0A0A0>持续输出 + 持续回复 + 无限成长，越打越凶。【适合在解锁血族血统后游玩】</color>",
 
         // skinId=3 无罪（UR · 亡者领域）
         // 注意：避免使用「」全角直角引号——TMP 默认字体对它没有 fallback，会渲染成 □。
         // 改用【】或加颜色 + 文字本身做高亮。
         "<b><color=#7FE3A0>无罪（UR · 亡者领域）</color></b>\n" +
         "<color=#FFD37A>本命技能加成</color>\n" +
-        "  • 风箭 attackRadius：10 → <color=#7FFFB0>15</color>\n" +
-        "  • 孢子领域 attackRadius：8 → <color=#7FFFB0>15</color>\n" +
+        "  • 风箭 attackRadius：10 → <color=#7FFFB0>15</color>，多重：<color=#7FFFB0>×2</color>\n" +
+        "  • 孢子领域 attackRadius：8 → <color=#7FFFB0>15</color>，CD：5s → <color=#7FFFB0>3s</color>\n" +
         "<color=#FFD37A>专属内容</color>\n" +
         "  • <color=#7FFFB0>开局自动获得</color><color=#FFB060>[风箭]</color>+<color=#FFB060>[孢子领域]</color>\n" +
         "  • <color=#FFB060>[亡者领域]被动</color>：被复活的友军小怪死亡时回复 <color=#7FFFB0>0.5%</color> 最大生命值\n" +
+        "  • <color=#FFB060>[亡者领域·成长]</color>：每分钟攻击范围 +<color=#7FFFB0>1</color>（上限 20）\n" +
         "<color=#A0A0A0>活不过前期的乐乐角色</color>",
     };
 
@@ -132,15 +135,16 @@ public class SkinChanger : MonoBehaviour
         "<color=#FF8E70><b>血族血脉</b></color>\n" +
         "<color=#E0E0E0>蝙蝠使魔 <color=#7FFFB0>×5</color>\n" +
         "吸血 <color=#7FFFB0>+10%</color>\n" +
+        "蝙蝠攻击 10% 概率<br>最大生命值 +<color=#7FFFB0>1</color>\n" +
         "火球 <color=#7FFFB0>×3</color>\n" +
         "开局自带<color=#FFB060>火球术</color></color>",
 
         // skinId=3 无罪
         "<color=#7FE3A0><b>亡者契约</b></color>\n" +
         "<color=#E0E0E0>开局自带<color=#FFB060>风箭</color>+<color=#FFB060>孢子领域</color>\n" +
-        "风箭/孢子领域范围 <color=#7FFFB0>15</color>\n" +
-        "解锁亡者领域 UR 进化\n" +
-        "<color=#FFB060>亡者领域</color>被动：友军死亡回 <color=#7FFFB0>0.5%</color> 血</color>",
+        "范围 <color=#7FFFB0>15</color>，孢子CD <color=#7FFFB0>3s</color>\n" +
+        "亡者领域范围每分钟 +<color=#7FFFB0>1</color>（上限 <color=#7FFFB0>20</color>）\n" +
+        "友军死亡回 <color=#7FFFB0>0.5%</color> 血</color>",
     };
 
     private title _title;

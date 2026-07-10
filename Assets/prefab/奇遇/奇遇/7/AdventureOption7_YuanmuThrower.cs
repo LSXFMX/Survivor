@@ -13,6 +13,14 @@ public class AdventureOption7_YuanmuThrower : AdventureOptionBase
         effectDescription = "清空源木，每扣除五十点源木增加一点攻击";
     }
 
+    /// <summary>无尽模式下不出现该奇遇。</summary>
+    public override bool IsAvailableInCurrentDifficulty()
+    {
+        if (DifficultyManager.Instance != null && DifficultyManager.Instance.IsEndless)
+            return false;
+        return base.IsAvailableInCurrentDifficulty();
+    }
+
     public override void Execute()
     {
         Player player = null;

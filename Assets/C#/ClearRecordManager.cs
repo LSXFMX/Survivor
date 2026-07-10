@@ -283,6 +283,14 @@ public class ClearRecordManager : MonoBehaviour
     /// <summary>获取通关装备积分</summary>
     public int GetEquipmentPoints() => PlayerPrefs.GetInt(KEY_POINTS, 0);
 
+    /// <summary>增加装备积分（跨对局持久化，用于无尽模式每分钟奖励等）。</summary>
+    public static void AddEquipmentPoints(int amount)
+    {
+        int pts = PlayerPrefs.GetInt(KEY_POINTS, 0) + amount;
+        PlayerPrefs.SetInt(KEY_POINTS, pts);
+        PlayerPrefs.Save();
+    }
+
     /// <summary>测试用：直接设置积分为10000</summary>
     [ContextMenu("测试：设置积分为10000")]
     public void TestSetPoints100()

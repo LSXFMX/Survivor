@@ -95,10 +95,8 @@ public class ChoiceUI : MonoBehaviour
     }
 
     /// <summary>
-    /// 减 CD 类升级（type=upgradeskill / skillAttr=CDtime / upgradenumber<0）的额外过滤：
-    /// 若目标技能的 CDtime 已经压到阈值附近（再降也无意义，且会让 Skillbase.FixedUpdate 永远出 CDkey>CDtime
-    /// 分支，造成"卡满 CDkey 但写不进去再降"），就把这个升级选项从卡池里剔除。
-    /// 阈值取 0.05 秒，给浮点和触发逻辑留点余量。
+    /// 减 CD 类升级（type=upgradeskill / skillAttr=CDtime / upgradenumber<0）的额外过滤。
+    /// 火球术 CD 下限为 1.0s，其他技能通用下限为 0.05s。
     /// </summary>
     private bool IsCooldownReductionUseless(GameObject upgradeObj)
     {
@@ -107,20 +105,22 @@ public class ChoiceUI : MonoBehaviour
         if (opt == null) return false;
         if (opt.type != Upgradeoptionsbase.Upgradetype.upgradeskill) return false;
         if (opt.skillAtr != Upgradeoptionsbase.skillAttribute.CDtime) return false;
-        if (opt.upgradenumber >= 0f) return false; // 只过滤"减少 CD"
+        if (opt.upgradenumber >= 0f) return false;
         if (opt.skill == null || string.IsNullOrEmpty(opt.skill.Skillname)) return false;
 
-        // 找到玩家身上同名的实际技能实例，用其当前 CDtime 判定（prefab 上的字段不能反映本局升级累积值）。
         const float kCooldownFloor = 0.05f;
+        const float kFireballCdFloor = 1.0f; // 火球术 CD 最小值
+
         foreach (Transform t in playerskill)
         {
             if (t == null) continue;
             Skillbase s = t.GetComponent<Skillbase>();
             if (s == null) continue;
             if (s.Skillname != opt.skill.Skillname) continue;
-            return s.CDtime <= kCooldownFloor;
+
+            float floor = s.Skillname == "火球术" ? kFireballCdFloor : kCooldownFloor;
+            return s.CDtime <= floor;
         }
-        // 玩家还没学这个技能，本来就轮不到出现这张减CD升级卡（升级卡只有学了才出现），按"不过滤"处理。
         return false;
     }
 
@@ -366,7 +366,10 @@ public class ChoiceUI : MonoBehaviour
 
         if (list.Count == 0)
         {
-            // 兜底：找不到 BattleUI 时也要恢复时间流，避免卡在 timeScale=0
+            // 无可选升级卡：改为固定从【攻击力+2 / 防御力+2 / 血量+100】随机给一项，
+            // 并直接关闭三选一（不弹卡），保证无尽 / 满级后继续升级仍有正反馈。
+            ApplyNoCardFallbackUpgrade();
+
             GameObject battleUIObj = GameObject.Find("BattleUI");
             battleUI bui = battleUIObj != null ? battleUIObj.GetComponent<battleUI>() : null;
             if (bui == null)
@@ -380,7 +383,7 @@ public class ChoiceUI : MonoBehaviour
             if (bui.PendingGachaStartupChoices > 0)
             {
                 bui.AbortGachaStartupChain();
-                ToastManager.Show("[抽卡·SSR] 启动资金：当前无可选升级，已结束开局三选一");
+                return;
             }
             bui.ResumeTime();
             return;
@@ -448,6 +451,83 @@ public class ChoiceUI : MonoBehaviour
         refreshsignalchoice(choice1, c1);
         refreshsignalchoice(choice2, c2);
         refreshsignalchoice(choice3, c3);
+
+        // 自动模式：1 秒后高亮显示将要自动选取的选项，再执行选取
+        if (AutoMode.Enabled)
+            StartCoroutine(AutoPickWithHighlight());
+    }
+
+    private const float AUTO_PICK_DELAY = 0.5f; // 自动选取前的等待时间（秒）
+    private static readonly Color _highlightColor = new Color(0.35f, 0.85f, 1f, 0.9f); // 高亮蓝
+
+    /// <summary>
+    /// 自动模式：等待 AUTO_PICK_DELAY 秒，期间高亮将要选取的卡片（模拟悬停效果），
+    /// 到时间后自动点击。玩家若中途手动点击任意卡片，高亮立即清除。
+    /// </summary>
+    private System.Collections.IEnumerator AutoPickWithHighlight()
+    {
+        yield return null; // 等一帧让 UI 稳定
+
+        int bestIdx = ComputeBestAutoPickIndex();
+        Image bestImg = null;
+        Color bestOrig = Color.white;
+        Image[] cardImgs = {
+            choice1 != null ? choice1.GetComponent<Image>() : null,
+            choice2 != null ? choice2.GetComponent<Image>() : null,
+            choice3 != null ? choice3.GetComponent<Image>() : null,
+        };
+
+        // 高亮最佳选项
+        if (bestIdx >= 0 && bestIdx < 3 && cardImgs[bestIdx] != null)
+        {
+            bestImg = cardImgs[bestIdx];
+            bestOrig = bestImg.color;
+            bestImg.color = _highlightColor;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < AUTO_PICK_DELAY)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            if (gameObject == null || !gameObject.activeInHierarchy) break;
+            if (!AutoMode.Enabled) break;
+            yield return null;
+        }
+
+        // 恢复原始颜色
+        if (bestImg != null && bestImg.gameObject != null)
+            bestImg.color = bestOrig;
+
+        // 执行选取
+        if (!AutoMode.Enabled || gameObject == null || !gameObject.activeInHierarchy)
+            yield break;
+
+        int finalIdx = ComputeBestAutoPickIndex();
+        if (finalIdx == 0) click1();
+        else if (finalIdx == 1) click2();
+        else if (finalIdx == 2) click3();
+    }
+
+    /// <summary>按优先级 学习技能 &gt; 技能升级 &gt; 人物升级 确定最佳选项索引（0/1/2）。</summary>
+    private int ComputeBestAutoPickIndex()
+    {
+        int best = -1, bestPri = -1;
+        GameObject[] cs = { c1, c2, c3 };
+        for (int i = 0; i < 3; i++)
+        {
+            if (cs[i] == null) continue;
+            var opt = cs[i].GetComponent<Upgradeoptionsbase>();
+            if (opt == null) continue;
+            int pri = opt.type switch
+            {
+                Upgradeoptionsbase.Upgradetype.getnewskill  => 3,
+                Upgradeoptionsbase.Upgradetype.upgradeskill  => 2,
+                Upgradeoptionsbase.Upgradetype.upgradeplayer => 1,
+                _ => 0,
+            };
+            if (pri > bestPri) { bestPri = pri; best = i; }
+        }
+        return best;
     }
 
     private GameObject GetSecondOrThirdChoice(GameObject fallbackExclude, List<GameObject> nonLearnSkillCandidates)
@@ -539,6 +619,26 @@ public class ChoiceUI : MonoBehaviour
         if (bui.TryAdvanceGachaStartupChain())
             return;
         bui.ResumeTime();
+    }
+
+    /// <summary>
+    /// 无卡可选时的兜底升级：从【攻击力+2 / 防御力+2 / 血量上限+100】随机选一项应用到玩家。
+    /// </summary>
+    private void ApplyNoCardFallbackUpgrade()
+    {
+        Player pl = null;
+        var pLayer = GameObject.Find("playerlayer");
+        if (pLayer != null && pLayer.transform.childCount > 0)
+            pl = pLayer.transform.GetChild(0).GetComponent<Player>();
+        if (pl == null) pl = FindObjectOfType<Player>();
+        if (pl == null) return;
+
+        switch (Random.Range(0, 3))
+        {
+            case 0: pl.atk += 2; ToastManager.Show("<color=#FF6B6B>升级：攻击力 +2</color>"); break;
+            case 1: pl.def += 2; ToastManager.Show("<color=#6BCBFF>升级：防御力 +2</color>"); break;
+            default: pl.healthmax += 100; pl.health += 100; ToastManager.Show("<color=#7CFF7C>升级：血量上限 +100</color>"); break;
+        }
     }
 
     public GameObject getrandom()

@@ -158,6 +158,11 @@ public class GachaManager : MonoBehaviour
         // 一旦后续把数据落到场景 Inspector，本方法因为「Find 命中=true」会自动跳过，零副作用。
         EnsureNewGachaItemsExist();
 
+        // R/SR 新增装备的图标注入：从 Inspector 绑定的 reviveCoinIcon / speedFruitIcon
+        // 写入对应 GachaItemData.icon → GachaUI 抽卡结果界面才能正常显示图标。
+        AllowRSrIconsInTesting();
+        EnsureRSrItemIcons();
+
         // 必须先 InitPool：须包含「未解锁」的 SSR/UR（unlockThreshold>0），否则解锁后 PoolKey 从未写入，
         // GetPoolRemain 缺省为 0，该道具永远不会进入可抽列表。
         InitPool();
@@ -260,6 +265,7 @@ public class GachaManager : MonoBehaviour
 
         // 确保所有 SSR/UR 条目的 icon 字段不为空（场景 Inspector 未拖入时运行时补全）
         EnsureSsrItemIcons();
+        EnsureUrItemIcons();
     }
 
     /// <summary>
@@ -286,18 +292,135 @@ public class GachaManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 将 Inspector 绑定的 reviveCoinIcon / speedFruitIcon 注入到对应 GachaItemData.icon，
+    /// 确保 GachaUI 抽卡结果界面能正确显示所有 R/SR 装备的图标。
+    /// （之前大部分条目的 icon 为 null → 抽卡结果界面显示空白）
+    /// </summary>
+    private void EnsureRSrItemIcons()
+    {
+        // Inspector 专用绑定优先
+        SetItemIcon(rItems, 2, GachaRarity.R, reviveCoinIcon);
+        SetItemIcon(srItems, 6, GachaRarity.SR, speedFruitIcon);
+
+        // 所有其他 R/SR：按 rarityId 从磁盘自动补全（Inspector 已绑的不动）
+        string basePath = "像素幸存者资源包/存档装备图标/抽卡装备";
+        // R items (rarityId → filename)
+        // R_0: Remake (000.png) / R_1: 量子源木 (001.jpeg) / R_2: 读档币 (002.png)
+        SetItemIconFromResources(rItems, 0, GachaRarity.R, $"{basePath}/R/000.png");
+        SetItemIconFromResources(rItems, 1, GachaRarity.R, $"{basePath}/R/001.jpeg");
+        SetItemIconFromResources(rItems, 2, GachaRarity.R, $"{basePath}/R/002.png");
+        // SR items (rarityId → filename)
+        // 0: 经验灵果, 1: 攻击灵果, 2: 防御灵果, 3: 生命灵果, 4: 暴击灵果, 5: 暴伤灵果, 6: 速度灵果
+        for (int i = 0; i <= 6; i++)
+            SetItemIconFromResources(srItems, i, GachaRarity.SR, $"{basePath}/SR/{i}.png");
+    }
+
+    /// <summary>向指定列表中以 (rarityId, rarity) 匹配条目写入 icon（如已有则跳过）。</summary>
+    private void SetItemIcon(System.Collections.Generic.List<GachaItemData> list,
+        int rarityId, GachaRarity rarity, Sprite sp)
+    {
+        if (sp == null || list == null) return;
+        foreach (var item in list)
+        {
+            if (item != null && item.rarityId == rarityId && item.rarity == rarity
+                && item.icon == null)
+                item.icon = sp;
+        }
+    }
+
+    /// <summary>通过 Resources 路径加载图标注入（Inspector 没绑定时的兜底）。</summary>
+    private void SetItemIconFromResources(System.Collections.Generic.List<GachaItemData> list,
+        int rarityId, GachaRarity rarity, string editorPath)
+    {
+        if (list == null) return;
+        foreach (var item in list)
+        {
+            if (item == null || item.rarityId != rarityId || item.rarity != rarity
+                || item.icon != null)
+                continue;
+
+            string resourcesPath = null;
+            if (editorPath.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase))
+                resourcesPath = editorPath.Substring(0, editorPath.Length - 4);
+            else if (editorPath.EndsWith(".jpeg", System.StringComparison.OrdinalIgnoreCase))
+                resourcesPath = editorPath.Substring(0, editorPath.Length - 5);
+            var tex = RuntimeAssetLoader.LoadTexture(null, resourcesPath, editorPath);
+            if (tex != null)
+                item.icon = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                    new Vector2(0.5f, 0.5f), 100f);
+        }
+    }
+
+    /// <summary>
+    /// 若在 Play Mode 下 GachaManager 的 reviveCoinIcon / speedFruitIcon 字段为 null，
+    /// 尝试从 Resources 路径补加载（打包后在 Inspector 里已正确绑定，不需要本方法；
+    /// 此处仅为编辑器测试提供兜底）。
+    /// </summary>
+    private void AllowRSrIconsInTesting()
+    {
+        if (reviveCoinIcon == null)
+            reviveCoinIcon = LoadSprite("像素幸存者资源包/存档装备图标/抽卡装备/R/002.png");
+        if (speedFruitIcon == null)
+            speedFruitIcon = LoadSprite("像素幸存者资源包/存档装备图标/抽卡装备/SR/6.png");
+    }
+
+    private Sprite LoadSprite(string editorPath)
+    {
+        string stripped = null;
+        if (editorPath.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase))
+            stripped = editorPath.Substring(0, editorPath.Length - 4);
+        else if (editorPath.EndsWith(".jpeg", System.StringComparison.OrdinalIgnoreCase))
+            stripped = editorPath.Substring(0, editorPath.Length - 5);
+        if (stripped == null) return null;
+        var tex = RuntimeAssetLoader.LoadTexture(null, stripped, editorPath);
+        if (tex != null)
+            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                new Vector2(0.5f, 0.5f), 100f);
+        return null;
+    }
+
+    /// <summary>UR 图标兜底：按 equipmentSystemId 自动加载。</summary>
+    private void EnsureUrItemIcons()
+    {
+        if (urItems == null) return;
+        foreach (var item in urItems)
+        {
+            if (item == null || item.icon != null) continue;
+            // UR_0 风之形(eqId=4) → UR/001.png? 实际文件名需确认。先跳过，保留场景 Inspector 绑定。
+            // UR_1 地狱火(eqId=5) → UR/001.png
+            // UR_2 亡者领域(eqId=10) → UR/002.png
+            string fn = item.equipmentSystemId switch
+            {
+                5  => "UR/001.png",
+                10 => "UR/002.png",
+                _  => "UR/000.png", // UR_0 风之形 兜底
+            };
+            string path = $"像素幸存者资源包/存档装备图标/抽卡装备/{fn}";
+            string rp = path.EndsWith(".png") ? path.Substring(0, path.Length - 4) : null;
+            var tex = RuntimeAssetLoader.LoadTexture(null, rp, path);
+            if (tex != null)
+                item.icon = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                    new Vector2(0.5f, 0.5f), 100f);
+        }
+    }
+
     /// <summary>根据 equipmentSystemId 返回 SSR 图标的 Assets 相对路径。</summary>
     private static string GetSsrIconPath(int eqId)
     {
-        // equipmentSystemId → 文件名映射（与 EquipmentIcon.ApplyForcedGachaSsrOverrides 保持一致）
-        switch (eqId)
+        // equipmentSystemId → 文件名映射
+        // 0~9 对应 000~009，11→008, 12→009, 13→010, 36→011
+        string basePath = "像素幸存者资源包/存档装备图标/抽卡装备/SSR";
+        if (eqId >= 0 && eqId <= 9)
+            return $"{basePath}/{eqId:D3}.png";
+        return eqId switch
         {
-            case 11: return "像素幸存者资源包/存档装备图标/抽卡装备/SSR/008.png";
-            case 12: return "像素幸存者资源包/存档装备图标/抽卡装备/SSR/009.png";
-            case 13: return "像素幸存者资源包/存档装备图标/抽卡装备/SSR/010.png";
-            case 36: return "像素幸存者资源包/存档装备图标/抽卡装备/SSR/011.png";
-            default: return null; // 其它 SSR 由场景 Inspector 已拖好
-        }
+            11 => $"{basePath}/008.png",
+            12 => $"{basePath}/009.png",
+            13 => $"{basePath}/010.png",
+            36 => $"{basePath}/011.png",
+            _  => null,
+        };
     }
 
     private static bool RarityIdExists(List<GachaItemData> list, int rarityId)

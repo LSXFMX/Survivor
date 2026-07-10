@@ -31,11 +31,14 @@ public class EquipmentIcon : MonoBehaviour
     public Action<EquipmentType, int, EquipmentIcon> onClickCallback;
 
     private const string KEY_SPORE_MUTATION_ENABLED = "SporeMutationEnabled";
+    private const string KEY_TRINITY_FUSION_ENABLED = "TrinityFusion.Enabled";
 
     private bool            isInitialized  = false;
     private EquipmentSystem equipmentSystem;
     private Button          sporeToggleButton;
     private TextMeshProUGUI sporeToggleText;
+    private Button          trinityToggleButton;
+    private TextMeshProUGUI trinityToggleText;
 
     private void Start()    => Initialize();
     private void OnEnable() => UpdateDisplay();
@@ -69,6 +72,7 @@ public class EquipmentIcon : MonoBehaviour
 
         equipmentSystem = EquipmentSystem.Instance;
         SetupSporeMutationToggle();
+        SetupTrinityFusionToggle();
         UpdateDisplay();
         isInitialized = true;
     }
@@ -115,8 +119,8 @@ public class EquipmentIcon : MonoBehaviour
         if (equipmentId == 1)
         {
             equipmentName = "大手子";
-            description = "初始经验石吸取距离 +30%\n每通关一个更高的难度，额外 +5%\n" +
-                "（通关 N1 后 35%，N2 后 40%，N3 后 45%……）\n\n" +
+            description = "初始经验石吸取距离 +50%\n每通关一个更高的难度，额外 +10%\n" +
+                "（通关 N1 后 60%，N2 后 70%，N3 后 80%……）\n\n" +
                 "那些闪闪发光的东西，一个也别想逃。";
             howToGet = "首次点击主页面的草";
         }
@@ -131,7 +135,7 @@ public class EquipmentIcon : MonoBehaviour
         {
             equipmentName = "沙漏";
             description = "解锁三倍速\n\n无限流玩家的必需品，血族血脉的最爱。";
-            howToGet = "使用500次抽卡（一次性计数）";
+            howToGet = "累计游玩 30 分钟游戏";
         }
         else if (equipmentId == 7)
         {
@@ -139,6 +143,13 @@ public class EquipmentIcon : MonoBehaviour
             description = "每隔一分钟，将全图的经验石吸引到自己周围\n\n真是方便的能力啊";
             howToGet = "在单局内达到五十级";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/成就装备/007空白绘卷/7.万象天引.png");
+        }
+        else if (equipmentId == 8)
+        {
+            equipmentName = "不可视之手";
+            description = "解锁自动选取升级功能\n\n有一只手在帮你选择升级，还不快谢他";
+            howToGet = "累计选择两百次升级";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/成就装备/008不可视之手/8.不可视之手.png");
         }
     }
 
@@ -198,12 +209,25 @@ public class EquipmentIcon : MonoBehaviour
         if (equipmentType != EquipmentType.GachaEquipment) return;
         if (gachaRarity != GachaRarity.UR) return;
 
-        if (equipmentId == 10)
+        // UR_0 风之形（之前缺失描述，完全来自场景 prefab → 补充兜底）
+        if (equipmentId == 4)
+        {
+            equipmentName = "风之形";
+            description = "解锁飓风技能进化路线\n\n" +
+                "进化条件：已学习风箭\n\n" +
+                "技能效果：将风箭进化为飓风，大幅提升范围伤害与击退\n\n" +
+                "风的形状，由你来定义。";
+            howToGet = "抽卡获得（N3 加入卡池）";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/UR/000.png");
+        }
+        else if (equipmentId == 10)
         {
             equipmentName = "亡者领域";
             description = "解锁孢子领域 → 亡者领域 的技能进化路线\n\n" +
                 "进化条件：已学习风箭 + 已学习孢子领域，且二者攻击范围 >= 15\n\n" +
-                "技能效果：在孢子领域范围内复活被击杀的敌人成为友军，友军小怪死亡时回复 0.5% 最大生命值\n\n" +
+                "技能效果：在孢子领域范围内复活被击杀的敌人成为友军\n" +
+                "友军小怪死亡时回复 0.5% 最大生命值\n" +
+                "（无罪专属：每分钟攻击范围 +1，上限 20）\n\n" +
                 "墓园的呢喃，是给你的低语。";
             howToGet = "通关 N6 后加入卡池";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/UR/002.png");
@@ -750,6 +774,74 @@ public class EquipmentIcon : MonoBehaviour
         if (bg != null) bg.color = enabled ? new Color(0.1f, 0.55f, 0.15f, 0.95f) : new Color(0.45f, 0.1f, 0.1f, 0.95f);
     }
 
+    // ── SSR9 三清化一 开关（参照孢子异变模式）────────────────────
+    private void SetupTrinityFusionToggle()
+    {
+        if (equipmentType != EquipmentType.GachaEquipment || gachaRarity != GachaRarity.SSR || equipmentId != 12) return;
+        if (trinityToggleButton != null) return;
+
+        Transform existing = transform.Find("TrinityFusionToggle");
+        GameObject toggleObj = existing != null ? existing.gameObject : new GameObject("TrinityFusionToggle");
+        toggleObj.transform.SetParent(transform, false);
+
+        RectTransform rect = toggleObj.GetComponent<RectTransform>();
+        if (rect == null) rect = toggleObj.AddComponent<RectTransform>();
+        // 定位在装备图标底部居中（不与孢子异变按钮的顶部位置冲突）
+        rect.anchorMin = new Vector2(0.5f, 0f);
+        rect.anchorMax = new Vector2(0.5f, 0f);
+        rect.pivot = new Vector2(0.5f, 0f);
+        rect.anchoredPosition = new Vector2(0f, 8f);
+        rect.sizeDelta = new Vector2(50f, 30f);
+
+        Image bg = toggleObj.GetComponent<Image>();
+        if (bg == null) bg = toggleObj.AddComponent<Image>();
+        bg.color = new Color(0.08f, 0.08f, 0.08f, 0.9f);
+
+        trinityToggleButton = toggleObj.GetComponent<Button>();
+        if (trinityToggleButton == null) trinityToggleButton = toggleObj.AddComponent<Button>();
+        trinityToggleButton.onClick.RemoveAllListeners();
+        trinityToggleButton.onClick.AddListener(ToggleTrinityFusion);
+
+        Transform textTr = toggleObj.transform.Find("Text");
+        GameObject textObj = textTr != null ? textTr.gameObject : new GameObject("Text");
+        textObj.transform.SetParent(toggleObj.transform, false);
+        RectTransform textRect = textObj.GetComponent<RectTransform>();
+        if (textRect == null) textRect = textObj.AddComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.sizeDelta = Vector2.zero;
+
+        trinityToggleText = textObj.GetComponent<TextMeshProUGUI>();
+        if (trinityToggleText == null) trinityToggleText = textObj.AddComponent<TextMeshProUGUI>();
+        trinityToggleText.alignment = TextAlignmentOptions.Center;
+        trinityToggleText.fontSize = 18;
+        trinityToggleText.fontStyle = FontStyles.Bold;
+        trinityToggleText.raycastTarget = false;
+    }
+
+    private void ToggleTrinityFusion()
+    {
+        bool enabled = TrinityFusionToggle.Enabled;
+        TrinityFusionToggle.Enabled = !enabled;
+        UpdateTrinityFusionToggleDisplay(IsUnlocked());
+        ToastManager.Show(enabled ? "三清化一：已关闭" : "三清化一：已开启");
+    }
+
+    private void UpdateTrinityFusionToggleDisplay(bool isUnlocked)
+    {
+        if (equipmentType != EquipmentType.GachaEquipment || gachaRarity != GachaRarity.SSR || equipmentId != 12) return;
+        SetupTrinityFusionToggle();
+        if (trinityToggleButton == null) return;
+
+        trinityToggleButton.gameObject.SetActive(isUnlocked);
+        if (!isUnlocked) return;
+
+        bool enabled = TrinityFusionToggle.Enabled;
+        if (trinityToggleText != null) trinityToggleText.text = enabled ? "开" : "关";
+        Image bg = trinityToggleButton.GetComponent<Image>();
+        if (bg != null) bg.color = enabled ? new Color(0.35f, 0.15f, 0.55f, 0.95f) : new Color(0.45f, 0.1f, 0.1f, 0.95f);
+    }
+
     public void UpdateDisplay()
     {
         if (iconImage == null) return;
@@ -759,6 +851,7 @@ public class EquipmentIcon : MonoBehaviour
         bool isUnlocked = IsUnlocked();
         iconImage.color = isUnlocked ? unlockedColor : lockedColor;
         UpdateSporeMutationToggleDisplay(isUnlocked);
+        UpdateTrinityFusionToggleDisplay(isUnlocked);
 
         // R/SR 抽卡装备：按稀有度单独显示叠加数量
         if (countText != null && equipmentType == EquipmentType.GachaEquipment

@@ -148,6 +148,12 @@ public static class TombDomainHook
         bool isWorldBoss = (en is WorldBossBat) || (en is WorldBossMushroomMan)
                         || (en is WorldBossWolf) || (en is WorldBossBase);
 
+        // === 无尽模式：每 5 分钟刷出的社群 Boss（蘑菇/蝙蝠/狼人/史莱姆）也应能被无罪复活为永久友军 ===
+        // 无尽模式没有关底流程，所有 Boss 都是社群 Boss，一律按「世界 Boss 级」处理（永久友军，不 15s 衰减即死）。
+        bool endless = DifficultyManager.Instance != null && DifficultyManager.Instance.IsEndless;
+        if (endless && ((en is BossBat) || (en is BossMushroomMan) || (en is WolfBoss) || (en is SlimeBoss)))
+            isWorldBoss = true;
+
         // === 2026-06-12：亡者领域对关底 Boss 无效，只对世界 Boss 有效 ===
         // 关底 Boss（BossBat / BossMushroomMan 实例但不是世界 Boss 版本）不能被复活。
         bool isStageBoss = !isWorldBoss && ((en is BossBat) || (en is BossMushroomMan));

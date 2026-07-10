@@ -21,6 +21,12 @@ public class battleUI : MonoBehaviour
     public int second;
     public bool startcount;
     public float timer;
+
+    // ── 无尽模式 ──
+    private bool  _endlessMode = false;
+    private float _endlessElapsed = 0f;   // 已过秒数（正计时）
+    private int   _endlessStageCount = 0; // 已触发的 5 分钟阶段数
+    private int   _endlessPointsMinute = 0; // 上次发放积分的分钟数
     public GameObject choiceUI;
     public TextMeshProUGUI yuanmuText;
     public AdventureUI adventureUI;
@@ -114,6 +120,116 @@ public class battleUI : MonoBehaviour
 
         // 角色头像 + 玩家升级进度 UI（运行时构造，无需场景拖拽）
         EnsureCharacterPanel();
+
+        // 自动模式按钮（运行时构造：齿轮图标 + 文字，开启时齿轮旋转+文字绿，关闭时停转+文字红）
+        AutoMode.Enabled = false;
+        EnsureAutoButton();
+    }
+
+    // ── 自动模式按钮 ──
+    private Image _autoGearImage;       // 齿轮图标（旋转）
+    private TextMeshProUGUI _autoLabel;  // 文字（不旋转）
+    private AutoGearSpinner _autoSpinner;
+
+    private void EnsureAutoButton()
+    {
+        // 仅在解锁成就装备8「不可视之手」后才提供自动选取升级功能（未解锁则不生成按钮）
+        if (!UpgradeChoiceCounter.AutoUnlocked)
+            return;
+
+        Canvas canvas = null;
+        if (speedButtonText != null) canvas = speedButtonText.GetComponentInParent<Canvas>();
+        if (canvas == null) canvas = GetComponentInParent<Canvas>();
+        if (canvas == null) canvas = FindObjectOfType<Canvas>();
+        if (canvas == null) return;
+        var parent = (RectTransform)canvas.transform;
+        if (parent.Find("AutoModeButton") != null) return;
+
+        var go = new GameObject("AutoModeButton", typeof(RectTransform));
+        var rt = (RectTransform)go.transform;
+        rt.SetParent(parent, false);
+        rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(1f, 1f);
+        rt.sizeDelta = new Vector2(120f, 60f);
+        rt.anchoredPosition = new Vector2(-20f, -150f);
+
+        var bg = go.AddComponent<Image>();
+        bg.color = new Color(0.1f, 0.1f, 0.12f, 0.85f);
+        var btn = go.AddComponent<Button>();
+        btn.onClick.AddListener(ToggleAutoMode);
+
+        // 齿轮图标（左侧，旋转）
+        var gearGo = new GameObject("Gear", typeof(RectTransform));
+        var grt = (RectTransform)gearGo.transform;
+        grt.SetParent(rt, false);
+        grt.anchorMin = grt.anchorMax = new Vector2(0f, 0.5f);
+        grt.pivot = new Vector2(0.5f, 0.5f);
+        grt.sizeDelta = new Vector2(40f, 40f);
+        grt.anchoredPosition = new Vector2(30f, 0f);
+        _autoGearImage = gearGo.AddComponent<Image>();
+        _autoGearImage.sprite = MakeGearSprite();
+        _autoGearImage.raycastTarget = false;
+        _autoSpinner = gearGo.AddComponent<AutoGearSpinner>();
+        _autoSpinner.enabled = false;
+
+        // 文字（右侧，不旋转）
+        var txtGo = new GameObject("Label", typeof(RectTransform));
+        var trt = (RectTransform)txtGo.transform;
+        trt.SetParent(rt, false);
+        trt.anchorMin = new Vector2(0f, 0f); trt.anchorMax = new Vector2(1f, 1f);
+        trt.offsetMin = new Vector2(52f, 0f); trt.offsetMax = Vector2.zero;
+        _autoLabel = txtGo.AddComponent<TextMeshProUGUI>();
+        _autoLabel.text = "自动";
+        _autoLabel.fontSize = 24;
+        _autoLabel.alignment = TextAlignmentOptions.Center;
+        _autoLabel.raycastTarget = false;
+        if (health != null && health.font != null) _autoLabel.font = health.font;
+
+        RefreshAutoButtonVisual();
+    }
+
+    public void ToggleAutoMode()
+    {
+        AutoMode.Enabled = !AutoMode.Enabled;
+        AudioManager.PlaySfx(AudioManager.SfxKey.Click);
+        RefreshAutoButtonVisual();
+    }
+
+    private void RefreshAutoButtonVisual()
+    {
+        bool on = AutoMode.Enabled;
+        if (_autoLabel != null) _autoLabel.color = on ? new Color(0.4f, 1f, 0.4f) : new Color(1f, 0.4f, 0.4f);
+        if (_autoGearImage != null) _autoGearImage.color = on ? new Color(0.4f, 1f, 0.4f) : new Color(0.8f, 0.8f, 0.8f);
+        if (_autoSpinner != null) _autoSpinner.enabled = on;
+    }
+
+    /// <summary>运行时绘制一个简单的齿轮 Sprite（8 齿），避免依赖美术资源。</summary>
+    private static Sprite _gearSprite;
+    private static Sprite MakeGearSprite()
+    {
+        if (_gearSprite != null) return _gearSprite;
+        int size = 64; var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        float cx = size / 2f, cy = size / 2f;
+        float rOuter = size * 0.46f, rInner = size * 0.30f, rHole = size * 0.13f;
+        int teeth = 8;
+        var clear = new Color(1, 1, 1, 0);
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x + 0.5f - cx, dy = y + 0.5f - cy;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float ang = Mathf.Atan2(dy, dx);
+                float toothWave = Mathf.Cos(ang * teeth);
+                float ringR = rInner + (rOuter - rInner) * ((toothWave + 1f) * 0.5f > 0.5f ? 1f : 0f);
+                Color col = clear;
+                if (d <= ringR && d >= rHole) col = Color.white;
+                if (col.a > 0f) { float edge = ringR - d; if (edge < 1.5f) col.a *= Mathf.Clamp01(edge / 1.5f); }
+                tex.SetPixel(x, y, col);
+            }
+        tex.Apply();
+        _gearSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        return _gearSprite;
     }
 
     /// <summary>从 speedButtonText 父级自动取 Button，避免新增字段 / 修改场景。</summary>
@@ -382,6 +498,22 @@ public class battleUI : MonoBehaviour
 
     public void starttime()
     {
+        _endlessMode = DifficultyManager.Instance != null && DifficultyManager.Instance.IsEndless;
+        if (_endlessMode)
+        {
+            enemy.endlessHpMultiplier = 1.0f;
+            _endlessElapsed = 0f;
+            _endlessStageCount = 0;
+            _endlessPointsMinute = 0;
+            minute = 0; second = 0;
+            timer = 0;
+            startcount = true;
+            _deathFallbackTimer = 0f;
+            _deathFallbackTriggered = false;
+            if (timeui != null) timeui.text = "00:00";
+            return;
+        }
+
         minute = DifficultyManager.Instance != null ? DifficultyManager.Instance.Current.minutes : 10;
         second = 0;
         timer = 0;
@@ -421,7 +553,44 @@ public class battleUI : MonoBehaviour
         // 角色头像 + 玩家升级进度（每帧刷新文字与皮肤切换检测——成本极低）
         RefreshCharacterPanel();
 
-        if (startcount)
+        if (startcount && _endlessMode)
+        {
+            // 无尽模式：正计时，永不 timeover
+            _endlessElapsed += Time.deltaTime;
+            int m = (int)(_endlessElapsed / 60f);
+            int s = (int)(_endlessElapsed % 60f);
+            if (timeui != null) timeui.text = (m < 10 ? "0" : "") + m + (s < 10 ? ":0" : ":") + s;
+
+            // 每 5 分钟一个阶段：刷社群Boss + 血量倍率 +5
+            int stage = (int)(_endlessElapsed / 300f);
+            if (stage > _endlessStageCount)
+            {
+                _endlessStageCount = stage;
+                OnEndlessStage(stage);
+            }
+
+            // 每分钟 +5 装备积分 + 扣除 20% 源木（传送门维持费用），每 5 分钟显示一次提示
+            int curMinute = (int)(_endlessElapsed / 60f);
+            if (curMinute > _endlessPointsMinute)
+            {
+                _endlessPointsMinute = curMinute;
+                ClearRecordManager.AddEquipmentPoints(5);
+
+                // 扣除 20% 源木作为传送门维持费用
+                if (YuanMuManager.Instance != null && YuanMuManager.Instance.Current > 0)
+                {
+                    int tax = Mathf.Max(1, Mathf.RoundToInt(YuanMuManager.Instance.Current * 0.1f));
+                    YuanMuManager.Instance.Spend(tax);
+                }
+
+                if (curMinute % 5 == 0)
+                {
+                    int total = ClearRecordManager.Instance != null ? ClearRecordManager.Instance.GetEquipmentPoints() : 0;
+                    ToastManager.Show($"<color=#D4AAFF>无尽 第{curMinute}分钟：装备积分 +5（合计 {total}）</color>");
+                }
+            }
+        }
+        else if (startcount)
         {
             timer += Time.deltaTime;
             if (timer >= 1)
@@ -685,6 +854,50 @@ public class battleUI : MonoBehaviour
         }
     }
 
+    /// <summary>无尽模式：每 5 分钟触发一次——血量倍率 +5，随机生成一个已解锁社群 Boss。</summary>
+    private void OnEndlessStage(int stage)
+    {
+        // 血量倍率 +5（作用于之后新生成的怪）
+        enemy.endlessHpMultiplier = 1f + stage * 5f;
+        ToastManager.Show($"<color=#FF6060>无尽 第{stage}波：怪物血量倍率 ×{enemy.endlessHpMultiplier:0}</color>");
+        SpawnRandomCommunityBoss();
+    }
+
+    /// <summary>无尽模式：随机生成一个"已解锁"的社群 Boss（蘑菇/蝙蝠/狼人/史莱姆）。</summary>
+    private void SpawnRandomCommunityBoss()
+    {
+        // 候选：按通关记录判断解锁（通关过对应难度即视为解锁该社群 Boss）
+        var candidates = new System.Collections.Generic.List<GameObject>();
+        var crm = ClearRecordManager.Instance;
+        // 蘑菇 Boss：N2 起就有，基本恒解锁
+        if (bossPrefab != null) candidates.Add(bossPrefab);
+        // 蝙蝠 Boss：通关 N7 解锁
+        if (batBossPrefab != null && (crm == null || crm.GetClearCount("N7") > 0)) candidates.Add(batBossPrefab);
+        // 狼人 Boss：通关 N9 解锁
+        if (wolfBossPrefab != null && (crm == null || crm.GetClearCount("N9") > 0)) candidates.Add(wolfBossPrefab);
+        // 史莱姆 Boss：通关 N11 解锁
+        GameObject slimeP = slimeBossPrefab != null ? slimeBossPrefab : Resources.Load<GameObject>("WorldBoss/SlimeBoss");
+        if (slimeP != null && (crm == null || crm.GetClearCount("N11") > 0)) candidates.Add(slimeP);
+
+        if (candidates.Count == 0) { if (bossPrefab != null) candidates.Add(bossPrefab); else return; }
+
+        GameObject prefab = candidates[Random.Range(0, candidates.Count)];
+        Vector3 pos = GetBossSpawnPos(0, 1);
+        GameObject obj = Instantiate(prefab, pos, Quaternion.Euler(45, 0, 0), enemylayer != null ? enemylayer : null);
+
+        // 按类型接线 + 注册血条（不进入 bossPhase，无尽模式不因 Boss 存活切换胜负流程）
+        var mush = obj.GetComponent<BossMushroomMan>();
+        if (mush != null) { mush.battleUI = this; BossHealthBarUI.Register(mush); }
+        var bat = obj.GetComponent<BossBat>();
+        if (bat != null) { bat.battleUI = this; BossHealthBarUI.Register(bat); }
+        var wolf = obj.GetComponent<WolfBoss>();
+        if (wolf != null) { wolf.battleUI = this; BossHealthBarUI.Register(wolf); }
+        var slime = obj.GetComponent<SlimeBoss>();
+        if (slime != null) { slime.battleUI = this; BossHealthBarUI.Register(slime); }
+
+        ToastManager.Show("<color=#FFD24A>无尽：一个社群Boss出现了！</color>");
+    }
+
     private void SpawnBoss()
     {
         string label = DifficultyManager.Instance != null ? DifficultyManager.Instance.Current.label : "N2";
@@ -924,7 +1137,7 @@ public class battleUI : MonoBehaviour
         const float AVATAR_SIZE   = 56f;
         const float TEXT_HEIGHT   = 20f;
         const float GAP_TO_BAR    = 4f;     // 头像底与血条顶之间的留空
-        const float PANEL_W       = AVATAR_SIZE;
+        const float PANEL_W       = 90f;    // 加宽到 90px，避免升级数 "144/17" 等换行
         const float PANEL_H       = AVATAR_SIZE + TEXT_HEIGHT;
 
         var panel = new GameObject("CharacterAvatarPanel", typeof(RectTransform));
@@ -990,6 +1203,7 @@ public class battleUI : MonoBehaviour
         tmp.color = new Color(1f, 0.92f, 0.6f, 1f);
         tmp.text = "0/0";
         tmp.raycastTarget = false;
+        tmp.enableWordWrapping = false; // 强制单行（避免 "144/17" 被拆成两行）
         // 复用 health TMP 的 font，确保中文/像素字体一致
         if (health != null && health.font != null) tmp.font = health.font;
         _charUpgradeText = tmp;

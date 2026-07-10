@@ -6,6 +6,14 @@ using UnityEngine;
 /// </summary>
 public class AdventureAntSummon : AdventureOptionBase
 {
+    /// <summary>无尽模式下不出现该奇遇。</summary>
+    public override bool IsAvailableInCurrentDifficulty()
+    {
+        if (DifficultyManager.Instance != null && DifficultyManager.Instance.IsEndless)
+            return false;
+        return base.IsAvailableInCurrentDifficulty();
+    }
+
     public override void Execute()
     {
         int refund = AdventureEventManager.Instance != null

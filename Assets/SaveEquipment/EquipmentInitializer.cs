@@ -100,6 +100,10 @@ public class EquipmentInitializer : MonoBehaviour
         if (PlayerPrefs.GetInt("MushroomDefeatedCount", 0) >= 500)
             EquipmentSystem.Instance.UnlockEquipment(EquipmentType.AchievementEquipment, 6);
 
+        // 不可视之手：累计选择 200 次升级后应长期保持解锁（解锁自动选取升级功能）
+        if (PlayerPrefs.GetInt("TotalUpgradeChoices", 0) >= UpgradeChoiceCounter.UNLOCK_THRESHOLD)
+            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.AchievementEquipment, 8);
+
         // 孢子之心（好感度装备0）：蘑菇好感度达到10后应保持解锁
         int favor = FavorManager.Instance != null
             ? FavorManager.Instance.GetFavor(FactionType.Mushroom)
@@ -426,6 +430,10 @@ public class EquipmentInitializer : MonoBehaviour
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.AchievementEquipment, 7))
             ApplyAchievement7_WanxiangAttraction();
 
+        // 成就装备 8：不可视之手 - 解锁自动选取升级功能（局内由 battleUI 检测该装备决定是否显示自动按钮）
+        if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.AchievementEquipment, 8))
+            ToastManager.Show("[装备] 不可视之手：自动选取升级已解锁（点击右上角齿轮开启）");
+
         // 好感度装备 0：孢子之心（好感度≥10解锁）
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment, 0))
             ApplyFavorEquipment0_SporeHeart();
@@ -466,17 +474,17 @@ public class EquipmentInitializer : MonoBehaviour
     }
 
     /// <summary>
-    /// 成就装备1「大手子」：初始经验石吸取距离 +30%，
-    /// 每通关一个更高的难度额外 +5%（通关 N1 后 35%，N2 后 40%，以此类推）。
+    /// 成就装备1「大手子」：初始经验石吸取距离 +50%，
+    /// 每通关一个更高的难度额外 +10%（通关 N1 后 60%，N2 后 70%，以此类推）。
     /// </summary>
     private void ApplyAchievement1_PickupRadius()
     {
         if (player == null) return;
-        // 基础加成 30%
-        float bonusPercent = 30f;
-        // 每通关一个更高难度 +5%（检查从 N1 开始连续通关了多少难度）
+        // 基础加成 50%
+        float bonusPercent = 50f;
+        // 每通关一个更高难度 +10%（检查从 N1 开始连续通关了多少难度）
         int clearedLevels = GetHighestClearedDifficultyCount();
-        bonusPercent += clearedLevels * 5f;
+        bonusPercent += clearedLevels * 10f;
         float multiplier = 1f + bonusPercent / 100f;
         player.PickupRadius *= multiplier;
         ToastManager.Show($"[装备] 大手子：拾取范围 +{bonusPercent:0}%（通关 {clearedLevels} 个难度）");

@@ -10,11 +10,11 @@ public class AdventureOption8_Fool : AdventureOptionBase
 {
     public override bool IsAvailableInCurrentDifficulty()
     {
-        // 先走基类的 oneShot 去重判定，否则本奇遇能在同一局内被反复抽到。
-        // 基类会检查 usedOptionsThisRun，已选过就直接 false。
         if (!base.IsAvailableInCurrentDifficulty()) return false;
 
         if (DifficultyManager.Instance == null) return false;
+        // 无尽模式或 N5+ 可触发愚弄
+        if (DifficultyManager.Instance.IsEndless) return true;
         string label = DifficultyManager.Instance.Current.label;
         if (!label.StartsWith("N")) return false;
         if (!int.TryParse(label.Substring(1), out int n)) return false;

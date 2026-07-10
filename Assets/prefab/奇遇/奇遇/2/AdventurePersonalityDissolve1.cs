@@ -125,7 +125,12 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
         //   的标准 Unity 套路 —— 子对象会跟随父节点的 inactive 状态、不会跑 Awake，
         //   我们改完 tag 后再把它移到 playerlayer 下并激活。
         GameObject original = mainPlayer.gameObject;
-        Vector3 spawnOffset = new Vector3(1.5f, 0, 0);
+
+        // ★ 在激活新分身前数现存分身数，决定出生偏移和跟随侧
+        int existingClones = CountActiveClones();
+        // 第 1 个分身 → 左侧（-1.5），第 2 个分身 → 右侧（+1.5）
+        float sideSign = existingClones >= 1 ? 1f : -1f;
+        Vector3 spawnOffset = new Vector3(sideSign * 1.5f, 0, 0);
 
         // 临时 holder：天生 inactive，让 Instantiate 进去的 clone 也处于 inactive 状态
         // （Unity 规则：子对象的"实际激活态"= 自身 activeSelf && 所有祖先 activeSelf）
@@ -155,6 +160,8 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
 
         // 设定分身的主体引用，使分身 AI 跟随主体移动
         clonePlayer.cloneOwner = ownerPlayer;
+        // 与出生偏移一致：-1=左，+1=右（玩家操控的在中间，一左一右）
+        clonePlayer.cloneFollowSide = existingClones >= 1 ? 1 : -1;
 
         // —— 4.5 立即停掉分身物理推挤（防御：避免第一帧分身把主玩家撞跑） —— //
         // 背景：分身和主玩家共用同一份 Player prefab，Player.Update() 里所有 Player
@@ -174,6 +181,9 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
             cloneRb.velocity        = Vector3.zero;
             cloneRb.angularVelocity = Vector3.zero;
         }
+
+        // 防御性：在 Player.Start 运行之前就忽略与主玩家的碰撞（防止时序窗口推挤）
+        IgnoreCollisionBetween(original, clone);
 
         // —— 5. 属性继承（策划：30% 属性；SSR6 解锁后 MushroomShadowCloneSync 逐帧同步本体 30%）—— //
         // 分身大小缩小到本体的 70%，视觉上与本体形成明显区分
@@ -227,7 +237,7 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
         //   - 有 SSR6 时：分身技能数值与主控同步（技能字段 1:1 复制，实际伤害 = damage × atk，
         //     atk 已经是 30%），合并后通过 skillupgrade.SyncUpgradeToCloneSkills 持续跟踪升级。
         //   - 两种情况都只有"随机一半"的技能（SSR6 不补齐技能列表）。
-        if (IsSsrUnlocked(SSR_TRINITY_FUSION_ID))
+        if (IsSsrUnlocked(SSR_TRINITY_FUSION_ID) && TrinityFusionToggle.Enabled)
         {
             // 在本体上创建独立的技能容器 SkillListClone
             Transform cloneSkillContainer = ownerPlayer.SkillListClone;
@@ -273,7 +283,7 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
                                 sb.speed     = ownerSkill.speed     * 0.3f;
                                 sb.number    = Mathf.Max(1, Mathf.RoundToInt(ownerSkill.number * 0.3f));
                                 sb.bullet    = ownerSkill.bullet; // bullet 是引用，不缩放
-                                sb.size      = ownerSkill.size     * 0.3f;
+                                sb.size      = ownerSkill.size     * 0.9f; // 技能大小保持 90%
                                 sb.interval  = ownerSkill.interval * 0.3f;
                                 sb.angel     = ownerSkill.angel    * 0.3f;
                             }
@@ -376,5 +386,20 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
     {
         return EquipmentSystem.Instance != null &&
                EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, id);
+    }
+
+    /// <summary>忽略两个 GameObject 之间所有 Collider 的物理碰撞（防止分身把主玩家推跑）。</summary>
+    private static void IgnoreCollisionBetween(GameObject a, GameObject b)
+    {
+        if (a == null || b == null) return;
+        var colsA = a.GetComponentsInChildren<Collider>();
+        var colsB = b.GetComponentsInChildren<Collider>();
+        if (colsA == null || colsB == null) return;
+        foreach (var ca in colsA)
+        {
+            if (ca == null) continue;
+            foreach (var cb in colsB)
+                if (cb != null) Physics.IgnoreCollision(ca, cb, true);
+        }
     }
 }

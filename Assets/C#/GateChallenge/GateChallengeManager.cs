@@ -29,6 +29,14 @@ public class GateChallengeManager : MonoBehaviour
 
     private const int MAX_FLOOR = 13;
 
+    // ── 门挑战难度上调（主要提升血量 + 轻微自然回血，不提升攻击力）──
+    private const float HP_BOOST          = 1.6f;    // 敌人血量额外 ×1.6
+    private const float REGEN_PCT_PER_SEC = 0.0002f; // 敌人每秒自然回血 = 最大血量的 0.02%
+
+    // 每层通关随机奖励数值 / 全通奖励数值
+    private const int   LAYER_REWARD_AMOUNT = 2;     // 攻击/防御/经验效率/闪避 四选一各 +2
+    private const float FULL_CLEAR_DR_BONUS = 10f;   // 全 13 层通关额外经验效率 +10
+
     private bool _inChallenge     = false;
     private bool _unlockedThisRun = false;
     private int  _currentFloor    = 1;
@@ -79,12 +87,16 @@ public class GateChallengeManager : MonoBehaviour
     {
         if (_unlockedThisRun) return;
 
-        // N5 及以上难度才开放门挑战
+        // N5 及以上难度或无尽模式开放门挑战
         if (DifficultyManager.Instance != null)
         {
-            string label = DifficultyManager.Instance.Current.label;
-            if (label.StartsWith("N") && int.TryParse(label.Substring(1), out int n) && n >= 5) { }
-            else return;
+            if (DifficultyManager.Instance.IsEndless) { }
+            else
+            {
+                string label = DifficultyManager.Instance.Current.label;
+                if (label.StartsWith("N") && int.TryParse(label.Substring(1), out int n) && n >= 5) { }
+                else return;
+            }
         }
 
         _unlockedThisRun = true;
@@ -173,7 +185,8 @@ public class GateChallengeManager : MonoBehaviour
         // 奇遇·愚弄会把 DifficultyMultiplier 翻倍，敌人血量/攻击/防御按倍率放大；
         // 闪避做 95% 上限，防止 ×N 后变成 100%+ 完全免疫。
         int mult       = Mathf.Max(1, DifficultyMultiplier);
-        int finalHp    = data.enemyHealth * mult;
+        // 难度上调：血量额外 ×HP_BOOST；攻击力保持原值（不上调）。
+        int finalHp    = Mathf.RoundToInt(data.enemyHealth * mult * HP_BOOST);
         int finalAtk   = data.enemyAtk    * mult;
         int finalDef   = data.enemyDef    * mult;
         int finalEva   = Mathf.Min(95, data.enemyEVA * mult);
@@ -193,6 +206,11 @@ public class GateChallengeManager : MonoBehaviour
             e.EVA       = finalEva;
 
             _spawnedEnemies.Add(e);
+
+            // 自然回血：门挑战怪每秒回复最大血量的 REGEN_PCT_PER_SEC（难度上调；不影响其它模式敌人）
+            var regen = obj.GetComponent<GateChallengeRegen>();
+            if (regen == null) regen = obj.AddComponent<GateChallengeRegen>();
+            regen.Init(e, REGEN_PCT_PER_SEC);
 
             if (healthBarPrefab != null)
                 Instantiate(healthBarPrefab, obj.transform);
@@ -259,6 +277,9 @@ public class GateChallengeManager : MonoBehaviour
             ChoiceUI.Instance.IncreaseAllMaxUpgrades();
         ToastManager.Show($"第{floor}层通关！所有技能升级上限 +1");
 
+        // 每通过一层：在 攻击/防御/经验效率/闪避 之间随机选 1 项 +2 增强玩家
+        GrantRandomLayerReward();
+
         _currentFloor = Mathf.Min(_currentFloor + 1, MAX_FLOOR + 1);
         _inChallenge  = false;
         _spawnedEnemies.Clear();
@@ -267,7 +288,28 @@ public class GateChallengeManager : MonoBehaviour
         ResetButton();
 
         if (_currentFloor > MAX_FLOOR)
-            ToastManager.Show("恭喜！已通关全部13层门挑战！");
+        {
+            // 打通全部 13 层：额外奖励经验效率 +10
+            EnsureRuntimeRefs();
+            if (player != null) player.DR += FULL_CLEAR_DR_BONUS;
+            ToastManager.Show($"<color=#FFD24A>恭喜通关全部13层门挑战！经验效率 +{FULL_CLEAR_DR_BONUS:0}</color>");
+        }
+    }
+
+    /// <summary>每通过一层：随机在 攻击力/防御力/经验效率/闪避率 中选一项 +LAYER_REWARD_AMOUNT。</summary>
+    private void GrantRandomLayerReward()
+    {
+        EnsureRuntimeRefs();
+        if (player == null) return;
+
+        int amount = LAYER_REWARD_AMOUNT;
+        switch (Random.Range(0, 4))
+        {
+            case 0:  player.atk += amount; ToastManager.Show($"<color=#FF6B6B>门挑战奖励：攻击力 +{amount}</color>"); break;
+            case 1:  player.def += amount; ToastManager.Show($"<color=#6BCBFF>门挑战奖励：防御力 +{amount}</color>"); break;
+            case 2:  player.DR  += amount; ToastManager.Show($"<color=#B980FF>门挑战奖励：经验效率 +{amount}</color>"); break;
+            default: player.EVA += amount; ToastManager.Show($"<color=#7CFF7C>门挑战奖励：闪避率 +{amount}</color>"); break;
+        }
     }
 
     /// <summary>恢复按钮默认状态</summary>

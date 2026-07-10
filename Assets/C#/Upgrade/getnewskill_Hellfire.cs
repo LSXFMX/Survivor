@@ -29,6 +29,22 @@ public class getnewskill_Hellfire : getnewskill
     public const int KeepOriginalOnEvolutionEquipmentId = 9;
     public const int KeepOriginalOnEvolutionEquipmentFallbackId = 7;
 
+    private void OnEnable()
+    {
+        // 升级卡图标用 UR 图替代（与风之形→UR/000、亡者领域→UR/002 一致）
+        if (icon == null)
+            icon = LoadUrIcon();
+    }
+
+    private static Sprite LoadUrIcon()
+    {
+        const string editorPath   = "像素幸存者资源包/存档装备图标/抽卡装备/UR/001.png";
+        const string resourcesPath = "像素幸存者资源包/存档装备图标/抽卡装备/UR/001";
+        var tex = RuntimeAssetLoader.LoadTexture(null, resourcesPath, editorPath);
+        if (tex == null) return null;
+        return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+    }
+
     public override bool IsAvailableInPool()
     {
         if (!base.IsAvailableInPool())

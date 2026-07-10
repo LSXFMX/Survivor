@@ -181,6 +181,9 @@ public class ArchiveManager : MonoBehaviour
         // 文本和图标由 EquipmentIcon.ApplyForcedClearEquipmentN9toN13Overrides 自动注入。
         EnsureClearEquipmentN9toN13IconsExist();
 
+        // 成就装备 8「不可视之手」：场景没有该图标，运行时用现有成就图标克隆补出
+        EnsureAchievementIcon8Exists();
+
         foreach (var container in equipmentContainers.Values)
         {
             if (container == null) continue;
@@ -363,6 +366,42 @@ public class ArchiveManager : MonoBehaviour
         // N13: 33-35
         for (int id = 33; id <= 35; id++)
             TryCloneClearN9toN13Icon(template, parent, id, existingIds);
+    }
+
+    /// <summary>
+    /// 在成就装备容器下按需补出成就装备 8「不可视之手」的图标。
+    /// 已存在则跳过，幂等。用现有成就装备图标（优先 id 7）做模板克隆，
+    /// 文本与图标由 EquipmentIcon.Initialize（equipmentId==8 分支）自动注入。
+    /// </summary>
+    private void EnsureAchievementIcon8Exists()
+    {
+        if (achievementEquipmentContainer == null) return;
+
+        EquipmentIcon[] existing = achievementEquipmentContainer.GetComponentsInChildren<EquipmentIcon>(true);
+        if (existing == null || existing.Length == 0) return;
+
+        EquipmentIcon template = null;
+        var existingIds = new HashSet<int>();
+        foreach (var icon in existing)
+        {
+            if (icon.equipmentType != EquipmentType.AchievementEquipment) continue;
+            existingIds.Add(icon.equipmentId);
+            if (template == null || icon.equipmentId == 7) template = icon;
+        }
+        if (template == null || existingIds.Contains(8)) return;
+
+        Transform parent = template.transform.parent != null ? template.transform.parent : achievementEquipmentContainer.transform;
+        GameObject clone = Instantiate(template.gameObject, parent);
+        clone.name = "Achievement_8 (auto)";
+
+        EquipmentIcon cloneIcon = clone.GetComponent<EquipmentIcon>();
+        if (cloneIcon == null) { Destroy(clone); return; }
+
+        cloneIcon.equipmentType = EquipmentType.AchievementEquipment;
+        cloneIcon.equipmentId   = 8;
+        cloneIcon.equipmentName = string.Empty;
+        cloneIcon.description   = string.Empty;
+        cloneIcon.howToGet      = string.Empty;
     }
 
     private static void TryCloneClearN9toN13Icon(EquipmentIcon template, Transform parent, int targetId, HashSet<int> existingIds)
@@ -658,6 +697,10 @@ public class ArchiveManager : MonoBehaviour
                     int bestLevel = PlayerPrefs.GetInt("BestSingleRunLevel", 1);
                     progressStr = $" ({Mathf.Min(50, bestLevel)}/50级)";
                     break;
+                case 8:
+                    int upCount = PlayerPrefs.GetInt("TotalUpgradeChoices", 0);
+                    progressStr = $" ({Mathf.Min(200, upCount)}/200)";
+                    break;
             }
         }
 
@@ -892,6 +935,7 @@ public class ArchiveManager : MonoBehaviour
         EnsureGachaRSrIconsExist();
         EnsureClearEquipmentN8IconsExist();
         EnsureClearEquipmentN9toN13IconsExist();
+        EnsureAchievementIcon8Exists();
 
         // 关键差异：Editor 模式下 EquipmentIcon.Start 不会触发，
         // 需要主动调用 EditorApplyForcedOverrides() 把文本/Sprite 立即写入。

@@ -18,6 +18,9 @@ public class title : MonoBehaviour
 
     private void OnEnable()
     {
+        // 全局设置：失去焦点继续运行（由设置面板「后台运行」Toggle 控制）
+        BackgroundRun.Apply();
+
         savescene.SetActive(false);
         fightscene.SetActive(false);
         if (choiceUI != null) choiceUI.SetActive(false);

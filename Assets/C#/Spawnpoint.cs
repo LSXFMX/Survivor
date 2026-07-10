@@ -11,8 +11,8 @@ public class Spawnpoint : MonoBehaviour
     public int maxenemy;
     public float timer;
 
-    [Header("N5+ 蝙蝠")]
-    public GameObject batPrefab; // 拖入蝙蝠 prefab，N5~N8 自动加入刷怪池
+    [Header("N4+ 蝙蝠")]
+    public GameObject batPrefab; // 拖入蝙蝠 prefab，N4 起自动加入刷怪池
 
     [Header("N9+ 狼人社群")]
     public GameObject wolfPrefab; // 拖入狼人 prefab，N9~N13 自动加入刷怪池
@@ -31,30 +31,46 @@ public class Spawnpoint : MonoBehaviour
 
         if (DifficultyManager.Instance == null) return;
         string label = DifficultyManager.Instance.Current.label;
+        bool endless = DifficultyManager.Instance.IsEndless;
 
-        // N5~N8 难度将蝙蝠加入刷怪池
-        if (batPrefab != null &&
-            (label == "N5" || label == "N6" || label == "N7" || label == "N8"))
-            enemy.Add(batPrefab);
-
-        // N9 起加入狼人社群小怪
-        if (wolfPrefab != null &&
-            (label == "N9" || label == "N10" || label == "N11" || label == "N12" || label == "N13"))
-            enemy.Add(wolfPrefab);
-
-        // N11 起加入史莱姆社群小怪
-        if (slimePrefab != null &&
-            (label == "N11" || label == "N12" || label == "N13"))
-            enemy.Add(slimePrefab);
-
-        // N12 开局生成一只史莱姆社群Boss（测试用）
-        if (slimeBossPrefab != null && label == "N12")
+        // 无尽模式：根据已通关的关卡解锁对应的敌人类型
+        if (endless)
         {
-            Vector3 pos = transform.childCount > 0 ? transform.GetChild(0).position : transform.position;
-            var obj = Instantiate(slimeBossPrefab, pos, Quaternion.Euler(45, 0, 0), enemylayer);
-            var boss = obj.GetComponent<SlimeBoss>();
-            if (boss != null && b != null) boss.battleUI = b;
-            Debug.Log("[Spawn] N12 开局已生成史莱姆社群Boss（测试模式）");
+            var crm = ClearRecordManager.Instance;
+            if (batPrefab != null && crm != null && crm.GetClearCount("N4") > 0)
+                enemy.Add(batPrefab);
+            if (wolfPrefab != null && crm != null && crm.GetClearCount("N9") > 0)
+                enemy.Add(wolfPrefab);
+            if (slimePrefab != null && crm != null && crm.GetClearCount("N11") > 0)
+                enemy.Add(slimePrefab);
+        }
+        else
+        {
+            // N4 起将蝙蝠加入刷怪池
+            if (batPrefab != null && 
+                (label == "N4" || label == "N5" || label == "N6" || label == "N7" || label == "N8"
+              || label == "N9" || label == "N10" || label == "N11" || label == "N12" || label == "N13"))
+                enemy.Add(batPrefab);
+
+            // N9 起加入狼人社群小怪
+            if (wolfPrefab != null &&
+                (label == "N9" || label == "N10" || label == "N11" || label == "N12" || label == "N13"))
+                enemy.Add(wolfPrefab);
+
+            // N11 起加入史莱姆社群小怪
+            if (slimePrefab != null &&
+                (label == "N11" || label == "N12" || label == "N13"))
+                enemy.Add(slimePrefab);
+
+            // N12 开局生成一只史莱姆社群Boss（测试用）
+            if (slimeBossPrefab != null && label == "N12")
+            {
+                Vector3 pos = transform.childCount > 0 ? transform.GetChild(0).position : transform.position;
+                var obj = Instantiate(slimeBossPrefab, pos, Quaternion.Euler(45, 0, 0), enemylayer);
+                var boss = obj.GetComponent<SlimeBoss>();
+                if (boss != null && b != null) boss.battleUI = b;
+                Debug.Log("[Spawn] N12 开局已生成史莱姆社群Boss（测试模式）");
+            }
         }
     }
 
