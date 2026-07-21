@@ -615,6 +615,11 @@ public class BulletBloodlineBat : Bulletbase
         finaldamage -= e.def;
 
         int dealt = Mathf.Max(0, (int)finaldamage);
+
+        // 会话伤害追踪（与 Bulletbase.OnTriggerEnter 对齐，让对局总结能看到血族血统贡献）
+        if (GameSessionTracker.Instance != null && fatherskill != null)
+            GameSessionTracker.Instance.RecordDamage(fatherskill.Skillname, dealt);
+
         e.health -= dealt;
 
         if (e.atknumber != null && DamageNumberSettings.Visible)

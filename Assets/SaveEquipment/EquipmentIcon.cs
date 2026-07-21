@@ -85,6 +85,11 @@ public class EquipmentIcon : MonoBehaviour
 
     private void ApplyForcedAchievementOverrides()
     {
+        // 狼人社群好感度装备 6/7/8（月牙吊坠 / 寄生的暗种 / 红月分身）的文本 + 图标兜底。
+        // 与蘑菇/蝙蝠社群 FavorEquipment 0-5 一致：场景里只要 EquipmentIcon 挂对了
+        // equipmentType=FavorEquipment / equipmentId=6~8，名字描述图标全部由此覆盖。
+        ApplyForcedFavorEquipmentWolfOverrides();
+
         // 同时把抽卡 SSR 8 / 9（新增的「我与我与我」/「三清化一」）的文本兜底
         // 写在这里，避免场景里手工漏配。即使该图标根本没在场景里挂出来，UI 显示也不报错。
         ApplyForcedGachaSsrOverrides();
@@ -150,6 +155,48 @@ public class EquipmentIcon : MonoBehaviour
             description = "解锁自动选取升级功能\n\n有一只手在帮你选择升级，还不快谢他";
             howToGet = "累计选择两百次升级";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/成就装备/008不可视之手/8.不可视之手.png");
+        }
+    }
+
+    /// <summary>
+    /// 狼人社群好感度装备 6/7/8 的文本 + 图标兜底。
+    ///   6 月牙吊坠 : 好感度≥10 解锁学习「命途:寄生」技能资格；≥100 开局自带
+    ///   7 寄生的暗种 : 好感度≥50，命途:寄生 命中敌人后弹射一次
+    ///   8 红月分身   : 好感度≥100，开局生成红月分身宠物 + 命途:寄生 数量+1
+    /// 与 ApplyForcedGachaSsrOverrides 同套路。
+    /// </summary>
+    private void ApplyForcedFavorEquipmentWolfOverrides()
+    {
+        if (equipmentType != EquipmentType.FavorEquipment) return;
+
+        if (equipmentId == 6)
+        {
+            equipmentName = "月牙吊坠";
+            description = "解锁技能【命途:寄生】\n\n" +
+                "\"心的共鸣，会带来力量。\"\n" +
+                "手指如寄生兽般伸出，尖端幻化狼爪，攻击后缩回；\n" +
+                "命途:寄生 自带 1% 吸血。";
+            howToGet = "首次击败狼人首领（狼人社群好感度 +10）";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/好感度装备/006_new.png");
+        }
+        else if (equipmentId == 7)
+        {
+            equipmentName = "寄生的暗种";
+            description = "【命途:寄生】命中敌人后再弹射一次\n\n" +
+                "\"你仿佛看到那悬崖边上的红月。\"\n" +
+                "触手命中主目标后，会再向 3 米内另一位敌人补射一击。";
+            howToGet = "狼人社群好感度累计 ≥ 50";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/好感度装备/007_new.png");
+        }
+        else if (equipmentId == 8)
+        {
+            equipmentName = "红月分身";
+            description = "开局获得宠物「红月分身」\n\n" +
+                "\"你是我的暗种，这不叫监视，叫保护。\"\n" +
+                "血红月牙如眼睛般漂浮在你头顶；\n" +
+                "开局自动获得【命途:寄生】，数量 +1。";
+            howToGet = "狼人社群好感度达到 100";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/好感度装备/008_new.png");
         }
     }
 
@@ -539,8 +586,11 @@ public class EquipmentIcon : MonoBehaviour
     /// 2. BFS 时只要与任一候选背景色距离 ≤ TOLERANCE 就去除，正确处理棋盘格/渐变背景
     /// 3. TOLERANCE 提升到 80，覆盖 AI 生成图的色差
     /// 4. 二次扫描：对已被去背的区域做"洞填充"（去除物体内部被背景色包围的残留像素）
+    ///
+    /// 可见性提升到 public：BulletParasite / SkillParasite 等其它 AI 生成图片
+    /// 加载方（LoadSpriteFallback）需要复用此算法为触手利爪 / 技能图标去背景。
     /// </summary>
-    private static void MakeTextureTransparent(Texture2D tex)
+    public static void MakeTextureTransparent(Texture2D tex)
     {
         if (tex == null) return;
         try { var _ = tex.GetPixel(0, 0); }

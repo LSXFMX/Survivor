@@ -12,6 +12,29 @@ public class getexp : MonoBehaviour
     /// <summary>经验石触发次数倍率（奇遇6可设为2）。每局开始时会被 battleUI 重置为 1。</summary>
     public static int triggerMultiplier = 1;
 
+    // 【碰撞隔离】经验石只和玩家/地面碰撞，不与怪物/其他经验石碰撞（防止被挤飞）
+    private static bool s_layerSetupDone;
+
+    private void Awake()
+    {
+        // 全局只设一次：经验石层 7 (ExpGem) 与 敌人层 6 (Enemy) 互斥，也与自身互斥
+        if (!s_layerSetupDone)
+        {
+            s_layerSetupDone = true;
+            int expLayer  = LayerMask.NameToLayer("ExpGem");
+            int enemyLayer = LayerMask.NameToLayer("Enemy");
+            if (expLayer >= 0 && enemyLayer >= 0)
+            {
+                Physics.IgnoreLayerCollision(expLayer, enemyLayer, true);
+                Physics.IgnoreLayerCollision(expLayer, expLayer,   true);
+            }
+        }
+
+        // 把自己挪出 Default 层，让上面的层碰撞规则生效
+        int myLayer = LayerMask.NameToLayer("ExpGem");
+        if (myLayer >= 0) gameObject.layer = myLayer;
+    }
+
     private void OnEnable()
     {
         player = GameObject.Find("playerlayer").transform.GetChild(0).gameObject.GetComponent<Player>();

@@ -693,6 +693,49 @@ public class WolfBoss : enemy
         PlayAnim("Death");
         foreach (var col in GetComponents<Collider>()) col.enabled = false;
         if (expstone != null) Instantiate(expstone, transform.position, Quaternion.Euler(45, 0, 0));
+
+        // 首次击败狼人首领里程碑：解锁「月牙吊坠」(FavorEquipment 6) + 狼人好感度 +10（仅首次）
+        // 与 BossBat.Destroy1 里"吸血鬼大君"里程碑同套路。
+        if (EquipmentSystem.Instance != null)
+        {
+            bool alreadyUnlockedPendant = EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment, 6);
+            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, 6);
+            if (!alreadyUnlockedPendant)
+            {
+                ToastManager.Show("狼人首领倒下了！「月牙吊坠」已获得，狼人社群好感度 +10");
+                if (FavorManager.Instance != null)
+                {
+                    FavorManager.Instance.AddFavor(FactionType.Wolf, 10);
+                    ToastManager.Show($"狼人社群好感度 +10（当前：{FavorManager.Instance.GetFavor(FactionType.Wolf)}）");
+                }
+                else
+                {
+                    int cur = UnityEngine.PlayerPrefs.GetInt("Favor_Wolf", 0);
+                    int next = Mathf.Clamp(cur + 10, 0, 100);
+                    UnityEngine.PlayerPrefs.SetInt("Favor_Wolf", next);
+                    UnityEngine.PlayerPrefs.Save();
+                    ToastManager.Show($"狼人社群好感度 +10（当前：{next}）");
+                }
+            }
+        }
+
+        // 每次击败狼人 Boss → 好感度 +1（模板同 BossBat.Destroy1 尾部）
+        if (FavorManager.Instance != null)
+        {
+            FavorManager.Instance.AddFavor(FactionType.Wolf, 1);
+            int newFavor = FavorManager.Instance.GetFavor(FactionType.Wolf);
+            ToastManager.Show($"狼人社群好感度 +1（当前：{newFavor}）");
+        }
+        else
+        {
+            string key = "Favor_Wolf";
+            int cur = PlayerPrefs.GetInt(key, 0);
+            int next = Mathf.Clamp(cur + 1, 0, 100);
+            PlayerPrefs.SetInt(key, next);
+            PlayerPrefs.Save();
+            ToastManager.Show($"狼人社群好感度 +1（当前：{next}）");
+        }
+
         StartCoroutine(DieAfter());
     }
 

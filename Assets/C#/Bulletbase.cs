@@ -89,6 +89,11 @@ public class Bulletbase : MonoBehaviour
             // 至少 1 点伤害，避免高防御导致负数/0 伤
             if (finaldamage < 1f) finaldamage = 1f;
             int dealt = (int)finaldamage;
+
+            // 会话伤害追踪
+            if (GameSessionTracker.Instance != null && fatherskill != null)
+                GameSessionTracker.Instance.RecordDamage(fatherskill.Skillname, dealt);
+
             enemy.health -= dealt;
             if (DamageNumberSettings.Visible)
             {

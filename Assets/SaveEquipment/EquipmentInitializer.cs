@@ -20,6 +20,10 @@ public class EquipmentInitializer : MonoBehaviour
     public GameObject bloodlineSkillPrefab;
     [Tooltip("吸血鬼线：蝙蝠宝宝宠物预制体")]
     public GameObject batBabyPetPrefab;
+    [Tooltip("狼人线：命途:寄生 技能预制体（FavorEquipment 6/8 会用到）")]
+    public GameObject parasiteSkillPrefab;
+    [Tooltip("狼人线：红月分身宠物预制体（FavorEquipment 8 会用到）")]
+    public GameObject redMoonClonePetPrefab;
     public battleUI battleUI; // 用于装备4显示速度按钮
 
     private void Start()
@@ -48,7 +52,185 @@ public class EquipmentInitializer : MonoBehaviour
             // 测试模式起手赠送 10000 源木，便于联调奇遇/门挑战触发条件。
             // 用延迟一帧 + 协程确保 YuanMuManager（同场景组件）已 Awake，避免 null。
             StartCoroutine(GrantTestModeYuanMuNextFrame());
+
+            // 测试模式：自动把狼人好感度拉到 90（≥10 门槛让学习卡进池，未到 100 不触发装备8开局注入），
+            // 让开发者可以立刻在三选一里刷到「命途:寄生」学习卡，无需先击败狼人首领。
+            int curFavor = FavorManager.Instance != null
+                ? FavorManager.Instance.GetFavor(FactionType.Wolf)
+                : PlayerPrefs.GetInt("Favor_Wolf", 0);
+            if (curFavor < 90)
+            {
+                if (FavorManager.Instance != null)
+                    FavorManager.Instance.SetFavor(FactionType.Wolf, 90);
+                else
+                    PlayerPrefs.SetInt("Favor_Wolf", 90);
+                Debug.Log($"[TestMode] 狼人好感度 {curFavor} → 90（学习卡门槛已满足）");
+            }
         }
+
+        // 命途:寄生 升级卡注册（替换原有 Registrar，内联同步，100% 可靠）
+        EnsureWolfFactionRegistered();
+    }
+
+    /// <summary>
+    /// 狼人社群升级卡注册（取代 WolfFactionRuntimeRegistrar，内联到 Start 尾部同步执行）。
+    /// 在 EquipmentInitializer.Start 末尾调用，保证：
+    ///   1. parasiteSkillPrefab / redMoonClonePetPrefab 从 Resources 自动补齐
+    ///   2. 命途:寄生 学习卡 + 4 张升级卡塞进 ChoiceUI.skillEntries
+    /// 不再依赖协程，不引入额外 MonoBehaviour，时序 100% 可靠。
+    /// </summary>
+    private void EnsureWolfFactionRegistered()
+    {
+        Debug.Log("[WolfFaction] === EnsureWolfFactionRegistered 开始执行 ===");
+        try
+        {
+            EnsureWolfFactionRegisteredCore();
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[WolfFaction] 注册过程抛出异常: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+        }
+        Debug.Log("[WolfFaction] === EnsureWolfFactionRegistered 结束 ===");
+    }
+
+    private void EnsureWolfFactionRegisteredCore()
+    {
+        // ── 1. 补 prefab 引用 ────────────────────────────────────────────
+        const string RES_PARASITE     = "Wolf/SkillParasite";
+        const string RES_RED_MOON_PET = "Wolf/RedMoonClonePet";
+        if (parasiteSkillPrefab == null)
+            parasiteSkillPrefab = Resources.Load<GameObject>(RES_PARASITE);
+        if (redMoonClonePetPrefab == null)
+            redMoonClonePetPrefab = Resources.Load<GameObject>(RES_RED_MOON_PET);
+        Debug.Log($"[WolfFaction] Step1: parasiteSkillPrefab={(parasiteSkillPrefab!=null)}, redMoonClonePetPrefab={(redMoonClonePetPrefab!=null)}");
+
+        // ── 2. 注册升级卡到 ChoiceUI ─────────────────────────────────────
+        var choiceUI = ChoiceUI.Instance;
+        if (choiceUI == null) choiceUI = FindObjectOfType<ChoiceUI>(true);
+        Debug.Log($"[WolfFaction] Step2: ChoiceUI.Instance={(ChoiceUI.Instance!=null)}, FindObjectOfType(true)={(choiceUI!=null)}");
+        if (choiceUI == null)
+        {
+            Debug.LogWarning("[WolfFaction] ChoiceUI 未找到，本局命途:寄生 升级卡未注册");
+            return;
+        }
+
+        GameObject skillPrefab = Resources.Load<GameObject>(RES_PARASITE);
+        Debug.Log($"[WolfFaction] Step3: Resources.Load(\"{RES_PARASITE}\")={(skillPrefab!=null)}");
+        if (skillPrefab == null)
+        {
+            Debug.LogWarning("[WolfFaction] Resources/Wolf/SkillParasite 未找到");
+            return;
+        }
+        Skillbase skillbase = skillPrefab.GetComponent<Skillbase>();
+        Debug.LogError($"[WolfFaction] Step4: prefab.GetComponent<Skillbase>()={(skillbase!=null)}, Skillname='{(skillbase!=null?skillbase.Skillname:"n/a")}'");
+        if (skillbase == null)
+        {
+            Debug.LogWarning("[WolfFaction] SkillParasite prefab 上缺少 Skillbase 组件");
+            return;
+        }
+
+        // 关键节点：确认 Step4 判断没 return
+        Debug.LogError("[WolfFaction] Step4.1: skillbase 非空，未 return，继续执行");
+
+        const string SKILL_NAME = "命途:寄生";
+        Debug.LogError($"[WolfFaction] Step4.2: SKILL_NAME 常量已赋值 = '{SKILL_NAME}'");
+
+        // 清理残留旧 entry（缺少 learnSkillPrefab 或技能名为命途:寄生）
+        int purged = 0;
+        Debug.LogError($"[WolfFaction] Step4.3: choiceUI == null? {choiceUI == null}");
+        int entryCountBefore = choiceUI.skillEntries?.Count ?? -1;
+        Debug.LogError($"[WolfFaction] Step4.5: 进入清理循环，skillEntries.Count={entryCountBefore}");
+        if (choiceUI.skillEntries != null)
+        {
+            for (int i = choiceUI.skillEntries.Count - 1; i >= 0; i--)
+            {
+                try
+                {
+                    var e = choiceUI.skillEntries[i];
+                    if (e == null)
+                    {
+                        choiceUI.skillEntries.RemoveAt(i);
+                        purged++;
+                        continue;
+                    }
+                    GameObject prefabGo = e.learnSkillPrefab;
+                    if (prefabGo == null)
+                    {
+                        choiceUI.skillEntries.RemoveAt(i);
+                        purged++;
+                        continue;
+                    }
+                    getnewskill lrn = prefabGo.GetComponent<getnewskill>();
+                    if (lrn != null && lrn.skill != null && lrn.skill.Skillname == SKILL_NAME)
+                    {
+                        choiceUI.skillEntries.RemoveAt(i);
+                        purged++;
+                    }
+                }
+                catch (System.Exception exLoop)
+                {
+                    Debug.LogWarning($"[WolfFaction] 清理循环第 {i} 条异常，跳过：{exLoop.GetType().Name}: {exLoop.Message}");
+                }
+            }
+        }
+        Debug.LogError($"[WolfFaction] Step5: 清理旧 entry {purged} 条，当前 skillEntries.Count={choiceUI.skillEntries?.Count ?? 0}");
+
+        // 学习卡
+        GameObject learnGo = new GameObject("LearnCard_Parasite");
+        learnGo.transform.SetParent(transform, false);
+        learnGo.SetActive(false);
+        getnewskill learnCard = learnGo.AddComponent<getnewskill>();
+        learnCard.Upgradename        = "命途:寄生";
+        learnCard.Upgradedescription = "学习命途:寄生技能";
+        learnCard.type               = Upgradeoptionsbase.Upgradetype.getnewskill;
+        learnCard.skill              = skillbase;
+        learnCard.icon               = BulletParasite.LoadSpriteFallback("Wolf/icon_parasite");
+        learnCard.upgradeGroup       = "parasite_learn";
+        learnCard.maxUpgrades        = 1;
+        learnCard.requireFavor       = true;
+        learnCard.favorFaction       = FactionType.Wolf;
+        learnCard.favorThreshold     = 10;
+        learnGo.SetActive(true);
+        Debug.LogError($"[WolfFaction] Step6: 学习卡已构造 name={learnGo.name}, skill.Skillname={learnCard.skill?.Skillname}, requireFavor={learnCard.requireFavor}, favorThreshold={learnCard.favorThreshold}");
+
+        // 升级卡 × 4
+        GameObject upDmg   = BuildParaUpgrade(skillbase, Upgradeoptionsbase.skillAttribute.damage,       1f,  "伤害 +1");
+        GameObject upCd    = BuildParaUpgrade(skillbase, Upgradeoptionsbase.skillAttribute.CDtime,       -0.1f, "冷却 -0.1s");
+        GameObject upNum   = BuildParaUpgrade(skillbase, Upgradeoptionsbase.skillAttribute.number,       1f,  "数量 +1");
+        GameObject upRange = BuildParaUpgrade(skillbase, Upgradeoptionsbase.skillAttribute.attackRadius, 5f,  "范围 +5");
+
+        var entry = new SkillUpgradeEntry();
+        entry.learnSkillPrefab = learnGo;
+        entry.upgradeOptions   = new System.Collections.Generic.List<GameObject> { upDmg, upCd, upNum, upRange };
+        if (choiceUI.skillEntries == null)
+            choiceUI.skillEntries = new System.Collections.Generic.List<SkillUpgradeEntry>();
+        choiceUI.skillEntries.Add(entry);
+
+        int wf = FavorManager.Instance != null
+            ? FavorManager.Instance.GetFavor(FactionType.Wolf)
+            : UnityEngine.PlayerPrefs.GetInt("Favor_Wolf", 0);
+        Debug.LogError($"[WolfFaction] Step7 完成: 命途:寄生 升级卡已注册（1 学习 + 4 升级）。" +
+                  $"好感度={wf}/10, unlocked={learnCard.IsFavorUnlocked()}, " +
+                  $"skillEntries 总数={choiceUI.skillEntries.Count}");
+    }
+
+    private GameObject BuildParaUpgrade(Skillbase target, Upgradeoptionsbase.skillAttribute attr, float value, string suffix)
+    {
+        GameObject go = new GameObject("Upg_Parasite_" + attr);
+        go.transform.SetParent(transform, false);
+        go.SetActive(false);
+        skillupgrade up = go.AddComponent<skillupgrade>();
+        up.Upgradename        = "命途:寄生：" + suffix;
+        up.Upgradedescription = "";
+        up.type               = Upgradeoptionsbase.Upgradetype.upgradeskill;
+        up.skill              = target;
+        up.skillAtr           = attr;
+        up.upgradenumber      = value;
+        up.icon               = null;
+        up.upgradeGroup       = "parasite_" + attr.ToString();
+        up.maxUpgrades        = 5;
+        go.SetActive(true);
+        return go;
     }
 
     /// <summary>测试模式：延迟一帧给玩家发放 10000 源木。</summary>
@@ -123,6 +305,17 @@ public class EquipmentInitializer : MonoBehaviour
         if (batFavor >= 10)  EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, 3);
         if (batFavor >= 50)  EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, 4);
         if (batFavor >= 100) EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, 5);
+
+        // 狼人社群好感度装备 6–8
+        // 6 = 月牙吊坠（好感度 ≥10 解锁命途:寄生学习资格）
+        // 7 = 寄生的暗种（好感度 ≥50，命途:寄生命中后弹射一次）
+        // 8 = 红月分身（好感度 ≥100，生成红月分身宠物 + 开局自带命途:寄生 数量 +1）
+        int wolfFavor = FavorManager.Instance != null
+            ? FavorManager.Instance.GetFavor(FactionType.Wolf)
+            : PlayerPrefs.GetInt("Favor_Wolf", 0);
+        if (wolfFavor >= 10)  EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, 6);
+        if (wolfFavor >= 50)  EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, 7);
+        if (wolfFavor >= 100) EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, 8);
     }
 
     public void ApplyAllEquipments()
@@ -456,6 +649,14 @@ public class EquipmentInitializer : MonoBehaviour
 
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment, 5))
             ApplyFavorEquipment5_BatBaby();
+
+        // 狼人社群好感度 6–8
+        if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment, 6))
+            ApplyFavorEquipment6_MoonPendant();
+        if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment, 7))
+            ApplyFavorEquipment7_ParasiteShadow();
+        if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment, 8))
+            ApplyFavorEquipment8_RedMoonClone();
     }
 
     /// <summary>成就装备0：初始解锁风箭技能</summary>
@@ -681,6 +882,97 @@ public class EquipmentInitializer : MonoBehaviour
                 pet.enemyLayer = GameObject.Find("enemylayer")?.transform;
         }
         ToastManager.Show("[装备] 蝙蝠宝宝：已加入战斗！");
+    }
+
+    // ── 狼人社群好感度装备 6–8 ────────────────────────────────
+    /// <summary>
+    /// 好感度装备 6「月牙吊坠」：狼人好感度 ≥100 时开局自动解锁「命途:寄生」技能。
+    /// 与孢子之心/血族血统同套路：≥10 只解锁学习资格（通过 getnewskill 升级卡门槛），
+    /// ≥100 才开局自带。
+    /// </summary>
+    private void ApplyFavorEquipment6_MoonPendant()
+    {
+        if (parasiteSkillPrefab == null || playerSkillList == null) return;
+        if (EquipmentSystem.Instance == null ||
+            !EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment, 6))
+            return;
+
+        int wf = FavorManager.Instance != null
+            ? FavorManager.Instance.GetFavor(FactionType.Wolf)
+            : UnityEngine.PlayerPrefs.GetInt("Favor_Wolf", 0);
+
+        // 未达到100：仅能通过升级三选一习得，不在此注入
+        if (wf < 100) return;
+
+        foreach (Transform t in playerSkillList)
+        {
+            if (t.GetComponent<SkillParasite>() != null) return;
+        }
+
+        GameObject skill = Instantiate(parasiteSkillPrefab, playerSkillList);
+        var sb = skill.GetComponent<Skillbase>();
+        if (sb != null) sb.player = player.gameObject;
+        // 蘑菇/蝙蝠好感度装备的开局注入都会 Toast，这里保持一致
+        ToastManager.Show("[装备觉醒] 月牙吊坠：命途:寄生 已在开局解锁！");
+    }
+
+    /// <summary>
+    /// 好感度装备 7「寄生的暗种」：好感度 ≥50 装备后，命途:寄生命中敌人后再向附近另一位敌人弹射一次。
+    /// 数值/弹射由 SkillParasite 运行时读取装备状态。这里只做 Toast + 打开已存在技能的弹射开关。
+    /// </summary>
+    private void ApplyFavorEquipment7_ParasiteShadow()
+    {
+        int wf = FavorManager.Instance != null
+            ? FavorManager.Instance.GetFavor(FactionType.Wolf)
+            : UnityEngine.PlayerPrefs.GetInt("Favor_Wolf", 0);
+        if (wf >= 50)
+            ToastManager.Show("[好感度装备] 寄生的暗种：命途:寄生 命中后弹射一次已激活（需已学会该技能）");
+    }
+
+    /// <summary>
+    /// 好感度装备 8「红月分身」：好感度 ≥100 时开局生成红月分身宠物。
+    /// 宠物本身不主动攻击，只作为"图腾"追加一份 SkillParasite（number 初始 +1）到玩家 SkillList。
+    /// 若玩家还未持有命途:寄生技能，也在此一次性开局注入，保证宠物有配套技能可用。
+    /// </summary>
+    private void ApplyFavorEquipment8_RedMoonClone()
+    {
+        if (player == null) return;
+
+        int wf = FavorManager.Instance != null
+            ? FavorManager.Instance.GetFavor(FactionType.Wolf)
+            : UnityEngine.PlayerPrefs.GetInt("Favor_Wolf", 0);
+        if (wf < 100) return;
+
+        // 1) 若玩家未持有命途:寄生技能，则开局注入（避免装备8比装备6单独触发时无技能可用）
+        if (parasiteSkillPrefab != null && playerSkillList != null)
+        {
+            SkillParasite existing = null;
+            foreach (Transform t in playerSkillList)
+            {
+                SkillParasite sp = t.GetComponent<SkillParasite>();
+                if (sp != null) { existing = sp; break; }
+            }
+            if (existing == null)
+            {
+                GameObject skill = Instantiate(parasiteSkillPrefab, playerSkillList);
+                var sb = skill.GetComponent<Skillbase>();
+                if (sb != null) sb.player = player.gameObject;
+                existing = skill.GetComponent<SkillParasite>();
+            }
+            // "红月分身：初始拥有命途:寄生 + 数量 +1"
+            if (existing != null) existing.number += 1;
+        }
+
+        // 2) 生成红月分身宠物（悬浮在玩家头顶）
+        if (redMoonClonePetPrefab == null) return;
+        if (FindObjectOfType<RedMoonClonePet>() != null) return;
+
+        Vector3 spawnPos = player.transform.position + new Vector3(0f, 1.6f, -0.2f);
+        GameObject petObj = Instantiate(redMoonClonePetPrefab, spawnPos, Quaternion.identity);
+        RedMoonClonePet pet = petObj.GetComponent<RedMoonClonePet>();
+        if (pet != null) pet.owner = player;
+
+        ToastManager.Show("[装备觉醒] 红月分身：\"你是我的暗种，这不叫监视，叫保护。\"");
     }
 
     // ── 抽卡装备 ──────────────────────────────────────────

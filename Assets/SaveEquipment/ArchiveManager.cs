@@ -184,6 +184,10 @@ public class ArchiveManager : MonoBehaviour
         // 成就装备 8「不可视之手」：场景没有该图标，运行时用现有成就图标克隆补出
         EnsureAchievementIcon8Exists();
 
+        // 好感度装备 6/7/8（狼人社群：月牙吊坠 / 寄生的暗种 / 红月分身）：
+        // 场景里只挂了 0~5（蘑菇 + 蝙蝠），运行时用现有蘑菇/蝙蝠图标克隆补出
+        EnsureFavorEquipmentWolfIconsExist();
+
         foreach (var container in equipmentContainers.Values)
         {
             if (container == null) continue;
@@ -402,6 +406,68 @@ public class ArchiveManager : MonoBehaviour
         cloneIcon.equipmentName = string.Empty;
         cloneIcon.description   = string.Empty;
         cloneIcon.howToGet      = string.Empty;
+    }
+
+    /// <summary>
+    /// 在 FavorEquipment 容器下按需补出狼人社群三件套图标（equipmentId 6/7/8）。
+    /// 场景历史上只挂了蘑菇 0/1/2 + 蝙蝠 3/4/5，狼人 6/7/8 需要在运行时克隆现有 FavorEquipment
+    /// 图标做模板补齐。
+    /// 名字 / 描述 / howToGet / Sprite 由
+    /// <see cref="EquipmentIcon.ApplyForcedFavorEquipmentWolfOverrides"/> 在 Initialize 时自动注入。
+    /// 与 EnsureGachaSsrIconsExist / EnsureAchievementIcon8Exists 同套路。
+    /// </summary>
+    private void EnsureFavorEquipmentWolfIconsExist()
+    {
+        if (favorEquipmentContainer == null) return;
+
+        EquipmentIcon[] existing = favorEquipmentContainer.GetComponentsInChildren<EquipmentIcon>(true);
+        if (existing == null || existing.Length == 0) return;
+
+        EquipmentIcon template = null;
+        var existingIds = new HashSet<int>();
+        foreach (var icon in existing)
+        {
+            if (icon == null) continue;
+            if (icon.equipmentType != EquipmentType.FavorEquipment) continue;
+            existingIds.Add(icon.equipmentId);
+            // 优先选 id 5（最靠近狼人系列）做模板，其次任意
+            if (template == null || icon.equipmentId == 5) template = icon;
+        }
+        if (template == null)
+        {
+            Debug.LogWarning("[ArchiveManager] 未在 FavorEquipment 容器下找到任何模板，无法克隆狼人 6/7/8");
+            return;
+        }
+
+        Transform parent = template.transform.parent != null
+            ? template.transform.parent
+            : favorEquipmentContainer.transform;
+
+        TryCloneFavorWolfIcon(template, parent, 6, existingIds);
+        TryCloneFavorWolfIcon(template, parent, 7, existingIds);
+        TryCloneFavorWolfIcon(template, parent, 8, existingIds);
+    }
+
+    private static void TryCloneFavorWolfIcon(EquipmentIcon template, Transform parent,
+        int targetId, HashSet<int> existingIds)
+    {
+        if (existingIds.Contains(targetId)) return;
+
+        GameObject clone = Instantiate(template.gameObject, parent);
+        clone.name = $"Favor_Wolf_{targetId} (auto)";
+
+        EquipmentIcon cloneIcon = clone.GetComponent<EquipmentIcon>();
+        if (cloneIcon == null) { Destroy(clone); return; }
+
+        cloneIcon.equipmentType = EquipmentType.FavorEquipment;
+        cloneIcon.equipmentId   = targetId;
+        // 名字/描述/howToGet/Sprite 由 EquipmentIcon.ApplyForcedFavorEquipmentWolfOverrides 注入，
+        // 这里清空避免视觉上闪现模板内容（蘑菇/蝙蝠字样）
+        cloneIcon.equipmentName = string.Empty;
+        cloneIcon.description   = string.Empty;
+        cloneIcon.howToGet      = string.Empty;
+
+        existingIds.Add(targetId);
     }
 
     private static void TryCloneClearN9toN13Icon(EquipmentIcon template, Transform parent, int targetId, HashSet<int> existingIds)

@@ -46,6 +46,16 @@ public class Player : Attribute
     /// <summary>被抓取/定身时置 true，屏蔽玩家的移动与冲刺（供 WolfBoss 撕咬处决等定身演出使用）。</summary>
     [HideInInspector] public bool movementLocked = false;
 
+    // ── 鼠标点击移动 ────────────────────────────────────────
+    [Header("鼠标移动")]
+    [Tooltip("鼠标点击移动到达判定的距离阈值（世界单位）。")]
+    public float clickMoveReachThreshold = 0.4f;
+    public Color   clickMarkerColor      = new Color(1f, 0.85f, 0.4f, 0.9f); // 金色半透明
+    public float   clickMarkerRadius     = 0.55f;   // 标记圆的世界半径
+    private Vector3?  _clickTarget;
+    private GameObject _clickMarker;
+    private static Plane _groundPlane = new Plane(Vector3.up, Vector3.zero);
+
     // 自然回血计时
     private float _regenTimer = 0f;
     // 死亡防重入：避免多个敌人同帧打死时重复触发返回主菜单协程
@@ -199,6 +209,65 @@ public class Player : Attribute
             _mainSpawnPosition = transform.position;
             _mainSpawnSet = true;
         }
+
+        // 鼠标点击标记物（仅主玩家，用程序生成的环形圆纹理）
+        if (!gameObject.CompareTag("Clone"))
+            CreateClickMarker();
+    }
+
+    /// <summary>生成一个程序化圆形标记（SpriteRenderer + 动态环形纹理），初始隐藏。</summary>
+    private void CreateClickMarker()
+    {
+        _clickMarker = new GameObject("ClickMarker");
+        _clickMarker.transform.SetParent(null); // 世界空间，不跟玩家移动
+        _clickMarker.SetActive(false);
+
+        var sr = _clickMarker.AddComponent<SpriteRenderer>();
+        sr.sprite = CreateRingSprite(clickMarkerRadius, clickMarkerColor);
+        sr.sortingOrder = 200; // 始终在最上层
+
+        // 匹配 45° 俯视视角
+        _clickMarker.transform.rotation = Quaternion.Euler(45f, 0f, 0f);
+    }
+
+    /// <summary>生成一个环形 sprite（空心圆环，中心透明，边缘带颜色）。</summary>
+    private static Sprite CreateRingSprite(float worldRadius, Color color)
+    {
+        const int TEX_SIZE = 64;
+        Texture2D tex = new Texture2D(TEX_SIZE, TEX_SIZE, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Bilinear;
+        tex.wrapMode   = TextureWrapMode.Clamp;
+
+        float cx = TEX_SIZE * 0.5f, cy = TEX_SIZE * 0.5f;
+        float outerR = TEX_SIZE * 0.48f;  // 外半径（像素）
+        float innerR = TEX_SIZE * 0.38f;  // 内半径
+
+        Color32[] pixels = new Color32[TEX_SIZE * TEX_SIZE];
+        for (int y = 0; y < TEX_SIZE; y++)
+        {
+            for (int x = 0; x < TEX_SIZE; x++)
+            {
+                float dx = x - cx, dy = y - cy;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                if (d >= innerR && d <= outerR)
+                {
+                    // 环内部：按径向渐变
+                    float t = (d - innerR) / (outerR - innerR); // 0=内缘, 1=外缘
+                    float alpha = color.a * (0.4f + 0.6f * (1f - Mathf.Abs(t - 0.5f) * 2f)); // 环中间最亮
+                    pixels[y * TEX_SIZE + x] = new Color32(
+                        (byte)(color.r * 255), (byte)(color.g * 255), (byte)(color.b * 255),
+                        (byte)Mathf.Clamp(alpha * 255, 0, 255));
+                }
+            }
+        }
+        tex.SetPixels32(pixels);
+        tex.Apply();
+
+        // PPU 按世界半径折算：worldRadius 米 = 像素环外半径 / PPU
+        float ppu = (outerR - 1f) / worldRadius; // 留 1px 余量
+        ppu = Mathf.Max(1f, ppu);
+        return Sprite.Create(tex, new Rect(0, 0, TEX_SIZE, TEX_SIZE),
+            new Vector2(0.5f, 0.5f), ppu);
     }
 
     /// <summary>分身启动时忽略与主玩家的所有碰撞（防止"分身推着主角跑"）。</summary>
@@ -347,9 +416,53 @@ public class Player : Attribute
             return;
         }
 
+        // ── 鼠标点击移动：优先级低于键盘（WASD 接管时清空鼠标目标）──────
+        bool keyboardMoving = false;
         float hmove = Input.GetAxis("Horizontal");
         float vmove = Input.GetAxis("Vertical");
-        rb.velocity = new Vector3(hmove, 0, vmove).normalized * speed;
+        if (Mathf.Abs(hmove) > 0.01f || Mathf.Abs(vmove) > 0.01f)
+        {
+            keyboardMoving = true;
+            _clickTarget = null; // 键盘移动接管，清除鼠标目标
+            HideMarker();
+        }
+        else
+        {
+            HandleMouseClickMove();
+        }
+
+        // ── 计算移动方向 & 速度 ──────────────────────────────────
+        Vector3 moveDir;
+        if (_clickTarget.HasValue && !keyboardMoving)
+        {
+            // 鼠标目标移动
+            Vector3 toTarget = _clickTarget.Value - transform.position;
+            toTarget.y = 0f;
+            float dist = toTarget.magnitude;
+            if (dist <= clickMoveReachThreshold)
+            {
+                _clickTarget = null; // 到达，停止
+                HideMarker();
+                rb.velocity = Vector3.zero;
+            }
+            else
+            {
+                moveDir = toTarget.normalized;
+                rb.velocity = moveDir * speed;
+                hmove = moveDir.x;
+                vmove = moveDir.z;
+            }
+        }
+        else if (keyboardMoving)
+        {
+            // 键盘移动
+            moveDir = new Vector3(hmove, 0, vmove).normalized;
+            rb.velocity = moveDir * speed;
+        }
+        else
+        {
+            rb.velocity = Vector3.zero;
+        }
 
         // 每帧兜底钳制地图边界（冲刺后已有额外钳制，此处为常规移动兜底）
         ClampToMapBounds();
@@ -469,6 +582,71 @@ public class Player : Attribute
             }
         }
         // 保持 detectCollisions=true，不让地形穿透
+    }
+
+    /// <summary>
+    /// 鼠标左键点击/长按地面移动：先用 Plane 求交 (Y=0)；若失败则回退到 Physics.Raycast。
+    ///   - 按下瞬间 (GetMouseButtonDown)：立即设置目标
+    ///   - 长按状态 (GetMouseButton) ：持续更新目标，让玩家可以"按住拖动"实时修正路径
+    /// 若点击到 UI 元素上则完全跳过。
+    /// </summary>
+    private void HandleMouseClickMove()
+    {
+        // 三选一/奇遇/暂停/总结面板等打开时，Time.timeScale=0，此期间禁用鼠标点击移动
+        if (Time.timeScale <= 0f) { _clickTarget = null; HideMarker(); return; }
+
+        bool clickedDown = Input.GetMouseButtonDown(0);
+        bool held        = Input.GetMouseButton(0);
+        if (!clickedDown && !held) return;
+
+        // 避免点击 UI 时触发移动（仅按下瞬间检测）
+        if (clickedDown)
+        {
+            var es = UnityEngine.EventSystems.EventSystem.current;
+            if (es != null && es.IsPointerOverGameObject()) return;
+        }
+
+        Camera cam = Camera.main;
+        // 兜底：若场景中找不到 MainCamera tag，取第一个活跃摄像机
+        if (cam == null)
+        {
+            var all = Camera.allCameras;
+            if (all.Length > 0) cam = all[0];
+        }
+        if (cam == null) return;
+
+        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+        Vector3? hitPoint = null;
+
+        // 方式 A：数学平面 (Y=0) 求交 —— 最快且不依赖碰撞体
+        if (_groundPlane.Raycast(ray, out float planeDist) && planeDist > 0f)
+            hitPoint = ray.GetPoint(planeDist);
+
+        // 方式 B：Physics.Raycast 兜底（打场景碰撞体）
+        if (!hitPoint.HasValue &&
+            Physics.Raycast(ray, out RaycastHit phit, 500f))
+            hitPoint = phit.point;
+
+        if (!hitPoint.HasValue) return;
+
+        Vector3 hit = hitPoint.Value;
+        hit.x = Mathf.Clamp(hit.x, -MAP_BOUND, MAP_BOUND);
+        hit.z = Mathf.Clamp(hit.z, -MAP_BOUND, MAP_BOUND);
+        hit.y = transform.position.y;
+        _clickTarget = hit;
+        ShowMarkerAt(hit);
+    }
+
+    private void ShowMarkerAt(Vector3 worldPos)
+    {
+        if (_clickMarker == null) return;
+        _clickMarker.transform.position = worldPos + Vector3.up * 0.05f; // 略微抬高避免 Z-fight
+        _clickMarker.SetActive(true);
+    }
+
+    private void HideMarker()
+    {
+        if (_clickMarker != null) _clickMarker.SetActive(false);
     }
 
     /// <summary>把玩家位置钳制在地图边界内（防卡出地图）。每帧 LateUpdate 也会调一次。</summary>

@@ -261,7 +261,7 @@ public class MindControlled : MonoBehaviour
                 _rb.angularVelocity = Vector3.zero;
                 _rb.useGravity = false;
                 _rb.isKinematic = true;
-                _rb.mass = 0.1f; // 极低质量，避免友军推着敌军到处跑
+                _rb.mass = 0.001f; // 极低质量：被控制友军几乎不推动敌人，避免把怪物推到空中
             }
 
             // 2026-06 修"被控制 boss / 友军只播待机不播行走"：

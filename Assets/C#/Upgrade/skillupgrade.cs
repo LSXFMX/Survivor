@@ -81,6 +81,8 @@ public class skillupgrade : Upgradeoptionsbase
                 }
                 SkillBloodline bl = choiceskill as SkillBloodline;
                 if (bl != null) bl.attackRadius += upgradenumber;
+                SkillParasite sp = choiceskill as SkillParasite;
+                if (sp != null) sp.attackRadius += upgradenumber;
                 break;
         }
 
@@ -139,6 +141,8 @@ public class skillupgrade : Upgradeoptionsbase
                     }
                     SkillBloodline cbl = s as SkillBloodline;
                     if (cbl != null) cbl.attackRadius += scaledValue;
+                    SkillParasite csp = s as SkillParasite;
+                    if (csp != null) csp.attackRadius += scaledValue;
                     break;
             }
         }

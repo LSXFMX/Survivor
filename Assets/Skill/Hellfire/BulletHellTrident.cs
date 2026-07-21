@@ -23,6 +23,7 @@ public class BulletHellTrident : MonoBehaviour
     enemy _targetEnemy;
     int _damage;
     Attribute _playerAttr;
+    Skillbase _sourceSkill; // 用于 GameSessionTracker 记录伤害归属
     bool _started;
     bool _damageApplied;
 
@@ -31,6 +32,7 @@ public class BulletHellTrident : MonoBehaviour
         _targetEnemy = targetEnemy;
         _damage = Mathf.Max(1, damage);
         _playerAttr = null;
+        _sourceSkill = sourceSkill;
         if (sourceSkill != null && sourceSkill.player != null)
             _playerAttr = sourceSkill.player.GetComponent<Attribute>();
 
@@ -99,7 +101,13 @@ public class BulletHellTrident : MonoBehaviour
         finalDamage -= _targetEnemy.def;
         if (finalDamage < 1f) finalDamage = 1f;
 
-        _targetEnemy.health -= (int)finalDamage;
+        int dealt = (int)finalDamage;
+
+        // 会话伤害追踪（让对局总结能看到地狱火贡献）
+        if (GameSessionTracker.Instance != null && _sourceSkill != null)
+            GameSessionTracker.Instance.RecordDamage(_sourceSkill.Skillname, dealt);
+
+        _targetEnemy.health -= dealt;
 
         if (_targetEnemy.atknumber != null && DamageNumberSettings.Visible)
         {

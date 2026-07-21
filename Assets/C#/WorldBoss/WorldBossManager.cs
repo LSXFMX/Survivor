@@ -188,6 +188,17 @@ public class WorldBossManager : MonoBehaviour
         // 记录本局击败数（用于通关源奖励倍率）
         _defeatedFactions.Add(faction);
 
+        // 会话追踪：记录击败世界Boss
+        string bossName = faction switch
+        {
+            FactionType.Mushroom => "世界·蘑菇人",
+            FactionType.Bat      => "世界·蝙蝠公爵",
+            FactionType.Wolf     => "世界·狼人首领",
+            FactionType.Slime    => "世界·史莱姆巨龙",
+            _                    => $"世界·{faction}"
+        };
+        GameSessionTracker.Instance?.RecordBossDefeated(bossName);
+
         if (_unlockedFactions.Contains(faction)) return;
 
         // 成就装备3「钥匙剑」：解锁世界Boss奖励，未解锁则跳过加成
@@ -271,6 +282,18 @@ public class WorldBossManager : MonoBehaviour
             if (favor >= 80) { ToastManager.Show("血族血统数量 +1"); yield return new WaitForSeconds(0.4f); }
             if (favor >= 90) { ToastManager.Show("自然回血 +1"); yield return new WaitForSeconds(0.4f); }
         }
+        else if (faction == FactionType.Wolf)
+        {
+            if (favor >= 10) { ToastManager.Show("经验效率 +5"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 20) { ToastManager.Show("攻击力 +10");   yield return new WaitForSeconds(0.4f); }
+            if (favor >= 30) { ToastManager.Show("移动速度 +2"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 40) { ToastManager.Show("命途:寄生 冷却 -20%"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 50) { ToastManager.Show("防御力 +2");   yield return new WaitForSeconds(0.4f); }
+            if (favor >= 60) { ToastManager.Show("命途:寄生 范围 +10"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 70) { ToastManager.Show("闪避率 +1");   yield return new WaitForSeconds(0.4f); }
+            if (favor >= 80) { ToastManager.Show("命途:寄生 数量 +1"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 90) { ToastManager.Show("自然回血 +1"); yield return new WaitForSeconds(0.4f); }
+        }
 
         // 应用实际加成
         ApplyFactionBonus(faction);
@@ -335,6 +358,60 @@ public class WorldBossManager : MonoBehaviour
             if (favor >= 100)
                 EquipmentSystem.Instance?.UnlockEquipment(EquipmentType.FavorEquipment, 5);
         }
+        else if (faction == FactionType.Wolf)
+        {
+            // 表格对应：
+            //   10 经验效率+5     + 解锁月牙吊坠(FavorEquipment 6, 内含命途:寄生学习资格)
+            //   20 攻击力+10
+            //   30 移动速度+2
+            //   40 命途:寄生 冷却 -20%
+            //   50 防御力+2      + 解锁寄生的暗种(FavorEquipment 7, 命途:寄生弹射一次)
+            //   60 命途:寄生 范围 +10
+            //   70 闪避率+1
+            //   80 命途:寄生 数量 +1
+            //   90 自然回血+1
+            //  100                + 解锁红月分身(FavorEquipment 8, 生成红月分身宠物 + 开局命途:寄生 数量+1)
+            if (favor >= 10)
+            {
+                player.DR += 5;
+                EquipmentSystem.Instance?.UnlockEquipment(EquipmentType.FavorEquipment, 6);
+            }
+            if (favor >= 20) player.atk += 10;
+            if (favor >= 30) player.speed += 2;
+            if (favor >= 40)
+                ApplyParasiteBonus(cdMul: 0.8f);
+            if (favor >= 50)
+            {
+                player.def += 2;
+                EquipmentSystem.Instance?.UnlockEquipment(EquipmentType.FavorEquipment, 7);
+            }
+            if (favor >= 60)
+                ApplyParasiteBonus(radiusBonus: 10f);
+            if (favor >= 70) player.EVA += 1;
+            if (favor >= 80)
+                ApplyParasiteBonus(countBonus: 1);
+            if (favor >= 90) player.regen += 1;
+            if (favor >= 100)
+                EquipmentSystem.Instance?.UnlockEquipment(EquipmentType.FavorEquipment, 8);
+        }
+    }
+
+    /// <summary>
+    /// 对命途:寄生技能应用加成（冷却乘区、射程、触手数量）。
+    /// 镜像 ApplyBloodlineBonus，服务于狼人社群 40/60/80 档奖励。
+    /// </summary>
+    private void ApplyParasiteBonus(float cdMul = 1f, float radiusBonus = 0f, int countBonus = 0)
+    {
+        if (player == null) return;
+        foreach (Transform t in player.SkillList)
+        {
+            SkillParasite sp = t.GetComponent<SkillParasite>();
+            if (sp == null) continue;
+            if (cdMul < 1f && cdMul > 0f)
+                sp.CDtime = Mathf.Max(0.2f, sp.CDtime * cdMul);
+            if (radiusBonus > 0f) sp.attackRadius += radiusBonus;
+            if (countBonus > 0)   sp.number += countBonus;
+        }
     }
 
     /// <summary>
@@ -374,6 +451,8 @@ public class WorldBossManager : MonoBehaviour
         {
             FactionType.Mushroom => "蘑菇",
             FactionType.Bat      => "蝙蝠",
+            FactionType.Wolf     => "狼人",
+            FactionType.Slime    => "史莱姆",
             _                    => faction.ToString()
         };
     }

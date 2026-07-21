@@ -74,6 +74,12 @@ public class battleUI : MonoBehaviour
     public float slowMoDuration = 1.5f;
     public float victoryDelay = 2f;
 
+    // ── 总结面板 & 属性面板（Inspector 拖入）──
+    [Header("总结面板 & 属性面板（在 Inspector 中拖入场景组件，留空则运行时兜底）")]
+    public GameSummaryPanel summaryPanel;
+    public PlayerStatsPanel statsPanel;
+    private bool _gameStarted; // 标记对局是否真正开始
+
     [Header("速度按钮")]
     public TextMeshProUGUI speedButtonText;
     private int speedMode = 1; // 1/2/3 倍速；2倍速开局自带，3倍速由成就装备4解锁
@@ -124,6 +130,9 @@ public class battleUI : MonoBehaviour
         // 自动模式按钮（运行时构造：齿轮图标 + 文字，开启时齿轮旋转+文字绿，关闭时停转+文字红）
         AutoMode.Enabled = false;
         EnsureAutoButton();
+
+        // 运行时构造总结面板 & 属性面板
+        EnsureSummaryAndStatsPanels();
     }
 
     // ── 自动模式按钮 ──
@@ -335,6 +344,29 @@ public class battleUI : MonoBehaviour
     {
         yield return null;
         starttime();
+        TryAutoOpenN1Tutorial();
+    }
+
+    /// <summary>N1 开局时自动弹出操作说明（新手引导），每台设备仅触发一次。</summary>
+    private void TryAutoOpenN1Tutorial()
+    {
+        if (!_gameStarted) return;
+        if (DifficultyManager.Instance == null || DifficultyManager.Instance.Current.label != "N1") return;
+        if (InstructionsPanelUI.WasN1TutorialShown()) return;
+        if (instructionsPanel == null) return;
+
+        var ip = instructionsPanel.GetComponent<InstructionsPanelUI>();
+        if (ip == null) return;
+
+        InstructionsPanelUI.MarkN1TutorialShown();
+        // 延迟一帧确保 UI 完全就绪后再暂停
+        StartCoroutine(AutoOpenTutorialDelayed(ip));
+    }
+
+    private IEnumerator AutoOpenTutorialDelayed(InstructionsPanelUI ip)
+    {
+        yield return null;
+        ip.ShowAuto();
     }
 
     public void RefreshSkill()
@@ -355,7 +387,9 @@ public class battleUI : MonoBehaviour
             UpdateSkillCountText(skill, sb);
 
             // 永续技能（无 CD、CDtime 极大）：附加旋转循环边框，告诉玩家"它一直在生效"
-            if (IsEternalSkill(sb))
+            //   2026-07 扩展：地狱火虽是真实 CD，但作为 UR 进化标志型技能也展示永续边框。
+            //   边框与否与 CD 进度遮罩独立（fillAmount 仍走真实 CD 公式）。
+            if (ShouldShowEternalBorder(sb))
                 AttachEternalBorder(skill);
         }
 
@@ -380,7 +414,7 @@ public class battleUI : MonoBehaviour
                 skill.transform.GetChild(0).GetComponent<Image>().sprite = sb.icon;
                 skill.transform.GetChild(1).GetComponent<Image>().sprite = sb.icon;
                 UpdateSkillCountText(skill, sb);
-                if (IsEternalSkill(sb))
+                if (ShouldShowEternalBorder(sb))
                     AttachEternalBorder(skill);
             }
         }
@@ -395,14 +429,29 @@ public class battleUI : MonoBehaviour
     }
 
     /// <summary>
-    /// 判定一个技能是不是"永续 / 无冷却"：CDtime ≥ 1e8 视为永续。
-    /// 三个永续技能：SkillFormOfWind / SkillTombDomain（都在 Awake 把 CDtime 设 1e30），
-    /// 以及其它继承自 Skillbase 但 CDtime 极大的"装备/标记"型技能也自动适用。
-    /// 地狱火等仍有真实 CD 的进化技能不会被误判。
+    /// 判定一个技能是不是"真正无 CD"：CDtime ≥ 1e8 视为永续。
+    /// 仅用于 Update() 里 fillAmount 的抑制：CDkey/CDtime ≈ 0 时 fillAmount 会算到 1
+    /// 整个图标被冷却遮罩盖住"看不见"，所以对真正无 CD 的技能强行设 0 让图标完全显示。
+    /// 三个真正无 CD 的技能：SkillFormOfWind / SkillTombDomain（都在 Awake 把 CDtime 设 1e30），
+    /// 以及其它继承自 Skillbase 但 CDtime 极大的"装备/标记"型技能。
+    /// 地狱火不在此名单 —— 它有真实 CD，必须让玩家看到 CD 进度遮罩。
     /// </summary>
     private static bool IsEternalSkill(Skillbase sb)
     {
         return sb != null && sb.CDtime >= 1e8f;
+    }
+
+    /// <summary>
+    /// 判定是否给技能 UI 套"永续边框"（4 个青绿小点沿外圈公转的旋转标记）。
+    /// 与 <see cref="IsEternalSkill"/> 解耦：UI 边框走白名单，CD 遮罩走真实 CD 公式。
+    /// 白名单 = IsEternalSkill + 地狱火。
+    /// 地狱火属于 UR 进化标志型技能（与风之形/亡者领域同档），但仍保留真实 CD。
+    /// </summary>
+    private static bool ShouldShowEternalBorder(Skillbase sb)
+    {
+        if (IsEternalSkill(sb)) return true;
+        if (sb is SkillHellfire) return true;
+        return false;
     }
 
     /// <summary>
@@ -469,35 +518,64 @@ public class battleUI : MonoBehaviour
         TextMeshProUGUI countText = skillUI.transform.GetChild(2).GetComponent<TextMeshProUGUI>();
         if (countText == null || ChoiceUI.Instance == null) return;
 
-        string group = "";
-        int max = 0;
-        if (ChoiceUI.Instance.skillEntries != null)
+        // 【BUG 修复 2026-07-21】之前只看 entry.upgradeOptions[0]（首个升级组）的次数 / 上限，
+        //   导致玩家选 CD/数量/范围等非"首个"升级时，countText 永远显示 0/5。
+        //   命途:寄生尤为明显：用户选 N 次"数量+1"，但显示卡在 0/5。
+        // 现在改为：该技能所有升级组（含学习卡）的总次数 / 总有效上限。
+        string targetSkill = sb != null ? sb.Skillname : null;
+        if (string.IsNullOrEmpty(targetSkill)) { countText.text = ""; return; }
+
+        var cui = ChoiceUI.Instance;
+        int totalCur = 0;
+        int totalMax = 0;
+        bool anyMatch = false;
+
+        if (cui.skillEntries != null)
         {
-            foreach (var entry in ChoiceUI.Instance.skillEntries)
+            foreach (var entry in cui.skillEntries)
             {
-                if (entry.upgradeOptions == null || entry.upgradeOptions.Count == 0) continue;
-                var first = entry.upgradeOptions[0].GetComponent<Upgradeoptionsbase>();
-                if (first != null && !string.IsNullOrEmpty(first.upgradeGroup))
+                if (entry == null) continue;
+                // 学习卡（也计入）
+                getnewskill learn = entry.learnSkillPrefab != null
+                    ? entry.learnSkillPrefab.GetComponent<getnewskill>() : null;
+                if (learn != null && learn.skill != null && learn.skill.Skillname == targetSkill)
                 {
-                    var learn = entry.learnSkillPrefab?.GetComponent<getnewskill>();
-                    if (learn != null && learn.skill != null && learn.skill.Skillname == sb.Skillname)
+                    if (!string.IsNullOrEmpty(learn.upgradeGroup) && learn.maxUpgrades > 0)
                     {
-                        group = first.upgradeGroup;
-                        max = ChoiceUI.Instance.GetEffectiveMaxUpgrades(first);
-                        break;
+                        totalCur += cui.GetGroupCount(learn.upgradeGroup);
+                        totalMax += cui.GetEffectiveMaxUpgrades(learn, isLearnOption: true);
+                        anyMatch = true;
+                    }
+                }
+
+                // 升级组（每个独立 group 单独计入）
+                if (entry.upgradeOptions != null)
+                {
+                    foreach (var upGo in entry.upgradeOptions)
+                    {
+                        if (upGo == null) continue;
+                        var opt = upGo.GetComponent<Upgradeoptionsbase>();
+                        if (opt == null) continue;
+                        // 只统计指向同一技能名（即同一 entry 的 learn 关联技能）的卡片
+                        if (opt.skill == null || opt.skill.Skillname != targetSkill) continue;
+                        if (string.IsNullOrEmpty(opt.upgradeGroup) || opt.maxUpgrades <= 0) continue;
+                        totalCur += cui.GetGroupCount(opt.upgradeGroup);
+                        totalMax += cui.GetEffectiveMaxUpgrades(opt, isLearnOption: false);
+                        anyMatch = true;
                     }
                 }
             }
         }
 
-        if (!string.IsNullOrEmpty(group) && max > 0)
-            countText.text = ChoiceUI.Instance.GetGroupCount(group) + "/" + max;
+        if (anyMatch && totalMax > 0)
+            countText.text = totalCur + "/" + totalMax;
         else
             countText.text = "";
     }
 
     public void starttime()
     {
+        _gameStarted = true;
         _endlessMode = DifficultyManager.Instance != null && DifficultyManager.Instance.IsEndless;
         if (_endlessMode)
         {
@@ -735,11 +813,38 @@ public class battleUI : MonoBehaviour
         if (_doubleBossRemain > 0)
         {
             _doubleBossRemain--;
+            // 记录击败的Boss名称
+            string bossName = DetermineBossName();
+            if (!string.IsNullOrEmpty(bossName))
+                GameSessionTracker.Instance?.RecordBossDefeated(bossName);
             if (_doubleBossRemain > 0) return; // 还有Boss存活
+        }
+        else
+        {
+            // 单Boss：记录击败
+            string bossName = DetermineBossName();
+            if (!string.IsNullOrEmpty(bossName))
+                GameSessionTracker.Instance?.RecordBossDefeated(bossName);
         }
 
         bossPhase = false;
         StartCoroutine(ReturnToMain(true));
+    }
+
+    /// <summary>根据当前场上的 Boss 引用推导 Boss 名称</summary>
+    private string DetermineBossName()
+    {
+        string label = DifficultyManager.Instance != null ? DifficultyManager.Instance.Current.label : "";
+        if (_dragonBossMode) return "最终龙王";
+        if (spawnedSlimeBoss != null) return "史莱姆巨龙";
+        if (spawnedWolfBoss != null) return "狼人首领";
+        if (spawnedBatBoss != null) return "蝙蝠公爵";
+        if (spawnedBoss != null)
+        {
+            if (label == "N6") return "蘑菇人首领(双)";
+            return "蘑菇人首领";
+        }
+        return "";
     }
 
     /// <summary>供 Player.death() 调用的公开包装</summary>
@@ -750,6 +855,9 @@ public class battleUI : MonoBehaviour
         startcount = false;
         bossPhase = false;
         SetSpeedButtonInteractable(false);
+
+        // 记录技能获取列表
+        RecordAcquiredSkills();
 
         if (victory)
         {
@@ -767,17 +875,14 @@ public class battleUI : MonoBehaviour
             AudioManager.StopAll();
         }
 
-        if (victoryPanel != null)
-        {
-            victoryPanel.SetActive(true);
-            ApplyVictoryPanelTexts(victory);
-        }
+        // 结算会话数据
+        string difficulty = DifficultyManager.Instance != null
+            ? DifficultyManager.Instance.Current.label : "??";
+        int finalLvl = player != null ? player.level : 0;
+        GameSessionTracker.Instance?.FinalizeSession(victory, difficulty, finalLvl);
 
-        ToastManager.Show("3秒后返回主菜单...");
-        yield return new WaitForSecondsRealtime(3f);
-        Time.timeScale = 1f;
-        UnityEngine.SceneManagement.SceneManager.LoadScene(
-            UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+        // 显示总结面板（替代旧的 victoryPanel）
+        ShowSummaryPanel();
     }
 
     /// <summary>
@@ -1098,6 +1203,20 @@ public class battleUI : MonoBehaviour
     private void ReturnToTitle()
     {
         AudioManager.StopBgm();
+
+        // 对局已开始 → 先记录技能并弹出总结面板，再从面板按钮返回主菜单
+        if (_gameStarted)
+        {
+            RecordAcquiredSkills();
+            string difficulty = DifficultyManager.Instance != null
+                ? DifficultyManager.Instance.Current.label : "??";
+            int finalLvl = player != null ? player.level : 0;
+            GameSessionTracker.Instance?.FinalizeSession(true, difficulty, finalLvl);
+            ShowSummaryPanel();
+            return;
+        }
+
+        // 对局未开始（主菜单退出等）直接重载
         Time.timeScale = 1f;
         UnityEngine.SceneManagement.SceneManager.LoadScene(
             UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
@@ -1344,6 +1463,83 @@ public class battleUI : MonoBehaviour
         catch
         {
             return null;
+        }
+    }
+
+    // ── 总结面板 & 属性面板 ──
+
+    private void EnsureSummaryAndStatsPanels()
+    {
+        // GameSessionTracker（场景中已通过 Awake 创建，这里确保存在）
+        if (GameSessionTracker.Instance == null)
+        {
+            var trackerGo = new GameObject("GameSessionTracker");
+            trackerGo.AddComponent<GameSessionTracker>();
+        }
+
+        // GameSummaryPanel：优先使用 Inspector 拖入 → 场景查找 → 兜底 AddComponent
+        if (summaryPanel == null) summaryPanel = GameSummaryPanel.Instance;
+        if (summaryPanel == null) summaryPanel = FindObjectOfType<GameSummaryPanel>();
+        if (summaryPanel == null)
+        {
+            Debug.LogWarning("[battleUI] 场景中没有 GameSummaryPanel，自动挂载兜底（无静态 UI，请在编辑器右键 GameSummaryPanel → 生成默认面板）");
+            summaryPanel = gameObject.AddComponent<GameSummaryPanel>();
+        }
+
+        // PlayerStatsPanel：同上
+        if (statsPanel == null) statsPanel = PlayerStatsPanel.Instance;
+        if (statsPanel == null) statsPanel = FindObjectOfType<PlayerStatsPanel>();
+        if (statsPanel == null)
+        {
+            Debug.LogWarning("[battleUI] 场景中没有 PlayerStatsPanel，自动挂载兜底（无静态 UI，请在编辑器右键 PlayerStatsPanel → 生成默认面板）");
+            statsPanel = gameObject.AddComponent<PlayerStatsPanel>();
+        }
+    }
+
+    /// <summary>把玩家当前持有的所有技能名称记录到追踪器</summary>
+    private void RecordAcquiredSkills()
+    {
+        var tracker = GameSessionTracker.Instance;
+        if (tracker == null || player == null) return;
+
+        if (player.SkillList != null)
+        {
+            foreach (Transform t in player.SkillList)
+            {
+                var sb = t?.GetComponent<Skillbase>();
+                if (sb != null && !string.IsNullOrEmpty(sb.Skillname))
+                    tracker.RecordSkillAcquired(sb.Skillname);
+            }
+        }
+        if (player.SkillListClone != null)
+        {
+            foreach (Transform t in player.SkillListClone)
+            {
+                var sb = t?.GetComponent<Skillbase>();
+                if (sb != null && !string.IsNullOrEmpty(sb.Skillname))
+                    tracker.RecordSkillAcquired(sb.Skillname);
+            }
+        }
+    }
+
+    /// <summary>显示总结面板（替代旧的 victoryPanel）</summary>
+    private void ShowSummaryPanel()
+    {
+        // 隐藏旧的 victoryPanel（如果有）
+        if (victoryPanel != null) victoryPanel.SetActive(false);
+
+        // 弹出总结面板
+        if (summaryPanel != null)
+        {
+            summaryPanel.Show();
+        }
+        else
+        {
+            // 兜底：没面板就直接重载场景
+            Debug.LogWarning("[battleUI] GameSummaryPanel 不存在，直接返回主菜单");
+            Time.timeScale = 1f;
+            UnityEngine.SceneManagement.SceneManager.LoadScene(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
         }
     }
 }

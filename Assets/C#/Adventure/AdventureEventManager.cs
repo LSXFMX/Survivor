@@ -48,6 +48,12 @@ public class AdventureEventManager : MonoBehaviour
     {
         if (triggerButton == null) return;
 
+        // 奇遇选择面板显示中 → 按钮不可交互，防止重复点击扣源木
+        bool adventureShowing = adventureUI != null && adventureUI.IsShowing;
+        if (triggerButton.interactable == adventureShowing)
+            triggerButton.interactable = !adventureShowing;
+        if (adventureShowing) return;
+
         // 全局设计：没有可选择的奇遇（可用数量 == 0）→ 隐藏奇遇按钮
         bool hasOptions = CountAvailableOptions() > 0;
         if (triggerButton.gameObject.activeSelf != hasOptions)
@@ -101,6 +107,9 @@ public class AdventureEventManager : MonoBehaviour
     {
         if (YuanMuManager.Instance == null) return;
         if (YuanMuManager.Instance.Current < triggerThreshold) return;
+
+        // 奇遇选择面板已显示，不允许重复触发（避免重复扣源木）
+        if (adventureUI != null && adventureUI.IsShowing) return;
 
         // 三选一升级进行中不允许触发奇遇（连源木也不扣）
         var bui = GameObject.Find("BattleUI")?.GetComponent<battleUI>();
