@@ -46,14 +46,14 @@ public class SlimeBoss : enemy
     [Header("剑气参数")]
     public float swordQiSpeed     = 12f;
     public float swordQiLifetime  = 1.6f;
-    public float swordQiDamageMul = 1.2f;
+    public float swordQiDamageMul = 0.8f;
 
     [Header("弓箭参数")]
     public int   arrowCount     = 5;
     public float arrowSpread    = 35f;
     public float arrowSpeed     = 18f;
     public float arrowLifetime  = 3f;
-    public float arrowDamageMul = 0.6f;
+    public float arrowDamageMul = 0.4f;
 
     [Header("巨龙终形态（血量 <10% 触发一次）")]
     [Range(0.01f, 0.5f)] public float dragonHpThreshold = 0.10f;
@@ -67,7 +67,7 @@ public class SlimeBoss : enemy
     public float breathSpread    = 70f;
     public float breathSpeed     = 9f;
     public float breathLifetime  = 3f;
-    public float breathDamageMul = 1.0f;
+    public float breathDamageMul = 0.7f;
 
     [Header("Boss UI")]
     [HideInInspector] public battleUI battleUI;

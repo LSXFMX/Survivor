@@ -82,8 +82,8 @@ public class DifficultyManager : MonoBehaviour
         new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.0f,  minutes = 13 },
         // N13：终极挑战，HP×80，ATK×5.0，13 分钟
         new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 5.0f,  minutes = 13 },
-        // 无尽：正计时挂机模式。起始 HP×5，每 5 分钟 +5；ATK 固定 ×5。minutes=0 表示不倒计时。
-        new DifficultyConfig { label = "无尽", hpMultiplier = 5.0f,  atkMultiplier = 5.0f,  minutes = 0  },
+        // 无尽：正计时挂机模式。起始 HP×25 = N8 基准；ATK×3.5 = N8 基准。minutes=0 表示不倒计时。
+        new DifficultyConfig { label = "无尽", hpMultiplier = 25.0f,  atkMultiplier = 3.5f,  minutes = 0  },
     };
 
     // 当前选中的难度索引（0=N1 … 4=N5），默认 N3
@@ -110,7 +110,7 @@ public class DifficultyManager : MonoBehaviour
             if (oldLen <= 10) expanded[10] = new DifficultyConfig { label = "N11", hpMultiplier = 52.0f, atkMultiplier = 5.0f, minutes = 13 };
             if (oldLen <= 11) expanded[11] = new DifficultyConfig { label = "N12", hpMultiplier = 65.0f, atkMultiplier = 5.0f, minutes = 13 };
             if (oldLen <= 12) expanded[12] = new DifficultyConfig { label = "N13", hpMultiplier = 80.0f, atkMultiplier = 5.0f, minutes = 13 };
-            expanded[13] = new DifficultyConfig { label = "无尽", hpMultiplier = 5.0f, atkMultiplier = 5.0f, minutes = 0 };
+            expanded[13] = new DifficultyConfig { label = "无尽", hpMultiplier = 25.0f, atkMultiplier = 3.5f, minutes = 0 };
             configs = expanded;
             Debug.LogWarning($"[难度管理] 场景 configs 只有 {oldLen} 个条目，已自动扩展到 14 个（N1-N13 + 无尽）");
         }

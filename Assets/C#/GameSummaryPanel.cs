@@ -352,6 +352,11 @@ public class GameSummaryPanel : MonoBehaviour
         titleTxt.color = new Color(1f, 0.88f, 0.4f);
         titleTxt.fontStyle = FontStyles.Bold;
         titleTxt.raycastTarget = false;
+        // 清除 heiti SDF 自带的外描边（黑边）
+        titleTxt.outlineWidth = 0f;
+        titleTxt.outlineColor = Color.clear;
+        // 阴影也去掉
+        titleTxt.fontSharedMaterial = null; // 防止从 material 继承 outline
         TryAssignFont(titleTxt);
 
         // ---- 页面容器 ----

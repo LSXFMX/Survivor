@@ -599,12 +599,12 @@ public class Player : Attribute
         bool held        = Input.GetMouseButton(0);
         if (!clickedDown && !held) return;
 
-        // 避免点击 UI 时触发移动（仅按下瞬间检测）
-        if (clickedDown)
-        {
-            var es = UnityEngine.EventSystems.EventSystem.current;
-            if (es != null && es.IsPointerOverGameObject()) return;
-        }
+        // 避免点击 HUD 按钮（倍速/暂停/源木等）时触发移动：
+        // 仅当鼠标悬停在实际 UI 按钮/面板上才拦截，不拦截空白区域。
+        // battleUI 的 Canvas 是全屏的，不能直接用 IsPointerOverGameObject。
+        var es = UnityEngine.EventSystems.EventSystem.current;
+        if (es != null && IsPointerOverInteractiveUI(es))
+            return;
 
         Camera cam = Camera.main;
         // 兜底：若场景中找不到 MainCamera tag，取第一个活跃摄像机
@@ -647,6 +647,35 @@ public class Player : Attribute
     private void HideMarker()
     {
         if (_clickMarker != null) _clickMarker.SetActive(false);
+    }
+
+    /// <summary>
+    /// 判断鼠标是否悬停在可交互 UI（按钮/面板）上，但不过滤全屏 Canvas 背景。
+    /// EventSystem.IsPointerOverGameObject 在全屏 Canvas 下永远返回 true，
+    /// 需要用 RaycastAll 精确判断鼠标下方是否有 Button/Selectable 等组件。
+    /// </summary>
+    private static bool IsPointerOverInteractiveUI(UnityEngine.EventSystems.EventSystem es)
+    {
+        var ped = new UnityEngine.EventSystems.PointerEventData(es)
+        {
+            position = Input.mousePosition
+        };
+        var hits = new System.Collections.Generic.List<UnityEngine.EventSystems.RaycastResult>();
+        es.RaycastAll(ped, hits);
+
+        foreach (var hit in hits)
+        {
+            var go = hit.gameObject;
+            if (go == null) continue;
+            // 只拦截有实际交互组件的 UI（按钮/开关/滑条/下拉框等）
+            if (go.GetComponent<UnityEngine.UI.Button>() != null) return true;
+            if (go.GetComponent<UnityEngine.UI.Toggle>() != null) return true;
+            if (go.GetComponent<UnityEngine.UI.Slider>() != null) return true;
+            if (go.GetComponent<UnityEngine.UI.Dropdown>() != null) return true;
+            if (go.GetComponent<UnityEngine.UI.Selectable>() != null) return true;
+            if (go.GetComponent<TMPro.TMP_InputField>() != null) return true;
+        }
+        return false;
     }
 
     /// <summary>把玩家位置钳制在地图边界内（防卡出地图）。每帧 LateUpdate 也会调一次。</summary>

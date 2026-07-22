@@ -88,6 +88,7 @@ public class EquipmentIcon : MonoBehaviour
         // 狼人社群好感度装备 6/7/8（月牙吊坠 / 寄生的暗种 / 红月分身）的文本 + 图标兜底。
         // 与蘑菇/蝙蝠社群 FavorEquipment 0-5 一致：场景里只要 EquipmentIcon 挂对了
         // equipmentType=FavorEquipment / equipmentId=6~8，名字描述图标全部由此覆盖。
+        ApplyForcedFavorEquipmentBaseOverrides();
         ApplyForcedFavorEquipmentWolfOverrides();
 
         // 同时把抽卡 SSR 8 / 9（新增的「我与我与我」/「三清化一」）的文本兜底
@@ -155,6 +156,66 @@ public class EquipmentIcon : MonoBehaviour
             description = "解锁自动选取升级功能\n\n有一只手在帮你选择升级，还不快谢他";
             howToGet = "累计选择两百次升级";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/成就装备/008不可视之手/8.不可视之手.png");
+        }
+    }
+
+    /// <summary>
+    /// 好感度装备 0-5（蘑菇社群 0/1/2 + 蝙蝠社群 3/4/5）的文本 + 图标兜底。
+    /// 这些装备的 EquipmentIcon 在场景里只有 serializedField 的图标引用，
+    /// Build 后若场景里没有其他引用，icon 资源会被 Unity 视为"未使用"剔除掉，
+    /// 导致打包后图标丢失。改为走 Resources 路径，与 6/7/8 同套路强制覆盖。
+    /// </summary>
+    private void ApplyForcedFavorEquipmentBaseOverrides()
+    {
+        if (equipmentType != EquipmentType.FavorEquipment) return;
+
+        if (equipmentId == 0)
+        {
+            equipmentName = "孢子之心";
+            description = "好感度达到 100 时，开局自动解锁【孢子领域】技能\n\n" +
+                "蘑菇群落的精髓，孕育着生命与衰变。";
+            howToGet = "首次击败蘑菇王（蘑菇社群好感度 +10）";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/好感度装备/000_new.png");
+        }
+        else if (equipmentId == 1)
+        {
+            equipmentName = "孢子喷射器";
+            description = "蘑菇滑板（冲刺）冷却时间 -50%\n\n" +
+                "二倍速的蘑菇坐骑，让玩家在孢子中穿行。";
+            howToGet = "蘑菇社群好感度累计 ≥ 50";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/好感度装备/001_new.png");
+        }
+        else if (equipmentId == 2)
+        {
+            equipmentName = "蘑菇宝宝";
+            description = "开局召唤跟随宠物「蘑菇宝宝」\n\n" +
+                "它会向最近的敌人投掷孢子，协同玩家战斗。";
+            howToGet = "蘑菇社群好感度达到 100";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/好感度装备/002_new.png");
+        }
+        else if (equipmentId == 3)
+        {
+            equipmentName = "血族血统";
+            description = "好感度达到 100 时，开局自动解锁【血族血统】技能\n\n" +
+                "蝙蝠群落的血脉遗产，让你的指尖流出鲜血与渴望。";
+            howToGet = "首次击败蝙蝠公爵（蝙蝠社群好感度 +10）";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/好感度装备/003_new.png");
+        }
+        else if (equipmentId == 4)
+        {
+            equipmentName = "血之潮汐";
+            description = "【血族血统】攻击范围 +10、CD ×0.8\n\n" +
+                "古老的血之力量在血管中翻涌。";
+            howToGet = "蝙蝠社群好感度累计 ≥ 50";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/好感度装备/004_new.png");
+        }
+        else if (equipmentId == 5)
+        {
+            equipmentName = "蝙蝠宝宝";
+            description = "开局召唤跟随宠物「蝙蝠宝宝」\n\n" +
+                "它会俯冲攻击敌人，从空中协助玩家。";
+            howToGet = "蝙蝠社群好感度达到 100";
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/好感度装备/005_new.png");
         }
     }
 

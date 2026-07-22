@@ -16,7 +16,7 @@ using TMPro;
 public class WorldBossBase : enemy
 {
     [Header("世界Boss设置")]
-    public float       activateRange = 45f;
+    public float       activateRange = 25f;
     public FactionType faction       = FactionType.Mushroom;
 
     [Header("世界Boss属性（v2：原关底Boss属性×2）")]
