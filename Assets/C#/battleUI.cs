@@ -522,6 +522,11 @@ public class battleUI : MonoBehaviour
         //   导致玩家选 CD/数量/范围等非"首个"升级时，countText 永远显示 0/5。
         //   命途:寄生尤为明显：用户选 N 次"数量+1"，但显示卡在 0/5。
         // 现在改为：该技能所有升级组（含学习卡）的总次数 / 总有效上限。
+        //
+        // 【BUG 修复 2026-07-29】按 upgradeGroup 去重 —— 防止 EquipmentInitializer 被多次调用
+        //   或场景中重复挂载组件时，同一 upgradeGroup 被多份 entry 重复计入，导致
+        //   选一次升级看似加好几个、且上限翻倍的诡异显示。
+        //   与 ComputePlayerUpgradeProgress 中 seenGroups 的处理方式保持一致。
         string targetSkill = sb != null ? sb.Skillname : null;
         if (string.IsNullOrEmpty(targetSkill)) { countText.text = ""; return; }
 
@@ -529,6 +534,7 @@ public class battleUI : MonoBehaviour
         int totalCur = 0;
         int totalMax = 0;
         bool anyMatch = false;
+        var seenGroups = new System.Collections.Generic.HashSet<string>();
 
         if (cui.skillEntries != null)
         {
@@ -540,7 +546,8 @@ public class battleUI : MonoBehaviour
                     ? entry.learnSkillPrefab.GetComponent<getnewskill>() : null;
                 if (learn != null && learn.skill != null && learn.skill.Skillname == targetSkill)
                 {
-                    if (!string.IsNullOrEmpty(learn.upgradeGroup) && learn.maxUpgrades > 0)
+                    if (!string.IsNullOrEmpty(learn.upgradeGroup) && learn.maxUpgrades > 0
+                        && seenGroups.Add(learn.upgradeGroup))
                     {
                         totalCur += cui.GetGroupCount(learn.upgradeGroup);
                         totalMax += cui.GetEffectiveMaxUpgrades(learn, isLearnOption: true);
@@ -559,6 +566,7 @@ public class battleUI : MonoBehaviour
                         // 只统计指向同一技能名（即同一 entry 的 learn 关联技能）的卡片
                         if (opt.skill == null || opt.skill.Skillname != targetSkill) continue;
                         if (string.IsNullOrEmpty(opt.upgradeGroup) || opt.maxUpgrades <= 0) continue;
+                        if (!seenGroups.Add(opt.upgradeGroup)) continue;  // 已统计过同 group
                         totalCur += cui.GetGroupCount(opt.upgradeGroup);
                         totalMax += cui.GetEffectiveMaxUpgrades(opt, isLearnOption: false);
                         anyMatch = true;
