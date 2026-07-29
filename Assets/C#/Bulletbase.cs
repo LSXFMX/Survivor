@@ -51,13 +51,10 @@ public class Bulletbase : MonoBehaviour
         enemy = s_cachedEnemyLayer;
 
         rb = GetComponent<Rigidbody>();
-        if (rb != null)
-        {
-            rb.useGravity = false;
-            if (transform.position.y < 1f)
-                transform.position = new Vector3(transform.position.x, 1f, transform.position.z);
-            rb.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotation;
-        }
+        rb.useGravity = false;
+        if (transform.position.y < 1f)
+            transform.position = new Vector3(transform.position.x, 1f, transform.position.z);
+        rb.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotation;
         transform.localScale = transform.localScale * size;
         _baseEuler = transform.rotation.eulerAngles;
     }
