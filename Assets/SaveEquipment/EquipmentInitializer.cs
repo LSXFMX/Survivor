@@ -239,13 +239,13 @@ public class EquipmentInitializer : MonoBehaviour
         go.transform.SetParent(transform, false);
         go.SetActive(false);
         skillupgrade up = go.AddComponent<skillupgrade>();
-        up.Upgradename        = "命途:寄生：" + suffix;
-        up.Upgradedescription = "";
+        up.Upgradename        = "命途:寄生";
+        up.Upgradedescription = suffix;
         up.type               = Upgradeoptionsbase.Upgradetype.upgradeskill;
         up.skill              = target;
         up.skillAtr           = attr;
         up.upgradenumber      = value;
-        up.icon               = null;
+        up.icon               = BulletParasite.LoadSpriteFallback("Wolf/icon_parasite");
         up.upgradeGroup       = "parasite_" + attr.ToString();
         up.maxUpgrades        = 5;
         go.SetActive(true);
