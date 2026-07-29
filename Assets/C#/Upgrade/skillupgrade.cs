@@ -40,6 +40,9 @@ public class skillupgrade : Upgradeoptionsbase
                 // 火球术 CD 下限 1.0s（防止 CD 被降到极值导致升级卡消失后仍能通过其他方式再降）
                 if (choiceskill.Skillname == "火球术")
                     choiceskill.CDtime = Mathf.Max(1f, choiceskill.CDtime);
+                // 命途:寄生 CD 下限 2.5s（基础 3.0s，CD 升级卡 -0.1s×5 = -0.5s = 2.5s）
+                if (choiceskill.Skillname == "命途:寄生")
+                    choiceskill.CDtime = Mathf.Max(2.5f, choiceskill.CDtime);
                 break;
             case skillAttribute.damage:
                 choiceskill.damage += (int)upgradenumber;
