@@ -57,6 +57,9 @@ public class DragonBoss : enemy
     private SpriteRenderer _sr;
     private Rigidbody      _rb;
     private bool  _busy, _invincible, _transitioning;
+
+    /// <summary>外部读入口：进场/转阶段期间为 true，期间应被子弹忽略。Bulletbase.OnTriggerEnter 会读此标志避免提前扣血。</summary>
+    public  bool  IsInvincible => _invincible;
     private int   _lockedHealth;
     private float _cdA, _cdB;          // 当前形态两个技能独立 CD
     private float _contactTimer, _busyWatchdog;

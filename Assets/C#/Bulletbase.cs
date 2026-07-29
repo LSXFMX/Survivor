@@ -58,6 +58,12 @@ public class Bulletbase : MonoBehaviour
         // 亡者领域：玩家子弹不打被控制的友军
         if (enemy._mindControlledFlag) return;
 
+        // 龙Boss 进场 / 转阶段 期间处于无敌状态（DragonBoss.LateUpdate 会把 health 强行回滚，
+        //   但帧顺序不可控——若子弹 OnTriggerEnter 抢在 LateUpdate 之前执行，
+        //   伤害数字 / 命中音效 / 击退都已经被播出来，视觉上就是"未出场的 boss 掉血了"）。
+        //   在源头拦截更可靠：直接跳过整段伤害/飘字/音效流程。
+        if (enemy is DragonBoss db && db.IsInvincible) return;
+
         if (enemy.health > 0)
         {
             // 闪避判定：EVA 为闪避概率（0~100）

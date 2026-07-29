@@ -600,12 +600,12 @@ public class EquipmentInitializer : MonoBehaviour
             ToastManager.Show("[装备] 龙鳞之甲：防御力＋10");
         }
 
-        // N13 通关装备 35：黄金睛 - 暴击伤害＋20
-        if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 35))
-        {
-            if (player != null) player.CD += 20f;
-            ToastManager.Show("[装备] 黄金睛：暴击伤害＋20");
-        }
+// N13 通关装备 35：黄金瞳 - 暴击伤害+20
+if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 35))
+{
+    if (player != null) player.CD += 20f;
+    ToastManager.Show("[装备] 黄金瞳：暴击伤害+20");
+}
     }
 
     // ── 成就装备 ──────────────────────────────────────────

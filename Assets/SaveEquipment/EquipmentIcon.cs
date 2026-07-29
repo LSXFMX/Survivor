@@ -553,7 +553,7 @@ public class EquipmentIcon : MonoBehaviour
     ///   24 月牙之剑：攻击力+20     | 25 月圆之甲：防御力+2      | 26 月球之心：自然回血+2
     ///   27 粘液之剑：攻击力+20     | 28 粘液之甲：生命值+300    | 29 粘液之心：经验效率+2
     ///   30 暗影之剑：攻击力+20     | 31 暗影之甲：防御力+2      | 32 暗影之心：暴击伤害+20
-    ///   33 龙鳞之剑：攻击力+30     | 34 龙鳞之甲：防御力+10     | 35 黄金睛：暴击伤害+20
+    ///   33 龙鳞之剑：攻击力+30     | 34 龙鳞之甲：防御力+10     | 35 黄金瞳：暴击伤害+20
     /// </summary>
     private void ApplyForcedClearEquipmentN9toN13Overrides()
     {
@@ -664,8 +664,8 @@ public class EquipmentIcon : MonoBehaviour
         }
         else if (equipmentId == 35)
         {
-            equipmentName = "黄金睛";
-            description = "暴击伤害＋20\n\n感叹没有黄金瞳的照修命运吧！";
+            equipmentName = "黄金瞳";
+            description = "暴击伤害+20\n\n感叹没有黄金瞳的悲惨命运吧！";
             howToGet = "通关N13有概率掉落";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/通关装备/035.png");
         }
