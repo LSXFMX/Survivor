@@ -43,6 +43,8 @@ public class WorldBossArrowIndicator : MonoBehaviour
         var scaler = go.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = 0.5f;
         go.AddComponent<GraphicRaycaster>();
     }
 
@@ -58,10 +60,21 @@ public class WorldBossArrowIndicator : MonoBehaviour
 
     void Update()
     {
-        if (_cam == null || _player == null) return;
+        // 懒初始化：Camera / Player 可能在 Start 时还未就绪
+        if (_cam == null) _cam = Camera.main;
+        if (_player == null)
+        {
+            var bui = FindObjectOfType<battleUI>();
+            if (bui != null && bui.player != null)
+                _player = bui.player.transform;
+        }
+        if (_cam == null || _player == null || _canvas == null) return;
 
         // 搜寻活跃的世界Boss（FindObjects每帧开销很小，只有几个Boss）
         var all = FindObjectsOfType<WorldBossBase>();
+        // 一次性调试提示（看到这条日志说明组件正常运行中）
+        if (all.Length > 0 && _indicators.Count == 0)
+            Debug.Log($"[WorldBossArrow] 检测到 {all.Length} 个世界Boss，开始创建箭头指示器");
 
         // 移除已死亡/销毁的Boss指示器
         var toRemove = new List<WorldBossBase>();
@@ -145,11 +158,13 @@ public class WorldBossArrowIndicator : MonoBehaviour
         distRt.pivot = new Vector2(0, 0.5f);
         distRt.anchoredPosition = new Vector2(arrowSize + portraitSize + 16, 0);
         var distTxt = distGo.AddComponent<Text>();
-        distTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        distTxt.font = Font.CreateDynamicFontFromOSFont("Arial", 16);
         distTxt.fontSize = 16;
         distTxt.color = Color.white;
         distTxt.alignment = TextAnchor.MiddleLeft;
         distTxt.raycastTarget = false;
+        if (distTxt.font == null)
+            distTxt.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
         // 给文字加描边效果：用 Shadow 组件
         var shadow = distGo.AddComponent<Shadow>();
         shadow.effectColor = Color.black;
