@@ -518,6 +518,10 @@ public class battleUI : MonoBehaviour
         TextMeshProUGUI countText = skillUI.transform.GetChild(2).GetComponent<TextMeshProUGUI>();
         if (countText == null || ChoiceUI.Instance == null) return;
 
+        // 【2026-07-29】永续类技能（风之形/亡者领域/地狱火 等带"永续边框"的 UR 进化型）
+        //   不显示 X/Y 计数：它们是终局形态，不再有可升级次数的概念。
+        if (ShouldShowEternalBorder(sb)) { countText.text = ""; return; }
+
         // 【BUG 修复 2026-07-21】之前只看 entry.upgradeOptions[0]（首个升级组）的次数 / 上限，
         //   导致玩家选 CD/数量/范围等非"首个"升级时，countText 永远显示 0/5。
         //   命途:寄生尤为明显：用户选 N 次"数量+1"，但显示卡在 0/5。
