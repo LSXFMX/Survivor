@@ -46,7 +46,7 @@ public class DragonBoss : enemy
     // ── 基础参数 ──
     public float bossScale       = 1.0f;
     public float goldScale       = 1.18f;
-    public int   perPhaseHealth  = 500;
+    public int   perPhaseHealth  = 1000;
     public float baseAtk         = 50f;
     public float baseDef         = 50f;
     public float moveSpeed       = 4.5f;
