@@ -18,9 +18,9 @@ public class WorldBossArrowIndicator : MonoBehaviour
     private Camera            _cam;
     private Transform         _player;
 
-    // 活跃指示器：Boss实例 → UI RectTransform
-    private Dictionary<WorldBossBase, GameObject> _indicators
-        = new Dictionary<WorldBossBase, GameObject>();
+    // 活跃指示器：enemy实例 → UI RectTransform
+    private Dictionary<enemy, GameObject> _indicators
+        = new Dictionary<enemy, GameObject>();
 
     // ──────── 颜色映射 ────────
     private static readonly Color ColMushroom = new Color(0.35f, 0.90f, 0.35f);
@@ -72,29 +72,27 @@ public class WorldBossArrowIndicator : MonoBehaviour
         }
         if (_cam == null || _player == null || _canvas == null) return;
 
-        // 搜寻活跃的世界Boss（FindObjects每帧开销很小，只有几个Boss）
-        var all = FindObjectsOfType<WorldBossBase>();
+        // 搜寻活跃的世界Boss——注意不能用 FindObjectsOfType<WorldBossBase>()
+        // 因为 WorldBossSlime 等实体继承链路是 WorldBossSlime→SlimeBoss→enemy，而非 WorldBossBase。
+        // 这里改为搜全部 enemy 再过滤 4 个世界Boss子类型，只处理少数实例，性能无压力。
+        var all = FindObjectsOfType<enemy>();
         // 每秒一次诊断日志
         if (Time.frameCount % 60 == 0)
         {
-            int alive = 0, dead = 0, inact = 0;
+            int alive = 0, dead = 0, total = 0;
             foreach (var b in all)
             {
-                if (b == null) continue;
-                if (!b.gameObject.activeInHierarchy) { inact++; continue; }
+                if (b == null || !IsWorldBoss(b)) continue;
+                total++;
+                if (!b.gameObject.activeInHierarchy) continue;
                 if (b.rolestate == enemy.state.dead || b.health <= 0) { dead++; continue; }
                 alive++;
             }
-            Debug.Log($"[WorldBossArrow] 总 {all.Length} | 激活 {alive} | 死亡 {dead} | 失活 {inact} | _indicators={_indicators.Count}");
-        }
-        if (all.Length > 0 && _indicators.Count == 0 && s_firstFrame)
-        {
-            s_firstFrame = false;
-            Debug.Log($"[WorldBossArrow] 首次检测到 {all.Length} 个世界Boss，开始创建箭头");
+            Debug.Log($"[WorldBossArrow] 世界Boss总 {total} | 激活 {alive} | 死亡 {dead} | _indicators={_indicators.Count}");
         }
 
         // 移除已死亡/销毁的Boss指示器
-        var toRemove = new List<WorldBossBase>();
+        var toRemove = new List<enemy>();
         foreach (var kv in _indicators)
         {
             if (kv.Key == null || !kv.Key.gameObject.activeSelf
@@ -112,7 +110,7 @@ public class WorldBossArrowIndicator : MonoBehaviour
 
         foreach (var boss in all)
         {
-            if (boss == null || !boss.gameObject.activeSelf) continue;
+            if (boss == null || !IsWorldBoss(boss) || !boss.gameObject.activeSelf) continue;
             if (boss.rolestate == enemy.state.dead || boss.health <= 0) continue;
 
             if (!_indicators.ContainsKey(boss))
@@ -129,9 +127,9 @@ public class WorldBossArrowIndicator : MonoBehaviour
         }
     }
 
-    private GameObject CreateIndicator(WorldBossBase boss)
+    private GameObject CreateIndicator(enemy boss)
     {
-        var go = new GameObject($"Arrow_{boss.faction}_{boss.GetInstanceID()}");
+        var go = new GameObject($"Arrow_{GetBossFaction(boss)}_{boss.GetInstanceID()}");
         go.transform.SetParent(_canvas.transform, false);
 
         var rt = go.AddComponent<RectTransform>();
@@ -190,7 +188,7 @@ public class WorldBossArrowIndicator : MonoBehaviour
         return go;
     }
 
-    private void UpdateIndicator(WorldBossBase boss, GameObject indicatorGo)
+    private void UpdateIndicator(enemy boss, GameObject indicatorGo)
     {
         Vector3 bossPos = boss.transform.position;
         Vector3 playerPos = _player.position;
@@ -261,9 +259,25 @@ public class WorldBossArrowIndicator : MonoBehaviour
 
     // ──────── 辅助方法 ────────
 
-    private Color GetBossColor(WorldBossBase boss)
+    // ──────── 世界Boss类型判断 ────────
+    private static bool IsWorldBoss(enemy e)
     {
-        switch (boss.faction)
+        return e is WorldBossSlime || e is WorldBossWolf
+            || e is WorldBossBat   || e is WorldBossMushroomMan;
+    }
+
+    private static FactionType GetBossFaction(enemy e)
+    {
+        if (e is WorldBossSlime)       return FactionType.Slime;
+        if (e is WorldBossWolf)        return FactionType.Wolf;
+        if (e is WorldBossBat)         return FactionType.Bat;
+        if (e is WorldBossMushroomMan) return FactionType.Mushroom;
+        return FactionType.Slime;
+    }
+
+    private Color GetBossColor(enemy boss)
+    {
+        switch (GetBossFaction(boss))
         {
             case FactionType.Bat:      return ColBat;
             case FactionType.Wolf:     return ColWolf;
@@ -272,7 +286,7 @@ public class WorldBossArrowIndicator : MonoBehaviour
         }
     }
 
-    private Sprite GetBossPortrait(WorldBossBase boss)
+    private Sprite GetBossPortrait(enemy boss)
     {
         // 尝试取 Boss 自身的 SpriteRenderer sprite 作为头像
         var sr = boss.GetComponentInChildren<SpriteRenderer>();
