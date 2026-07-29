@@ -65,8 +65,9 @@ public class WolfBoss : enemy
     private float _vy = 0f;                 // 竖直速度（脚本模拟重力用）
     private const float GRAVITY = 45f;      // 模拟重力加速度
     private const float DASH_LIFT = 2.2f;   // 冲刺起跳抬高的高度（基于地面向上）
-    private bool  busy       = false; // 技能演出中，暂停常规移动/选技能
-    private bool  invincible = false;
+    private bool  busy             = false; // 技能演出中，暂停常规移动/选技能
+    private bool  invincible       = false;
+    private bool  _mcQuakeRunning  = false; // MC 震地协程防重叠
     private int   lockedHealth;
     private string curAnim = "";
 
@@ -192,7 +193,21 @@ public class WolfBoss : enemy
     protected override void FixedUpdate()
     {
         if (phase == Phase.Dead) return;
-        if (GetComponent<MindControlled>() != null) return;
+
+        // 亡者领域复活后：原版技能协程全部面向玩家（DamagePlayers 遍历 playerlayer），不适合 MC。
+        // 改为简单的"走到最近敌人→震地"循环，由 MindControlled 驱动移动。
+        MindControlled mc = GetComponent<MindControlled>();
+        if (mc != null)
+        {
+            if (_mcQuakeRunning) return;
+            cdQuake -= Time.fixedDeltaTime;
+            if (cdQuake <= 0f)
+            {
+                cdQuake = quakeInterval * 0.5f; // MC 下技能频率减半（不抢风头）
+                StartCoroutine(QuakeOnEnemies());
+            }
+            return;
+        }
 
         if (busy)
         {
@@ -285,6 +300,32 @@ public class WolfBoss : enemy
         DamagePlayers(transform.position, quakeRadius, dmg, wolf ? 2f : 0f);
         yield return new WaitForSeconds(0.3f);
         busy = false;
+    }
+
+    // ── 亡者领域复活版震地：打敌人而非玩家 ──
+    private IEnumerator QuakeOnEnemies()
+    {
+        _mcQuakeRunning = true;
+        SpawnClawFx(transform.position);
+        yield return new WaitForSeconds(0.3f);
+
+        // 遍历 enemylayer（和 MindControlled 索敌一致，不依赖特殊 Layer 命名）
+        int dmg = Mathf.RoundToInt(atk * 1.2f);
+        Transform host = GameObject.Find("enemylayer")?.transform;
+        if (host != null)
+        {
+            foreach (Transform t in host)
+            {
+                enemy e = t.GetComponent<enemy>();
+                if (e == null || e == this || e._mindControlledFlag || e.health <= 0) continue;
+                if (Vector3.Distance(t.position, transform.position) > quakeRadius) continue;
+                int d = Mathf.Max(1, dmg - (int)e.def);
+                e.health -= d;
+                ShowDamageNumber(t.position, d);
+            }
+        }
+        yield return new WaitForSeconds(0.3f);
+        _mcQuakeRunning = false;
     }
 
     // ── 半血：抓取处决 → 变身 ──

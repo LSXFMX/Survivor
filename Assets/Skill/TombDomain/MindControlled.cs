@@ -394,7 +394,18 @@ public class MindControlled : MonoBehaviour
             return;
         }
 
-        // 保险：每帧再切断一次对玩家的索敌（仅地面友军；蝙蝠分支已自管 role）
+        // Boss 型友军（SlimeBoss / WolfBoss）：
+        //   它们自身 FixedUpdate 里有完整的 CD 计时 + 技能协程，MindControlled 不应再做
+        //   简陋的"走→平A"循环。只需要把 role 喂给 Boss，让 Boss 面向敌人释放技能即可，
+        //   攻击方向由 Boss 自己的 FaceTarget() + SwordSwing/BowDraw/Quake 决定。
+        if (_en is SlimeBoss || _en is WolfBoss)
+        {
+            _en.role = (tgt != null) ? tgt.gameObject : null;
+            SyncOverlayFrameIfChanged();
+            return;
+        }
+
+        // 保险：每帧再切断一次对玩家的索敌（仅地面友军；蝙蝠/Boss 分支已自管 role）
         _en.role = null;
 
         if (tgt != null)

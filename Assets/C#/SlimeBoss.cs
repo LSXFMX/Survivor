@@ -100,8 +100,9 @@ public class SlimeBoss : enemy
     // 手持武器
     private Transform _swordObj;
     private Transform _bowObj;
-    private bool _swordSwinging = false;
-    private bool _bowDrawing    = false;
+    private bool _swordSwinging  = false;
+    private bool _bowDrawing     = false;
+    private bool _weaponsCreated = false;  // MC 复活后一次性解锁武器
     private Material _spriteMat;
 
     // 巨龙
@@ -179,54 +180,78 @@ public class SlimeBoss : enemy
     protected override void FixedUpdate()
     {
         if (phase == Phase.Dead) return;
-        if (GetComponent<MindControlled>() != null) return;
 
-        if (busy)
+        bool mindControlled = GetComponent<MindControlled>() != null;
+
+        if (!mindControlled)
         {
-            busyWatchdog += Time.fixedDeltaTime;
-            if (busyWatchdog > 9f)
+            if (busy)
             {
-                StopAllCoroutines();
-                busy = false; busyWatchdog = 0f;
-                _swordSwinging = false; _bowDrawing = false;
-                if (anim != null) anim.speed = 1f;
-                curAnim = "";
-                PlayAnim(phase == Phase.Dragon ? "DragonWalk" : "Walk");
+                busyWatchdog += Time.fixedDeltaTime;
+                if (busyWatchdog > 9f)
+                {
+                    StopAllCoroutines();
+                    busy = false; busyWatchdog = 0f;
+                    _swordSwinging = false; _bowDrawing = false;
+                    if (anim != null) anim.speed = 1f;
+                    curAnim = "";
+                    PlayAnim(phase == Phase.Dragon ? "DragonWalk" : "Walk");
+                }
+                return;
             }
-            return;
+            busyWatchdog = 0f;
         }
-        busyWatchdog = 0f;
+        else
+        {
+            // MindControlled：移动由 MindControlled 接管，只保留技能释放逻辑。
+            // Dragon 形态跳过（巨龙是"向玩家喷吐+自毁"的终局演出，MC 不应进入）。
+            if (phase != Phase.Slime) return;
+        }
 
         float dt = Time.fixedDeltaTime;
 
         if (phase == Phase.Slime)
         {
-            if (role == null) { getrole(); return; }
-            FaceTarget();
-            PlayAnim("Walk");
-            MoveToward(role.transform.position, slimeSpeed, dt);
-
-            // 血量 <10% → 触发巨龙终形态（最高优先级，只触发一次）
-            if (health <= healthmax * dragonHpThreshold)
+            if (!mindControlled)
             {
-                StartCoroutine(TransformRoutine());
-                return;
+                if (role == null) { getrole(); return; }
+                FaceTarget();
+                PlayAnim("Walk");
+                MoveToward(role.transform.position, slimeSpeed, dt);
+
+                // 血量 <10% → 触发巨龙终形态（最高优先级，只触发一次）
+                if (health <= healthmax * dragonHpThreshold)
+                {
+                    StartCoroutine(TransformRoutine());
+                    return;
+                }
+
+                // 合体吞噬
+                cdMerge -= dt;
+                if (cdMerge <= 0f)
+                {
+                    cdMerge = mergeInterval;
+                    StartCoroutine(MergeRoutine());
+                    return;
+                }
+
+                // 解锁手持武器（一次性）
+                if (absorbedCount >= swordUnlockCount && _swordObj == null) CreateSword();
+                if (absorbedCount >= bowUnlockCount   && _bowObj   == null) CreateBow();
+            }
+            else
+            {
+                // MC：朝向看 role（MindControlled 会喂入敌方目标），只更新武器并释放技能
+                if (role != null) FaceTarget();
+                if (!_weaponsCreated)
+                {
+                    if (_swordObj == null) CreateSword();
+                    if (_bowObj   == null) CreateBow();
+                    _weaponsCreated = _swordObj != null || _bowObj != null;
+                }
             }
 
-            // 合体吞噬
-            cdMerge -= dt;
-            if (cdMerge <= 0f)
-            {
-                cdMerge = mergeInterval;
-                StartCoroutine(MergeRoutine());
-                return;
-            }
-
-            // 解锁手持武器（一次性）
-            if (absorbedCount >= swordUnlockCount && _swordObj == null) CreateSword();
-            if (absorbedCount >= bowUnlockCount   && _bowObj   == null) CreateBow();
-
-            // 手持剑：到点挥砍打出剑气（不打断移动，武器独立协程）
+            // 手持剑：到点挥砍打出剑气（MC 时也生效，朝 role 方向出刀）
             if (_swordObj != null && !_swordSwinging)
             {
                 cdSword -= dt;
@@ -241,6 +266,8 @@ public class SlimeBoss : enemy
         }
         else if (phase == Phase.Dragon)
         {
+            if (mindControlled) return; // MC 不进巨龙形态
+
             // 停止移动，只面向玩家
             if (role != null) FaceTarget();
             PlayAnim("DragonWalk");
