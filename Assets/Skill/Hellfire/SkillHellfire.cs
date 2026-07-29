@@ -29,6 +29,8 @@ public class SkillHellfire : Skillbase
     [Header("地狱火行为")]
     public float spawnHeight = 8f;
     public float strikeInterval = 0.04f;
+    [Tooltip("索敌范围（以玩家为中心），超出此范围的敌人不会被选中。")]
+    public float attackRadius = 40f;
 
     [Header("学习瞬间继承（只记录一次）")]
     public bool hasInheritanceSnapshot = false;
@@ -227,6 +229,9 @@ public class SkillHellfire : Skillbase
             // 已占领营地：与风箭同理，地狱火也不应攻击友方营地（2026-06）
             Camp camp = en as Camp;
             if (camp != null && camp.IsCaptured) continue;
+            // 攻击范围限制（全图索敌太强，限制在以玩家为中心的 attackRadius 半径内）
+            float sqrDist = (e.position - center).sqrMagnitude;
+            if (sqrDist > attackRadius * attackRadius) continue;
             all.Add(e);
         }
 
