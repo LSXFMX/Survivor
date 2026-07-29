@@ -579,10 +579,8 @@ public class MindControlled : MonoBehaviour
         if (sr != null) pos.y = sr.bounds.max.y + 0.25f;
         else            pos.y += 0.6f;
 
-        DamageNumberPool.EnsureInit(victim.atknumber);
-        var num = DamageNumberPool.Get(pos);
-        if (num == null) num = Object.Instantiate(victim.atknumber, pos, Quaternion.identity);
-        num.transform.localScale = Vector3.one * DamageNumberSettings.SizeScale;
+        GameObject num = Object.Instantiate(victim.atknumber, pos, Quaternion.identity);
+        num.transform.localScale *= DamageNumberSettings.SizeScale;
         var txt = num.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
         if (txt != null)
         {
