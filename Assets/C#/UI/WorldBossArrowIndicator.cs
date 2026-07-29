@@ -58,6 +58,8 @@ public class WorldBossArrowIndicator : MonoBehaviour
         EnsureArrowSprite();
     }
 
+    private static bool s_firstFrame = true;
+
     void Update()
     {
         // 懒初始化：Camera / Player 可能在 Start 时还未就绪
@@ -72,9 +74,24 @@ public class WorldBossArrowIndicator : MonoBehaviour
 
         // 搜寻活跃的世界Boss（FindObjects每帧开销很小，只有几个Boss）
         var all = FindObjectsOfType<WorldBossBase>();
-        // 一次性调试提示（看到这条日志说明组件正常运行中）
-        if (all.Length > 0 && _indicators.Count == 0)
-            Debug.Log($"[WorldBossArrow] 检测到 {all.Length} 个世界Boss，开始创建箭头指示器");
+        // 每秒一次诊断日志
+        if (Time.frameCount % 60 == 0)
+        {
+            int alive = 0, dead = 0, inact = 0;
+            foreach (var b in all)
+            {
+                if (b == null) continue;
+                if (!b.gameObject.activeInHierarchy) { inact++; continue; }
+                if (b.rolestate == enemy.state.dead || b.health <= 0) { dead++; continue; }
+                alive++;
+            }
+            Debug.Log($"[WorldBossArrow] 总 {all.Length} | 激活 {alive} | 死亡 {dead} | 失活 {inact} | _indicators={_indicators.Count}");
+        }
+        if (all.Length > 0 && _indicators.Count == 0 && s_firstFrame)
+        {
+            s_firstFrame = false;
+            Debug.Log($"[WorldBossArrow] 首次检测到 {all.Length} 个世界Boss，开始创建箭头");
+        }
 
         // 移除已死亡/销毁的Boss指示器
         var toRemove = new List<WorldBossBase>();
