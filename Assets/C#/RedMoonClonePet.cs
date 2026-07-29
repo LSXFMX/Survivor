@@ -22,14 +22,18 @@ public class RedMoonClonePet : MonoBehaviour
     public Animator animator;
 
     [Header("跟随")]
-    [Tooltip("相对玩家的悬浮偏移（默认脑袋正上方偏后）。")]
-    public Vector3 followOffset = new Vector3(0f, 1.6f, -0.2f);
+    [Tooltip("相对玩家位置的偏移量。X 是水平偏移（负=左，正=右），Y 是高度，Z 是前后（45° 视角下负=前/正=后）。")]
+    public Vector3 followOffset = new Vector3(-1.5f, 0.3f, -0.3f);
     [Tooltip("跟随的插值速度（越大越贴身）。")]
     public float followLerp = 8f;
-    [Tooltip("是否根据玩家朝向镜像 followOffset.x（玩家向左时红月飘到右后方，反之亦然）。")]
+    [Tooltip("是否根据玩家朝向镜像 followOffset.x。true=永远在玩家左肩（面朝方向的那一侧）")]
     public bool mirrorByFacing = true;
-    [Tooltip("强制保持 X=45° 倾斜，统一战斗视角。")]
-    public bool forceTiltX45 = true;
+    [Tooltip("根据玩家朝向自动翻转 sprite 的 localScale.x（与玩家自身翻转一致）。45° 视角游戏中这是正确的。")]
+    public bool mirrorSpriteByFacing = true;
+
+    [Header("尺寸")]
+    [Tooltip("sprite 渲染缩放（<1 更小，>1 更大）。用来把贴图调整到合适的视觉大小。")]
+    public float spriteScale = 0.55f;
 
     [Header("呼吸悬浮")]
     [Tooltip("上下浮动幅度（米）。")]
@@ -47,6 +51,7 @@ public class RedMoonClonePet : MonoBehaviour
     private static Sprite s_petSpriteCache;
     private static bool   s_petSpriteTried;
 
+    private SpriteRenderer _sr;
     private float _hoverPhaseSeed;
     private float _lastHoverApplied;
     private float _blinkTimer;
@@ -59,16 +64,28 @@ public class RedMoonClonePet : MonoBehaviour
 
         // sprite 自动从 Resources/Wolf/ 加载（避免 prefab 时序里 sprite 引用 GUID 不稳定）。
         // 只在 SpriteRenderer 存在但 sprite 缺失时才补，不覆盖手工配置。
-        // 走 BulletParasite.LoadSpriteFallback，兼容 Unity 把 png 导入为 Texture2D 而非 Sprite 的情况。
+        //
+        // 【修复】之前走 BulletParasite.LoadSpriteFallback，内部会做 BFS 边缘泛洪抠背景：
+        //   - 抠背景是运行时 CPU 密集操作（每帧图片遍历 + SetPixels32），首次加载会卡顿 0.5s+
+        //   - 红月贴图本身带有深蓝近黑色背景，与红月主体反差不明显，BFS 容易过度抠掉红月边缘，导致"全透明"效果
+        // 解决方案：直接用 Resources.Load<Sprite> 加载原始贴图（保留深蓝背景，在游戏场景里深蓝
+        // 与灰暗背景融合良好，不会显得突兀），完全跳过运行时抠图，性能与视觉双赢。
         SpriteRenderer sr = GetComponentInChildren<SpriteRenderer>();
         if (sr != null && sr.sprite == null)
         {
             if (s_petSpriteCache == null && !s_petSpriteTried)
             {
                 s_petSpriteTried = true;
-                s_petSpriteCache = BulletParasite.LoadSpriteFallback("Wolf/RedMoonClonePet_sprite");
+                s_petSpriteCache = Resources.Load<Sprite>("Wolf/RedMoonClonePet_sprite");
             }
             if (s_petSpriteCache != null) sr.sprite = s_petSpriteCache;
+        }
+
+        // 缩放 SpriteRenderer：让红月保持合适的视觉尺寸，不被 sprite 原始像素大小直接撑爆屏幕
+        _sr = sr;
+        if (_sr != null && spriteScale > 0f && spriteScale != 1f)
+        {
+            _sr.transform.localScale = new Vector3(spriteScale, spriteScale, 1f);
         }
     }
 
@@ -76,27 +93,33 @@ public class RedMoonClonePet : MonoBehaviour
     {
         if (owner == null) owner = FindObjectOfType<Player>();
         IgnoreCollisionWithOwner();
-        ApplyTiltX45();
     }
-
-    // 【性能】倾斜角度只在 Start 里设一次；Update 里不必再写 transform.rotation。
-    // 45° 倾斜是"死值"，除非有别的东西每帧改宠物 rotation，否则完全没必要每帧回填。
 
     private void Update()
     {
         if (owner == null) return;
 
-        // 跟随：追到 owner 头顶偏后
+        // 跟随：追到 owner 左肩（面朝方向那一侧）
         Vector3 offset = followOffset;
         Transform ot = owner.transform;
         if (mirrorByFacing && ot.localScale.x < 0f)
             offset.x = -offset.x;
         Vector3 target = ot.position + offset;
 
-        // 直接位置合并进 LateUpdate 的呼吸计算，减少一次 transform.position 写入
         Vector3 curPos = transform.position;
         curPos = Vector3.Lerp(curPos, target, Mathf.Clamp01(followLerp * Time.deltaTime));
         transform.position = curPos;
+
+        // 45° 倾斜视角
+        transform.rotation = Quaternion.Euler(45f, 0f, 0f);
+
+        // 根据玩家朝向翻转 sprite（与玩家自身 flip 逻辑一致：sprite 的 localScale.x 取反）
+        if (mirrorSpriteByFacing && _sr != null)
+        {
+            Vector3 s = _sr.transform.localScale;
+            s.x = Mathf.Abs(s.x) * (ot.localScale.x < 0f ? -1f : 1f);
+            _sr.transform.localScale = s;
+        }
 
         UpdateBlink();
     }
@@ -111,12 +134,6 @@ public class RedMoonClonePet : MonoBehaviour
         p.y += dy;
         transform.position = p;
         _lastHoverApplied = dy;
-    }
-
-    private void ApplyTiltX45()
-    {
-        if (!forceTiltX45) return;
-        transform.rotation = Quaternion.Euler(45f, 0f, 0f);
     }
 
     private void ScheduleNextBlink()

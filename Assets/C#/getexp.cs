@@ -14,6 +14,9 @@ public class getexp : MonoBehaviour
 
     // 【碰撞隔离】经验石只和玩家/地面碰撞，不与怪物/其他经验石碰撞（防止被挤飞）
     private static bool s_layerSetupDone;
+    // 静态缓存：避免每个经验石 OnEnable 都做一次 GameObject.Find（大群敌人死亡时秒级生成数十个）
+    private static Player s_cachedPlayer;
+    private static bool   s_playerCached;
 
     private void Awake()
     {
@@ -37,7 +40,14 @@ public class getexp : MonoBehaviour
 
     private void OnEnable()
     {
-        player = GameObject.Find("playerlayer").transform.GetChild(0).gameObject.GetComponent<Player>();
+        if (!s_playerCached)
+        {
+            s_playerCached = true;
+            var pl = GameObject.Find("playerlayer");
+            if (pl != null && pl.transform.childCount > 0)
+                s_cachedPlayer = pl.transform.GetChild(0).GetComponent<Player>();
+        }
+        player = s_cachedPlayer;
     }
 
     private void OnCollisionEnter(Collision collision)

@@ -130,9 +130,12 @@ public class WorldBossBase : enemy
         p.health -= dmg;
         if (DamageNumberSettings.Visible)
         {
-            GameObject number = Instantiate(atknumber, collision.transform.position, default);
-            number.transform.localScale *= DamageNumberSettings.SizeScale;
-            number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = dmg.ToString();
+            DamageNumberPool.EnsureInit(atknumber);
+            var number = DamageNumberPool.Get(collision.transform.position);
+            if (number == null) number = Instantiate(atknumber, collision.transform.position, default);
+            number.transform.localScale = Vector3.one * DamageNumberSettings.SizeScale;
+            var txt = number.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
+            if (txt != null) txt.text = dmg.ToString();
         }
         AudioManager.PlaySfx(AudioManager.SfxKey.Hit);
         p.startturnred();

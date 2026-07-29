@@ -592,18 +592,17 @@ public class Player : Attribute
     /// </summary>
     private void HandleMouseClickMove()
     {
-        // 三选一/奇遇/暂停/总结面板等打开时，Time.timeScale=0，此期间禁用鼠标点击移动
+        // 三选一/奇遇/暂停/总结/存档装备等面板打开时，Time.timeScale=0，此期间禁用鼠标点击移动
         if (Time.timeScale <= 0f) { _clickTarget = null; HideMarker(); return; }
 
         bool clickedDown = Input.GetMouseButtonDown(0);
         bool held        = Input.GetMouseButton(0);
         if (!clickedDown && !held) return;
 
-        // 避免点击 HUD 按钮（倍速/暂停/源木等）时触发移动：
-        // 仅当鼠标悬停在实际 UI 按钮/面板上才拦截，不拦截空白区域。
-        // battleUI 的 Canvas 是全屏的，不能直接用 IsPointerOverGameObject。
-        var es = UnityEngine.EventSystems.EventSystem.current;
-        if (es != null && IsPointerOverInteractiveUI(es))
+        // 避免点击 UI 时触发移动：上溯父级链查找交互组件
+        //（battleUI 的 Canvas 是全屏的，IsPointerOverGameObject 会一直返回 true，
+        //  所以手动用 RaycastAll 精确判断鼠标下方是否有可交互 UI。）
+        if (IsClickOnUI())
             return;
 
         Camera cam = Camera.main;
@@ -653,9 +652,13 @@ public class Player : Attribute
     /// 判断鼠标是否悬停在可交互 UI（按钮/面板）上，但不过滤全屏 Canvas 背景。
     /// EventSystem.IsPointerOverGameObject 在全屏 Canvas 下永远返回 true，
     /// 需要用 RaycastAll 精确判断鼠标下方是否有 Button/Selectable 等组件。
+    /// 上溯父级链查找：EquipmentIcon 的 Button 组件在父节点，hit 直接命中的 Image 子节点上没有。
     /// </summary>
-    private static bool IsPointerOverInteractiveUI(UnityEngine.EventSystems.EventSystem es)
+    private static bool IsClickOnUI()
     {
+        var es = UnityEngine.EventSystems.EventSystem.current;
+        if (es == null) return false;
+
         var ped = new UnityEngine.EventSystems.PointerEventData(es)
         {
             position = Input.mousePosition
@@ -665,15 +668,18 @@ public class Player : Attribute
 
         foreach (var hit in hits)
         {
-            var go = hit.gameObject;
-            if (go == null) continue;
-            // 只拦截有实际交互组件的 UI（按钮/开关/滑条/下拉框等）
-            if (go.GetComponent<UnityEngine.UI.Button>() != null) return true;
-            if (go.GetComponent<UnityEngine.UI.Toggle>() != null) return true;
-            if (go.GetComponent<UnityEngine.UI.Slider>() != null) return true;
-            if (go.GetComponent<UnityEngine.UI.Dropdown>() != null) return true;
-            if (go.GetComponent<UnityEngine.UI.Selectable>() != null) return true;
-            if (go.GetComponent<TMPro.TMP_InputField>() != null) return true;
+            Transform t = hit.gameObject != null ? hit.gameObject.transform : null;
+            while (t != null)
+            {
+                var go = t.gameObject;
+                if (go.GetComponent<UnityEngine.UI.Button>()     != null) return true;
+                if (go.GetComponent<UnityEngine.UI.Toggle>()     != null) return true;
+                if (go.GetComponent<UnityEngine.UI.Slider>()     != null) return true;
+                if (go.GetComponent<UnityEngine.UI.Dropdown>()   != null) return true;
+                if (go.GetComponent<UnityEngine.UI.Selectable>() != null) return true;
+                if (go.GetComponent<TMPro.TMP_InputField>()      != null) return true;
+                t = t.parent;
+            }
         }
         return false;
     }

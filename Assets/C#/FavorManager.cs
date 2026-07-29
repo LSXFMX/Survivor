@@ -56,22 +56,43 @@ public class FavorManager : MonoBehaviour
         Debug.Log("[好感度] 所有好感度已清除");
     }
 
-    // ── 测试用 ContextMenu ────────────────────────────────
+    // ── 测试用 ContextMenu（右键组件标题 → 选择测试项）────────────
 
     [ContextMenu("测试：蘑菇好感度 +10")]
-    void Test_Mushroom_Add10() => AddFavor(FactionType.Mushroom, 10);
+    void Test_Mushroom_Add10() { AddFavor(FactionType.Mushroom, 10); Print(FactionType.Mushroom); }
 
     [ContextMenu("测试：蘑菇好感度设为100")]
-    void Test_Mushroom_Set100() => SetFavor(FactionType.Mushroom, 100);
+    void Test_Mushroom_Set100() { SetFavor(FactionType.Mushroom, 100); Print(FactionType.Mushroom); }
 
     [ContextMenu("测试：蘑菇好感度设为0")]
-    void Test_Mushroom_Reset() => SetFavor(FactionType.Mushroom, 0);
+    void Test_Mushroom_Reset() { SetFavor(FactionType.Mushroom, 0); Print(FactionType.Mushroom); }
 
     [ContextMenu("测试：蝙蝠好感度 +10")]
-    void Test_Bat_Add10() => AddFavor(FactionType.Bat, 10);
+    void Test_Bat_Add10() { AddFavor(FactionType.Bat, 10); Print(FactionType.Bat); }
 
     [ContextMenu("测试：蝙蝠好感度设为100")]
-    void Test_Bat_Set100() => SetFavor(FactionType.Bat, 100);
+    void Test_Bat_Set100() { SetFavor(FactionType.Bat, 100); Print(FactionType.Bat); }
+
+    [ContextMenu("测试：蝙蝠好感度设为0")]
+    void Test_Bat_Reset() { SetFavor(FactionType.Bat, 0); Print(FactionType.Bat); }
+
+    [ContextMenu("测试：狼人好感度 +10")]
+    void Test_Wolf_Add10() { AddFavor(FactionType.Wolf, 10); Print(FactionType.Wolf); }
+
+    [ContextMenu("测试：狼人好感度设为100")]
+    void Test_Wolf_Set100() { SetFavor(FactionType.Wolf, 100); Print(FactionType.Wolf); }
+
+    [ContextMenu("测试：狼人好感度设为0")]
+    void Test_Wolf_Reset() { SetFavor(FactionType.Wolf, 0); Print(FactionType.Wolf); }
+
+    [ContextMenu("测试：史莱姆好感度 +10")]
+    void Test_Slime_Add10() { AddFavor(FactionType.Slime, 10); Print(FactionType.Slime); }
+
+    [ContextMenu("测试：史莱姆好感度设为100")]
+    void Test_Slime_Set100() { SetFavor(FactionType.Slime, 100); Print(FactionType.Slime); }
+
+    [ContextMenu("测试：史莱姆好感度设为0")]
+    void Test_Slime_Reset() { SetFavor(FactionType.Slime, 0); Print(FactionType.Slime); }
 
     [ContextMenu("测试：打印所有好感度")]
     void Test_PrintAll()
@@ -79,4 +100,6 @@ public class FavorManager : MonoBehaviour
         foreach (FactionType f in System.Enum.GetValues(typeof(FactionType)))
             Debug.Log($"[好感度] {f} = {GetFavor(f)}");
     }
+
+    private void Print(FactionType f) => Debug.Log($"[好感度-测试] {f} = {GetFavor(f)}");
 }

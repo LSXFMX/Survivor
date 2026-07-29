@@ -31,6 +31,13 @@ public class EquipmentInitializer : MonoBehaviour
         // 成就装备0永久解锁，每次进入战斗都确保已解锁
         EquipmentSystem.Instance?.UnlockEquipment(EquipmentType.AchievementEquipment, 0);
         EnsurePersistentUnlocks();
+
+        // 【修复时序】ApplyAllEquipments 里的 ApplyFavorEquipment8/6 需要使用
+        // parasiteSkillPrefab/redMoonClonePetPrefab，但这两个 prefab 的 Resources.Load
+        // 原来只在末尾的 EnsureWolfFactionRegistered 才执行，导致 ApplyAllEquipments
+        // 跑的时候 prefab 还是 null，红月分身/月牙吊坠的开局注入全部静默跳过。
+        // 现在提前到 equip apply 之前补齐引用。
+        EnsureWolfFactionPrefabsLoaded();
         ApplyAllEquipments();
 
         // 复活管理器（R_2 读档币）：进入战斗时重置"每局仅一次"状态。
@@ -70,6 +77,18 @@ public class EquipmentInitializer : MonoBehaviour
 
         // 命途:寄生 升级卡注册（替换原有 Registrar，内联同步，100% 可靠）
         EnsureWolfFactionRegistered();
+    }
+
+    /// <summary>
+    /// 从 Resources 补齐 parasiteSkillPrefab / redMoonClonePetPrefab 引用。
+    /// 需要放在 ApplyAllEquipments 之前调用，否则 ApplyFavorEquipment6/8 会因缺少 prefab 引用而静默跳过。
+    /// </summary>
+    private void EnsureWolfFactionPrefabsLoaded()
+    {
+        if (parasiteSkillPrefab == null)
+            parasiteSkillPrefab = Resources.Load<GameObject>("Wolf/SkillParasite");
+        if (redMoonClonePetPrefab == null)
+            redMoonClonePetPrefab = Resources.Load<GameObject>("Wolf/RedMoonClonePet");
     }
 
     /// <summary>
@@ -963,11 +982,12 @@ public class EquipmentInitializer : MonoBehaviour
             if (existing != null) existing.number += 1;
         }
 
-        // 2) 生成红月分身宠物（悬浮在玩家头顶）
+        // 2) 生成红月分身宠物（默认左肩侧后方，与 prefab followOffset 一致）
         if (redMoonClonePetPrefab == null) return;
         if (FindObjectOfType<RedMoonClonePet>() != null) return;
 
-        Vector3 spawnPos = player.transform.position + new Vector3(0f, 1.6f, -0.2f);
+        // 直接用跟随目标作为生成位置，避免 Update 第一帧之前被看到 1.6 高的"头顶幽灵"
+        Vector3 spawnPos = player.transform.position + new Vector3(-1.5f, 0.9f, -0.3f);
         GameObject petObj = Instantiate(redMoonClonePetPrefab, spawnPos, Quaternion.identity);
         RedMoonClonePet pet = petObj.GetComponent<RedMoonClonePet>();
         if (pet != null) pet.owner = player;
