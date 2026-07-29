@@ -109,28 +109,34 @@ public class DragonBoss : enemy
     };
 
     // ───────────────────────────── 生命周期 ─────────────────────────────
-    protected new void OnEnable()
+    /// <summary>
+    /// 【2026-07-29 修复】原来用 <c>new</c> 关键字遮蔽了基类 enemy.OnEnable()，
+    ///   导致只算了难度倍率（hpMultiplier），完全遗漏了奇遇倍率（adventureHpMultiplier）
+    ///   和无尽倍率（endlessHpMultiplier）。现在改为先写 base 值再显式调用 base.OnEnable()，
+    ///   让基类统一计算 hp/atk 再补上龙 Boss 独有逻辑。
+    /// </summary>
+    protected override void OnEnable()
     {
         playerlayer = GameObject.Find("playerlayer")?.transform;
         _sr = GetComponent<SpriteRenderer>();
         _rb = GetComponent<Rigidbody>();
-        if (_rb != null) { _rb.isKinematic = true; _rb.useGravity = false; }
 
+        // 把基值写进 healthmax / atk，让 base.OnEnable 用统一的倍率公式算最终值
         rolename = "最终龙王";
-
-        float hpMul = 1f, atkMul = 1f;
-        if (DifficultyManager.Instance != null)
-        {
-            hpMul  = DifficultyManager.Instance.Current.hpMultiplier;
-            atkMul = DifficultyManager.Instance.Current.atkMultiplier;
-        }
-        healthmax = Mathf.Max(1, Mathf.RoundToInt(perPhaseHealth * hpMul));
-        health    = healthmax;
+        healthmax = perPhaseHealth;
+        atk       = baseAtk;
         def       = baseDef;
 
+        // 调用基类：难度 / 奇遇 / 无尽倍率统一生效
+        base.OnEnable();
+
+        // 龙 Boss 独有：Rigidbody 是 kinematic（飞行动画走 transform 控制）
+        if (_rb != null) { _rb.isKinematic = true; _rb.useGravity = false; }
+
+        // 世界 Boss 击败加成：每击败一只 -5% 攻击力（上限 -20%）
         int wbDefeated = WorldBossManager.Instance != null ? WorldBossManager.Instance.DefeatedCountThisRun : 0;
         float atkReduction = Mathf.Min(0.20f, wbDefeated * 0.05f);
-        atk = baseAtk * atkMul * (1f - atkReduction);
+        atk = Mathf.RoundToInt(atk * (1f - atkReduction));
 
         _phase = DragonPhase.Entrance;
         _phaseIndex = 0; _busy = false; _invincible = true; _transitioning = false;
