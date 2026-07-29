@@ -1067,10 +1067,8 @@ public class DragonBoss : enemy
     private void ShowDamageNumber(Vector3 pos, int d)
     {
         if (!DamageNumberSettings.Visible || atknumber == null) return;
-        DamageNumberPool.EnsureInit(atknumber);
-        var n = DamageNumberPool.Get(pos);
-        if (n == null) n = Instantiate(atknumber, pos, default);
-        n.transform.localScale = Vector3.one * DamageNumberSettings.SizeScale;
+        GameObject n = Instantiate(atknumber, pos, default);
+        n.transform.localScale *= DamageNumberSettings.SizeScale;
         var tmp = n.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
         if (tmp != null) tmp.text = d.ToString();
     }

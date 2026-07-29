@@ -21,12 +21,6 @@ public class Bulletbase : MonoBehaviour
     public GameObject role;//目标角色
     public Vector3 distance;
     private Vector3 _baseEuler;
-
-    // 静态缓存：所有子弹共享，避免每个子弹发射时 2 次 GameObject.Find（高频战斗场景每秒几十发）
-    private static Attribute      s_cachedPlayer;
-    private static Transform      s_cachedEnemyLayer;
-    private static bool           s_cacheReady;
-
     //获取子弹所属技能的参数
     public virtual void GetFather()
     {
@@ -36,25 +30,22 @@ public class Bulletbase : MonoBehaviour
         pass = fatherskill.pass;
         speed = fatherskill.speed;
         size = fatherskill.size;
-
-        // 静态缓存避免每帧找 player layer（最高频调用之一）
-        if (!s_cacheReady)
-        {
-            s_cacheReady = true;
-            var pl = GameObject.Find("playerlayer");
-            if (pl != null && pl.transform.childCount > 0)
-                s_cachedPlayer = pl.transform.GetChild(0).GetComponent<Attribute>();
-            var el = GameObject.Find("enemylayer");
-            if (el != null) s_cachedEnemyLayer = el.transform;
-        }
-        player = s_cachedPlayer;
-        enemy = s_cachedEnemyLayer;
-
+        player = GameObject.Find("playerlayer").transform.GetChild(0).GetComponent<Attribute>();
         rb = GetComponent<Rigidbody>();
-        rb.useGravity = false;
+        rb.useGravity = false;          // 禁用重力，防止火球埋进地里
+        // 火球术 / 地狱火 的子弹 Sprite 较大（size×scale 后视觉半径更大），
+        // 出生时 transform 紧贴 player.position（玩家 pivot 在脚底 → y≈0），
+        // 直接锁 Y=0 的话子弹下半截会扎进地面里，看起来像"陷在地里"。
+        // 解决：发射前把出生 Y 抬高到 player 身体中部高度（约 1f），再锁 Y。
+        // 风箭/飓风/暗齿轮等细子弹原本视觉无问题，统一抬高也不会让它们看起来"漂浮过高"，
+        // 因此这里对所有子弹一致处理（保持行为一致性最重要）。
         if (transform.position.y < 1f)
+        {
             transform.position = new Vector3(transform.position.x, 1f, transform.position.z);
-        rb.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotation;
+        }
+        rb.constraints = RigidbodyConstraints.FreezePositionY  // 锁定Y轴位置（在抬高后的高度）
+                       | RigidbodyConstraints.FreezeRotation;  // 锁定旋转
+        enemy = GameObject.Find("enemylayer").transform;
         transform.localScale = transform.localScale * size;
         _baseEuler = transform.rotation.eulerAngles;
     }
@@ -106,19 +97,12 @@ public class Bulletbase : MonoBehaviour
             enemy.health -= dealt;
             if (DamageNumberSettings.Visible)
             {
-                DamageNumberPool.EnsureInit(enemy.atknumber);
-                var number = DamageNumberPool.Get(enemy.transform.position);
-                if (number == null)
-                {
-                    number = Instantiate(enemy.atknumber, enemy.transform.position, default);
-                }
-                number.transform.localScale = Vector3.one * DamageNumberSettings.SizeScale;
+                GameObject atknumber = enemy.atknumber;
+                GameObject number = Instantiate(atknumber, enemy.transform.position, default);
+                number.transform.localScale *= DamageNumberSettings.SizeScale;
                 var txt = number.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
-                if (txt != null)
-                {
-                    txt.text = dealt.ToString();
-                    if (isCrit) txt.color = new Color32(255, 215, 0, 255);
-                }
+                txt.text = dealt.ToString();
+                if (isCrit) txt.color = new Color32(255, 215, 0, 255);
             }
             // 命中音效：优先让所属技能派发更精确的火球/冰击音，否则播通用 Hit
             if (fatherskill != null) fatherskill.PlayHitSfx();
@@ -180,9 +164,6 @@ public class Bulletbase : MonoBehaviour
     {
         if (cango)
         {
-            // 部分子类（如 BulletParasite 触手）使用 LineRenderer 距离判定移动，不依赖物理 Rigidbody
-            // 这种情况下 prefab 上没有 Rigidbody 组件，rb 为 null，直接 return
-            if (rb == null) return;
             Vector3 vect = new Vector3(distance.x, 0, distance.z).normalized * speed;
             rb.velocity = vect;
             float angle = Mathf.Atan2(distance.z, distance.x) * Mathf.Rad2Deg;
