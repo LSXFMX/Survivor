@@ -20,6 +20,7 @@ public class SlimeBossProjectile : MonoBehaviour
     private bool _launched = false;
     private float _baseTiltX = 45f;
     private Transform _playerlayer;
+    private static Transform s_playerlayerCache; // 所有投射物共享，只查找一次
     private float _hitCooldown = 0f;
     private GameObject _atknumber;
 
@@ -37,8 +38,12 @@ public class SlimeBossProjectile : MonoBehaviour
 
     void Awake()
     {
-        GameObject pl = GameObject.Find("playerlayer");
-        if (pl != null) _playerlayer = pl.transform;
+        if (s_playerlayerCache == null)
+        {
+            GameObject pl = GameObject.Find("playerlayer");
+            if (pl != null) s_playerlayerCache = pl.transform;
+        }
+        _playerlayer = s_playerlayerCache;
         // 备份伤害数字预制体（从任意敌人身上借用不可靠，改由自身可选字段/查找）
     }
 

@@ -152,41 +152,36 @@ public class ArchiveManager : MonoBehaviour
         HideAllContainers();
     }
 
+    /// <summary>
+    /// 安全执行一个补全函数：捕获任何异常并记录日志，绝不让其向上传播炸掉整个初始化流程。
+    /// </summary>
+    private static void SafeRun(System.Action action, string label)
+    {
+        try
+        {
+            action();
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[ArchiveManager] {label} 执行失败，已跳过（不影响其它装备分类正常显示）：{ex}");
+        }
+    }
+
     // 设置所有EquipmentIcon的点击回调
     private void SetupEquipmentIcons()
     {
-        // ── 在挂回调前先补全 SSR8 / SSR9 两个新增抽卡装备图标 ─────────────────
-        // 场景里历史上只手工拖了 SSR0~SSR7 共 8 个 EquipmentIcon，新增的
-        // 「我与我与我」(equipmentSystemId=11) / 「三清化一」(equipmentSystemId=12)
-        // 没有对应图标。这里在运行时用现有 SSR EquipmentIcon 做模板 Instantiate 出
-        // 缺失的两个图标，挂到原 SSR 容器（GridLayoutGroup 会自动排版）。
-        // 之后 EquipmentIcon.Start → Initialize → ApplyForcedGachaSsrOverrides
-        // 会自动注入名字/描述/howToGet/Sprite。
-        EnsureGachaSsrIconsExist();
-
-        // 同样补全 R_2 读档币 / SR_6 速度灵果 两个新增 R/SR 抽卡装备图标。
-        // 直接在 gachaEquipmentContainer 下扫描全部 EquipmentIcon，按 gachaRarity 分组，
-        // 取首个同稀有度图标做模板克隆（保留 parent 一致以兼容 GridLayoutGroup）。
-        // 文本与 Sprite 由 EquipmentIcon.ApplyForcedGachaRSrOverrides 注入。
-        EnsureGachaRSrIconsExist();
-
-        // ── 同样地补全 N8 通关装备 18/19/20（和平之剑/甲/心）三个图标 ──────────
-        // 场景里通关装备容器历史上只挂到 N7（id 0~17），新增的 N8 三件没有 EquipmentIcon。
-        // 这里在运行时用 N7 任一 EquipmentIcon 做模板 Instantiate，文本和图标
-        // 由 EquipmentIcon.ApplyForcedClearEquipmentN8Overrides 自动注入。
-        EnsureClearEquipmentN8IconsExist();
-
-        // ── 同样地补全 N9~N13 通关装备 21~35（利爪/月牙/粘液/暗影/龙鳞 系列）十五个图标 ──
-        // 场景里没有这些图标，运行时用现有 ClearEquipment 图标做模板克隆，
-        // 文本和图标由 EquipmentIcon.ApplyForcedClearEquipmentN9toN13Overrides 自动注入。
-        EnsureClearEquipmentN9toN13IconsExist();
-
-        // 成就装备 8「不可视之手」：场景没有该图标，运行时用现有成就图标克隆补出
-        EnsureAchievementIcon8Exists();
-
-        // 好感度装备 6/7/8（狼人社群：月牙吊坠 / 寄生的暗种 / 红月分身）：
-        // 场景里只挂了 0~5（蘑菇 + 蝙蝠），运行时用现有蘑菇/蝙蝠图标克隆补出
-        EnsureFavorEquipmentWolfIconsExist();
+        // 【关键修复】以下每个 Ensure* 补全函数都会克隆图标并触发 EquipmentIcon.Initialize
+        // （里面含贴图抠背景等可能失败的操作，如纹理压缩格式不支持 SetPixels32）。
+        // 之前任意一个函数抛出未捕获异常，会导致本方法直接中断——后面绑定所有装备图标
+        // onClickCallback 的循环、以及 Start() 里 InitializeTabButtons/ShowEquipmentContainer
+        // 全部被跳过，表现为“存档界面什么都没有、全部无法点击”。
+        // 现在给每一步单独 try-catch，任意一步失败只影响该分类，其余分类仍可正常显示。
+        SafeRun(EnsureGachaSsrIconsExist, "EnsureGachaSsrIconsExist");
+        SafeRun(EnsureGachaRSrIconsExist, "EnsureGachaRSrIconsExist");
+        SafeRun(EnsureClearEquipmentN8IconsExist, "EnsureClearEquipmentN8IconsExist");
+        SafeRun(EnsureClearEquipmentN9toN13IconsExist, "EnsureClearEquipmentN9toN13IconsExist");
+        SafeRun(EnsureAchievementIcon8Exists, "EnsureAchievementIcon8Exists");
+        SafeRun(EnsureFavorEquipmentWolfIconsExist, "EnsureFavorEquipmentWolfIconsExist");
 
         foreach (var container in equipmentContainers.Values)
         {
@@ -293,6 +288,9 @@ public class ArchiveManager : MonoBehaviour
         cloneIcon.equipmentName = string.Empty;
         cloneIcon.description   = string.Empty;
         cloneIcon.howToGet      = string.Empty;
+        // 关键修复：Instantiate 会把模板的 isInitialized=true 也复制过来，
+        // 导致克隆体自己的 Start() 直接跳过 Initialize，点击和图标覆盖都不会生效。
+        cloneIcon.ForceReinitializeAfterClone();
 
         Debug.Log($"[ArchiveManager] 已克隆 {rarity}_{targetId} 图标（父节点 = {parent.name}）");
     }
@@ -406,6 +404,7 @@ public class ArchiveManager : MonoBehaviour
         cloneIcon.equipmentName = string.Empty;
         cloneIcon.description   = string.Empty;
         cloneIcon.howToGet      = string.Empty;
+        cloneIcon.ForceReinitializeAfterClone();
     }
 
     /// <summary>
@@ -424,6 +423,7 @@ public class ArchiveManager : MonoBehaviour
         if (existing == null || existing.Length == 0) return;
 
         EquipmentIcon template = null;
+        EquipmentIcon rightmost = null; // 场景里 x 坐标最大的现有图标，用于推算下一个图标的排列位置
         var existingIds = new HashSet<int>();
         foreach (var icon in existing)
         {
@@ -432,6 +432,14 @@ public class ArchiveManager : MonoBehaviour
             existingIds.Add(icon.equipmentId);
             // 优先选 id 5（最靠近狼人系列）做模板，其次任意
             if (template == null || icon.equipmentId == 5) template = icon;
+
+            var rt = icon.transform as RectTransform;
+            if (rt != null)
+            {
+                var rightRt = rightmost != null ? rightmost.transform as RectTransform : null;
+                if (rightRt == null || rt.anchoredPosition.x > rightRt.anchoredPosition.x)
+                    rightmost = icon;
+            }
         }
         if (template == null)
         {
@@ -443,18 +451,48 @@ public class ArchiveManager : MonoBehaviour
             ? template.transform.parent
             : favorEquipmentContainer.transform;
 
-        TryCloneFavorWolfIcon(template, parent, 6, existingIds);
-        TryCloneFavorWolfIcon(template, parent, 7, existingIds);
-        TryCloneFavorWolfIcon(template, parent, 8, existingIds);
+        // 计算图标间距：用现有图标里 x 坐标差值最小的正数间距，找不到则回退用图标自身宽度
+        float spacing = 0f;
+        var templateRt = template.transform as RectTransform;
+        if (templateRt != null) spacing = templateRt.sizeDelta.x + 22f; // 图标宽度 + 一点间隙作为兜底
+        {
+            var xs = new List<float>();
+            foreach (var icon in existing)
+            {
+                if (icon == null || icon.equipmentType != EquipmentType.FavorEquipment) continue;
+                var rt = icon.transform as RectTransform;
+                if (rt != null) xs.Add(rt.anchoredPosition.x);
+            }
+            xs.Sort();
+            for (int i = 1; i < xs.Count; i++)
+            {
+                float d = xs[i] - xs[i - 1];
+                if (d > 1f) { spacing = d; break; }
+            }
+        }
+
+        float baseX = 0f, baseY = 0f;
+        var rightmostRt = rightmost != null ? rightmost.transform as RectTransform : null;
+        if (rightmostRt != null) { baseX = rightmostRt.anchoredPosition.x; baseY = rightmostRt.anchoredPosition.y; }
+
+        int offsetIndex = 1;
+        TryCloneFavorWolfIcon(template, parent, 6, existingIds, baseX + spacing * offsetIndex++, baseY);
+        TryCloneFavorWolfIcon(template, parent, 7, existingIds, baseX + spacing * offsetIndex++, baseY);
+        TryCloneFavorWolfIcon(template, parent, 8, existingIds, baseX + spacing * offsetIndex++, baseY);
     }
 
     private static void TryCloneFavorWolfIcon(EquipmentIcon template, Transform parent,
-        int targetId, HashSet<int> existingIds)
+        int targetId, HashSet<int> existingIds, float posX, float posY)
     {
         if (existingIds.Contains(targetId)) return;
 
         GameObject clone = Instantiate(template.gameObject, parent);
         clone.name = $"Favor_Wolf_{targetId} (auto)";
+
+        // 修复：Instantiate 会完整复制模板的 RectTransform.anchoredPosition，
+        // 导致克隆图标与模板图标完全重叠、互相遮挡点击区域。这里显式重新定位。
+        var rt = clone.transform as RectTransform;
+        if (rt != null) rt.anchoredPosition = new Vector2(posX, posY);
 
         EquipmentIcon cloneIcon = clone.GetComponent<EquipmentIcon>();
         if (cloneIcon == null) { Destroy(clone); return; }
@@ -466,6 +504,10 @@ public class ArchiveManager : MonoBehaviour
         cloneIcon.equipmentName = string.Empty;
         cloneIcon.description   = string.Empty;
         cloneIcon.howToGet      = string.Empty;
+        // 关键修复：template 若已跑过 Start()（isInitialized=true），Instantiate 会把这个
+        // 值也复制给克隆体，导致克隆体自己的 Start() 直接跳过 Initialize，
+        // button.onClick 从未挂监听器（点击无反应）、图标也未被重新覆盖为狼人系列贴图。
+        cloneIcon.ForceReinitializeAfterClone();
 
         existingIds.Add(targetId);
     }
@@ -487,6 +529,7 @@ public class ArchiveManager : MonoBehaviour
         cloneIcon.equipmentName = string.Empty;
         cloneIcon.description   = string.Empty;
         cloneIcon.howToGet      = string.Empty;
+        cloneIcon.ForceReinitializeAfterClone();
 
         existingIds.Add(targetId);
     }
@@ -524,6 +567,7 @@ public class ArchiveManager : MonoBehaviour
         cloneIcon.equipmentName = string.Empty;
         cloneIcon.description   = string.Empty;
         cloneIcon.howToGet      = string.Empty;
+        cloneIcon.ForceReinitializeAfterClone();
 
         existingIds.Add(targetId);
     }
@@ -550,6 +594,7 @@ public class ArchiveManager : MonoBehaviour
         cloneIcon.equipmentName = string.Empty;
         cloneIcon.description   = string.Empty;
         cloneIcon.howToGet      = string.Empty;
+        cloneIcon.ForceReinitializeAfterClone();
 
         existingIds.Add(targetId);
     }

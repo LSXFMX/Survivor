@@ -54,18 +54,75 @@ public class EquipmentIcon : MonoBehaviour
     /// </summary>
     public void EditorApplyForcedOverrides()
     {
-        if (iconImage == null) iconImage = GetComponentInChildren<Image>(true);
+        if (iconImage == null) iconImage = FindChildImage();
         ApplyForcedAchievementOverrides();
+    }
+
+    /// <summary>
+    /// 【运行时克隆专用】强制重新走一遍 Initialize 流程。
+    ///
+    /// 根因：Instantiate(template.gameObject, ...) 会把模板身上所有字段的"当前值"原样复制给克隆体，
+    /// 包括 private isInitialized。如果模板在被克隆之前已经自己跑过 Start() → Initialize()
+    /// （isInitialized 已变为 true，这在 Unity 里非常常见，跨 GameObject 的 Start 顺序不保证），
+    /// 那么克隆体一出生 isInitialized 就是 true —— 之后克隆体自己的 Start() 调 Initialize() 时，
+    /// 第一行 `if (isInitialized) return;` 直接跳过，导致：
+    ///   1) button.onClick 从未挂上监听器 → 点击完全没反应
+    ///   2) ApplyForcedXxxOverrides() 从未用克隆体的新 equipmentId 重新执行 → 图标/文本保留模板旧值
+    /// ArchiveManager 在 Instantiate 克隆并改好 equipmentType / equipmentId 之后，
+    /// 必须调用本方法强制复位并重新初始化。
+    /// </summary>
+    public void ForceReinitializeAfterClone()
+    {
+        isInitialized = false;
+        button = null;      // 清空后 Initialize 会重新 GetComponent，避免复用模板残留的错误引用
+        iconImage = null;
+        Initialize();
+    }
+
+    /// <summary>
+    /// 只在子物体范围内查找 Image 组件，绝不返回挂在自身节点上的 Image。
+    ///
+    /// 根因：EquipmentIcon 所在的顶层节点自身可能还挂着一个已禁用的遗留 Image 组件
+    /// （m_Enabled: 0，历史遗留，很可能是早期原型没清理干净），而真正用于显示图标的
+    /// Image 组件是挂在专门的子物体（名为 "Image"）上。
+    /// GetComponentInChildren&lt;Image&gt;(true) 会优先检查自身节点，includeInactive=true
+    /// 还会把已禁用的组件也纳入搜索——于是直接命中自身那个禁用的遗留 Image，
+    /// 完全跳过子物体的正确 Image，导致贴图渲染在错误的对象上（表现为"用父物体绑定了图标"）。
+    /// </summary>
+    private Image FindChildImage()
+    {
+        var images = GetComponentsInChildren<Image>(true);
+        foreach (var img in images)
+        {
+            if (img == null) continue;
+            if (img.gameObject == this.gameObject) continue; // 跳过挂在自身节点上的
+            return img;
+        }
+        return null;
     }
 
     private void Initialize()
     {
         if (isInitialized) return;
 
-        if (button == null) button = GetComponent<Button>() ?? gameObject.AddComponent<Button>();
-        if (iconImage == null) iconImage = GetComponentInChildren<Image>();
+        // 修复：Unity 的 GetComponent<T>() 返回 fake-null，?? 运算符会把它原样传回，
+        // 后面访问 button.onClick 会抛 NullReferenceException → Button 永远不响应点击
+        if (button == null)
+        {
+            button = GetComponent<Button>();
+            if (button == null) button = gameObject.AddComponent<Button>();
+        }
+        if (iconImage == null)
+        {
+            iconImage = FindChildImage();
+        }
 
         ApplyForcedAchievementOverrides();
+
+        // 如果 button 是运行时 AddComponent 新建的（场景里没拖），必须把 targetGraphic 指向
+        // iconImage，否则点击图片区域不会触发 onClick
+        if (button != null && button.targetGraphic == null && iconImage != null)
+            button.targetGraphic = iconImage;
 
         button.onClick.RemoveAllListeners();
         button.onClick.AddListener(OnButtonClicked);
@@ -627,16 +684,66 @@ public class EquipmentIcon : MonoBehaviour
         var tex = RuntimeAssetLoader.LoadTexture(null, resourcesPath, relativeToAssets);
         if (tex == null) return;
 
-        // AI 生成的图标通常带有白色/灰色实心背景（无真正 alpha），需后处理去除
-        MakeTextureTransparent(tex);
+        // 【关键修复】Resources.Load 出来的 Texture2D 可能被 Unity 按平台压缩成 DXT/ASTC 等
+        // GPU 专用格式，这类格式 CPU 无法直接 SetPixels32 写回，会抛
+        // "ArgumentException: texture uses an unsupported format"。
+        // 先转换成一份 RGBA32 的可写副本，再做抠背景，从根上避免异常。
+        Texture2D writable = CreateWritableCopy(tex) ?? tex;
 
-        Sprite forcedSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+        // AI 生成的图标通常带有白色/灰色实心背景（无真正 alpha），需后处理去除
+        // 用 try-catch 兜底：即使某些极端纹理仍然处理失败，也只是跳过抠背景（保留原图），
+        // 不能让异常向上传播炸掉整个 ArchiveManager.SetupEquipmentIcons 的初始化流程。
+        try
+        {
+            MakeTextureTransparent(writable);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[EquipmentIcon] 抠背景失败（{relativeToAssets}）：{ex.Message}，使用原图");
+        }
+
+        Sprite forcedSprite = Sprite.Create(writable, new Rect(0, 0, writable.width, writable.height), new Vector2(0.5f, 0.5f), 100f);
         iconImage.enabled = true;
         iconImage.material = null;
         iconImage.sprite = forcedSprite;
         iconImage.overrideSprite = forcedSprite;
         iconImage.type = Image.Type.Simple;
         iconImage.preserveAspect = true;
+    }
+
+    /// <summary>
+    /// 把任意 Texture2D 复制成一份 RGBA32 CPU 可读写副本，绕开 DXT/ASTC 等 GPU 压缩格式限制。
+    /// 失败返回 null（调用方应回退使用原纹理，做到"降级不崩溃"）。
+    /// </summary>
+    private static Texture2D CreateWritableCopy(Texture2D src)
+    {
+        if (src == null) return null;
+
+        RenderTexture rt = null;
+        RenderTexture prevActive = RenderTexture.active;
+        try
+        {
+            rt = RenderTexture.GetTemporary(src.width, src.height, 0,
+                RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
+            Graphics.Blit(src, rt);
+            RenderTexture.active = rt;
+
+            Texture2D copy = new Texture2D(src.width, src.height, TextureFormat.RGBA32, false);
+            copy.ReadPixels(new Rect(0, 0, src.width, src.height), 0, 0, false);
+            copy.Apply(false, false);
+            copy.name = src.name + "_writable";
+            return copy;
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[EquipmentIcon] CreateWritableCopy 失败：{ex.Message}");
+            return null;
+        }
+        finally
+        {
+            RenderTexture.active = prevActive;
+            if (rt != null) RenderTexture.ReleaseTemporary(rt);
+        }
     }
 
     /// <summary>

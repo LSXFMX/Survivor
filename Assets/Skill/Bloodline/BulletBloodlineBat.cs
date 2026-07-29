@@ -671,9 +671,10 @@ public class BulletBloodlineBat : Bulletbase
         pl.health = Mathf.Min(pl.health + heal, pl.healthmax);
 
         // 吸血反馈：在玩家身上弹绿色回血数字
-        if (floatingTextPrefab != null)
+        if (floatingTextPrefab != null && DamageNumberSettings.Visible)
         {
             GameObject num = Instantiate(floatingTextPrefab, pl.transform.position, default);
+            num.transform.localScale *= DamageNumberSettings.SizeScale;
             var txt = num.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
             if (txt != null)
             {

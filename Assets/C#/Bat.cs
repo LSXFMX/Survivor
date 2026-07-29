@@ -250,9 +250,12 @@ public class Bat : enemy
 
         if (atknumber != null && DamageNumberSettings.Visible)
         {
-            GameObject number = Instantiate(atknumber, other.transform.position, Quaternion.identity);
-            number.transform.localScale *= DamageNumberSettings.SizeScale;
-            number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = atk.ToString();
+            DamageNumberPool.EnsureInit(atknumber);
+            var number = DamageNumberPool.Get(other.transform.position);
+            if (number == null) number = Instantiate(atknumber, other.transform.position, Quaternion.identity);
+            number.transform.localScale = Vector3.one * DamageNumberSettings.SizeScale;
+            var txt = number.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
+            if (txt != null) txt.text = atk.ToString();
         }
 
         player.startturnred();
