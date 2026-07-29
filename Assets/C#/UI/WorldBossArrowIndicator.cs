@@ -193,9 +193,9 @@ public class WorldBossArrowIndicator : MonoBehaviour
         Vector3 bossPos = boss.transform.position;
         Vector3 playerPos = _player.position;
 
-        // 方向向量（玩家 → Boss）
-        Vector3 dir = bossPos - playerPos;
-        float dist = dir.magnitude;
+        // 方向向量（玩家 → Boss，XZ 平面）
+        Vector3 dirXZ = bossPos - playerPos; dirXZ.y = 0;
+        float dist = dirXZ.magnitude;
 
         // 只显示远处Boss的箭头（近处已在屏幕上可见）
         if (dist < maxShowDist)
@@ -205,56 +205,60 @@ public class WorldBossArrowIndicator : MonoBehaviour
         }
         if (!indicatorGo.activeSelf) indicatorGo.SetActive(true);
 
-        // Viewport坐标（0~1，原点左下）
-        Vector3 vp = _cam.WorldToViewportPoint(bossPos);
-
         // 更新距离文本
         var distTxt = indicatorGo.transform.Find("Distance")?.GetComponent<Text>();
-        if (distTxt != null)
-            distTxt.text = $"{dist:F0}m";
+        if (distTxt != null) distTxt.text = $"{dist:F0}m";
 
-        // 箭头朝向（弧度）
-        float angle = Mathf.Atan2(dir.z, dir.x) * Mathf.Rad2Deg;
-        // 屏幕空间：x→水平，y→垂直（Canvas 的 0° 是右侧）
-        // 世界空间：x→水平，z→垂直（Unity 3D 俯视）
-        // WorldToViewportPoint 已转换，直接用 angle 旋转箭头
+        // 世界方向 → 屏幕方向（XZ中的X→屏幕右，Z→屏幕上）
+        // Canvas 中 0° = 右，90° = 上
+        Vector2 screenDir = new Vector2(dirXZ.x, dirXZ.z).normalized;
+        float angleDeg = Mathf.Atan2(screenDir.y, screenDir.x) * Mathf.Rad2Deg;
+
+        // 箭头旋转（箭头贴图默认朝上，-90° 补偿）
         var arrowRt = indicatorGo.transform.Find("Arrow")?.GetComponent<RectTransform>();
         if (arrowRt != null)
-            arrowRt.localRotation = Quaternion.Euler(0, 0, angle - 90f);
+            arrowRt.localRotation = Quaternion.Euler(0, 0, angleDeg - 90f);
 
-        // 计算屏幕边缘位置
+        // 将Boss的世界坐标转到屏幕像素
+        Vector3 screenPoint = _cam.WorldToScreenPoint(bossPos);
         RectTransform canvasRt = _canvas.GetComponent<RectTransform>();
         Vector2 screenSize = canvasRt.sizeDelta;
 
+        // 如果Boss在屏幕后面(z<0)或屏幕外，计算屏幕边缘交点
+        bool behind = screenPoint.z < 0;
         Vector2 center = screenSize * 0.5f;
-        // 将 viewport 转为屏幕像素坐标（0~1 → 像素），并夹到边缘内
-        Vector2 screenPos = new Vector2(vp.x * screenSize.x, vp.y * screenSize.y);
-        Vector2 clamped = ClampToEdge(screenPos, center, screenSize);
+        Vector2 targetPos;
+        if (behind || screenPoint.x < -50 || screenPoint.x > screenSize.x + 50
+                  || screenPoint.y < -50 || screenPoint.y > screenSize.y + 50)
+        {
+            // 使用方向向量计算边缘交点（比WorldToViewportPoint更稳定）
+            targetPos = ClampToEdgeDir(center, screenDir, screenSize);
+        }
+        else
+        {
+            // Boss在屏幕内但还不够近 → 推到最近边缘
+            targetPos = new Vector2(screenPoint.x, screenPoint.y);
+            targetPos = ClampToEdgeDir(center, (targetPos - center).normalized, screenSize);
+        }
 
+        // Canvas anchoredPosition 原点在屏幕中心
         var rt = indicatorGo.GetComponent<RectTransform>();
-        rt.anchoredPosition = clamped;
+        rt.anchoredPosition = targetPos - center;
 
-        // 轻微缩放：越远箭头越小（0.7~1.0）
+        // 越远箭头越小
         float scale = Mathf.Clamp(1f - (dist - maxShowDist) / 200f, 0.7f, 1f);
         rt.localScale = Vector3.one * scale;
     }
 
-    /// <summary>将越界坐标投影到屏幕边缘</summary>
-    private Vector2 ClampToEdge(Vector2 pos, Vector2 center, Vector2 screenSize)
+    /// <summary>从center沿dir方向找到屏幕边缘（留padding），返回屏幕像素坐标。</summary>
+    private Vector2 ClampToEdgeDir(Vector2 center, Vector2 dir, Vector2 screenSize)
     {
-        Vector2 dir = pos - center;
-        if (dir.magnitude < 1f) dir = Vector2.right;
-
-        // 计算与四条边的交点
         float halfW = screenSize.x * 0.5f - edgePadding;
         float halfH = screenSize.y * 0.5f - edgePadding;
-
-        // 投影到边缘矩形
         float scaleX = Mathf.Abs(dir.x) > 0.001f ? halfW / Mathf.Abs(dir.x) : float.MaxValue;
         float scaleY = Mathf.Abs(dir.y) > 0.001f ? halfH / Mathf.Abs(dir.y) : float.MaxValue;
         float scale  = Mathf.Min(scaleX, scaleY);
-
-        return center + dir.normalized * scale;
+        return center + dir * scale;
     }
 
     // ──────── 辅助方法 ────────
