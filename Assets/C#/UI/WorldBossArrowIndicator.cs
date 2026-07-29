@@ -68,7 +68,7 @@ public class WorldBossArrowIndicator : MonoBehaviour
         foreach (var kv in _indicators)
         {
             if (kv.Key == null || !kv.Key.gameObject.activeSelf
-                || kv.Key.rolestate == state.dead || kv.Key.health <= 0)
+                || kv.Key.rolestate == enemy.state.dead || kv.Key.health <= 0)
                 toRemove.Add(kv.Key);
         }
         foreach (var dead in toRemove)
@@ -83,7 +83,7 @@ public class WorldBossArrowIndicator : MonoBehaviour
         foreach (var boss in all)
         {
             if (boss == null || !boss.gameObject.activeSelf) continue;
-            if (boss.rolestate == state.dead || boss.health <= 0) continue;
+            if (boss.rolestate == enemy.state.dead || boss.health <= 0) continue;
 
             if (!_indicators.ContainsKey(boss))
             {
