@@ -395,7 +395,8 @@ public class EquipmentIcon : MonoBehaviour
                 "（无罪专属：每分钟攻击范围 +1，上限 20）\n\n" +
                 "墓园的呢喃，是给你的低语。";
             howToGet = "通关 N6 后加入卡池";
-            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/UR/002.png");
+            // 该图带有真实背景 + 角色面部肤色，抠背景会把面部误判为"洞"抠掉 → 跳过抠背景
+            SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/UR/002.png", skipBackgroundRemoval: true);
         }
         else if (equipmentId == 9)
         {
@@ -436,12 +437,9 @@ public class EquipmentIcon : MonoBehaviour
             equipmentName = "量子源木";
             description = "每件开局源木 +1\n\n量子态的源木在开局时具现为可用资源，扩充冒险的资本。";
             howToGet = "累计抽卡 200 次后加入卡池（共 100 个）";
-            if (!TrySetIconFromGachaManager(GachaRarity.R, 1))
-                SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/R/001.png");
-            howToGet = "累计抽卡 200 次后加入卡池（每 20 抽追加 1 张）";
             // 优先用挂在 GachaManager 上的静态 Sprite（走标准 Unity 资源管线，避免运行时 LoadImage 偏色）
-            if (!TrySetIconFromGachaManager(GachaRarity.R, 2))
-                SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/R/002.png");
+            if (!TrySetIconFromGachaManager(GachaRarity.R, 1))
+                SetIconFromAssetPath("像素幸存者资源包/存档装备图标/抽卡装备/R/001.jpeg");
         }
         else if (gachaRarity == GachaRarity.SR && equipmentId == 6)
         {
@@ -671,15 +669,21 @@ public class EquipmentIcon : MonoBehaviour
         }
     }
 
-    private void SetIconFromAssetPath(string relativeToAssets)
+    private void SetIconFromAssetPath(string relativeToAssets, bool skipBackgroundRemoval = false)
     {
         if (iconImage == null) return;
 
-        // 从 editorAssetsRelativePath 自动推导 resourcesRelativePath（去掉 .png 扩展名）
+        // 从 editorAssetsRelativePath 自动推导 resourcesRelativePath（去掉 .png / .jpeg 扩展名）
         // 这样 RuntimeAssetLoader 第 2 层 Resources.Load 能命中，不再仅依赖第 3 层编辑器文件读取
         string resourcesPath = null;
-        if (!string.IsNullOrEmpty(relativeToAssets) && relativeToAssets.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase))
-            resourcesPath = relativeToAssets.Substring(0, relativeToAssets.Length - 4);
+        if (!string.IsNullOrEmpty(relativeToAssets))
+        {
+            if (relativeToAssets.EndsWith(".png",  System.StringComparison.OrdinalIgnoreCase))
+                resourcesPath = relativeToAssets.Substring(0, relativeToAssets.Length - 4);
+            else if (relativeToAssets.EndsWith(".jpeg", System.StringComparison.OrdinalIgnoreCase) ||
+                     relativeToAssets.EndsWith(".jpg",  System.StringComparison.OrdinalIgnoreCase))
+                resourcesPath = relativeToAssets.Substring(0, relativeToAssets.LastIndexOf('.'));
+        }
 
         var tex = RuntimeAssetLoader.LoadTexture(null, resourcesPath, relativeToAssets);
         if (tex == null) return;
@@ -693,13 +697,20 @@ public class EquipmentIcon : MonoBehaviour
         // AI 生成的图标通常带有白色/灰色实心背景（无真正 alpha），需后处理去除
         // 用 try-catch 兜底：即使某些极端纹理仍然处理失败，也只是跳过抠背景（保留原图），
         // 不能让异常向上传播炸掉整个 ArchiveManager.SetupEquipmentIcons 的初始化流程。
-        try
+        //
+        // 【2026-07-29】部分图标本身带有真实背景（亡者领域 等），其面部的肤色/阴影与
+        //   边缘背景色的色差在 FillInternalHoles 的容差范围内时会被误判为"洞"抠掉，
+        //   导致角色面部透明。调用方通过 skipBackgroundRemoval=true 跳过此步。
+        if (!skipBackgroundRemoval)
         {
-            MakeTextureTransparent(writable);
-        }
-        catch (System.Exception ex)
-        {
-            Debug.LogWarning($"[EquipmentIcon] 抠背景失败（{relativeToAssets}）：{ex.Message}，使用原图");
+            try
+            {
+                MakeTextureTransparent(writable);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[EquipmentIcon] 抠背景失败（{relativeToAssets}）：{ex.Message}，使用原图");
+            }
         }
 
         Sprite forcedSprite = Sprite.Create(writable, new Rect(0, 0, writable.width, writable.height), new Vector2(0.5f, 0.5f), 100f);
