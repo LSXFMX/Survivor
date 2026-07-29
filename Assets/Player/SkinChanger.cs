@@ -75,8 +75,9 @@ public class SkinChanger : MonoBehaviour
     {
         // skinId=0 琪露诺
         "<b><color=#FFE066>琪露诺</color></b>\n" +
-        "基础角色，无 UR 加成。\n" +
-        "适合熟悉游戏机制的玩家——所有技能均按基础数值结算。",
+        "<color=#FFD37A>难度倍率：攻击 / 防御 / 血量 / 经验 × (1 + 难度 × 0.1)</color>\n" +
+        "<color=#7FFFB0>N1=1.1倍  N8=1.8倍  N13=2.3倍</color>\n" +
+        "随难度提升同步变强——专注即纯粹的成长。",
 
         // skinId=1 南筱风
         "<b><color=#7FE3FF>南筱风（UR · 风系）</color></b>\n" +
@@ -122,7 +123,7 @@ public class SkinChanger : MonoBehaviour
     {
         // skinId=0 琪露诺
         "<color=#FFE066><b>基础角色</b></color>\n" +
-        "<color=#C8C8C8>无特殊加成</color>",
+        "<color=#7FFFB0>(1+N×0.1)倍率：攻/防/血/经验</color>",
 
         // skinId=1 南筱风
         "<color=#7FE3FF><b>风之眷顾</b></color>\n" +

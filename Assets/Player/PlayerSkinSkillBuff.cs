@@ -279,9 +279,27 @@ public class PlayerSkinSkillBuff : MonoBehaviour
                 ApplyTombBuffStats();
                 break;
             default:
-                // 琪露诺：无加成
+                // 琪露诺：难度倍率（1 + N*0.1）
+                ApplyCirnoDifficultyScaling(_player);
                 break;
         }
+    }
+
+    /// <summary>
+    /// 琪露诺专属：根据当前难度获得属性倍率 (1 + N*0.1)。
+    /// N1=1.1, N8=1.8, N13=2.3。作用于 atk / def / hp / 经验效率(DR)。
+    private static void ApplyCirnoDifficultyScaling(Attribute player)
+    {
+        if (player == null) return;
+        var dm = DifficultyManager.Instance;
+        if (dm == null || dm.IsEndless) return;
+        int n = dm.CurrentIndex + 1;
+        float mult = 1f + n * 0.1f;
+        player.atk       *= mult;
+        player.def       *= mult;
+        player.healthmax  = Mathf.RoundToInt(player.healthmax * mult);
+        player.health     = player.healthmax;
+        player.DR        *= mult;
     }
 
     /// <summary>
