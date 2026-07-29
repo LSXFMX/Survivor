@@ -591,7 +591,8 @@ public class battleUI : MonoBehaviour
         _endlessMode = DifficultyManager.Instance != null && DifficultyManager.Instance.IsEndless;
         if (_endlessMode)
         {
-            enemy.endlessHpMultiplier = 1.0f;
+            enemy.endlessHpMultiplier  = 1.0f;
+            enemy.endlessAtkMultiplier = 1.0f;
             _endlessElapsed = 0f;
             _endlessStageCount = 0;
             _endlessPointsMinute = 0;
@@ -971,12 +972,15 @@ public class battleUI : MonoBehaviour
         }
     }
 
-    /// <summary>无尽模式：每 5 分钟触发一次——血量倍率 +5，随机生成一个已解锁社群 Boss。</summary>
+    /// <summary>无尽模式：每 5 分钟触发一次——血量倍率随机 +5~10，攻击倍率随机 +0/1（累积制，作用于之后新生成的怪）。</summary>
     private void OnEndlessStage(int stage)
     {
-        // 血量倍率 +5（作用于之后新生成的怪）
-        enemy.endlessHpMultiplier = 1f + stage * 5f;
-        ToastManager.Show($"<color=#FF6060>无尽 第{stage}波：怪物血量倍率 ×{enemy.endlessHpMultiplier:0}</color>");
+        int hpAdd  = Random.Range(5, 11);   // [5, 10] 闭区间
+        int atkAdd = Random.Range(0, 2);    // 0 或 1
+        enemy.endlessHpMultiplier  += hpAdd;
+        enemy.endlessAtkMultiplier += atkAdd;
+        string atkStr = atkAdd > 0 ? $"，攻击倍率 ×{enemy.endlessAtkMultiplier:0}" : "";
+        ToastManager.Show($"<color=#FF6060>无尽 第{stage}波：血量倍率 +{hpAdd}（×{enemy.endlessHpMultiplier:0}）{atkStr}</color>");
         SpawnRandomCommunityBoss();
     }
 

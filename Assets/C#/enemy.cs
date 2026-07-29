@@ -9,6 +9,7 @@ public class enemy : Attribute
     public static float adventureAtkMultiplier = 1.0f;
     /// <summary>无尽模式：随时间叠加的额外血量倍率（每 5 分钟 +5，从 1 起）。仅新生成的怪生效。</summary>
     public static float endlessHpMultiplier = 1.0f;
+    public static float endlessAtkMultiplier = 1.0f;
 
     public GameObject atknumber;
     public state rolestate;
@@ -29,7 +30,8 @@ public class enemy : Attribute
         _cachedPlayerLayer = null;
         adventureHpMultiplier = 1.0f;
         adventureAtkMultiplier = 1.0f;
-        endlessHpMultiplier = 1.0f;
+        endlessHpMultiplier  = 1.0f;
+        endlessAtkMultiplier = 1.0f;
     }
 
     private const string KEY_SPORE_MUTATION_ENABLED = "SporeMutationEnabled";
@@ -100,7 +102,7 @@ public class enemy : Attribute
             var cfg = DifficultyManager.Instance.Current;
             healthmax = Mathf.RoundToInt(healthmax * cfg.hpMultiplier * adventureHpMultiplier * endlessHpMultiplier);
             health    = healthmax;
-            atk       = Mathf.RoundToInt(atk * cfg.atkMultiplier * adventureAtkMultiplier);
+            atk       = Mathf.RoundToInt(atk * cfg.atkMultiplier * adventureAtkMultiplier * endlessAtkMultiplier);
         }
 
         // 物理质量：Boss(500) > 玩家(100) > 小怪(10) > 复活Boss(5) > 复活小怪(1)
