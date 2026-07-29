@@ -504,6 +504,15 @@ public class SlimeBoss : enemy
     public override void Destroy1()
     {
         if (phase == Phase.Dead) return;
+
+        // 亡者领域复活检查（关底史莱姆 Boss 也需要被复活为永久友军）
+        if (!_reviveAttempted)
+        {
+            _reviveAttempted = true;
+            if (TombDomainHook.TryReviveAsAlly(this))
+                return;
+        }
+
         phase = Phase.Dead;
         rolestate = state.dead;
         busy = true;

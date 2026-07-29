@@ -146,7 +146,7 @@ public static class TombDomainHook
         // ★ 修复：之前漏了 WorldBossWolf → 狼人被当小怪走"每秒掉血 + 15s 强制 Destroy1"分支，
         //   表现为"复活之后又死了/乱复活"。
         bool isWorldBoss = (en is WorldBossBat) || (en is WorldBossMushroomMan)
-                        || (en is WorldBossWolf) || (en is WorldBossBase);
+                        || (en is WorldBossWolf) || (en is WorldBossSlime) || (en is WorldBossBase);
 
         // === 无尽模式：每 5 分钟刷出的社群 Boss（蘑菇/蝙蝠/狼人/史莱姆）也应能被无罪复活为永久友军 ===
         // 无尽模式没有关底流程，所有 Boss 都是社群 Boss，一律按「世界 Boss 级」处理（永久友军，不 15s 衰减即死）。
