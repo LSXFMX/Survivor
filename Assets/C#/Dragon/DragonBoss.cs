@@ -48,7 +48,7 @@ public class DragonBoss : enemy
     public float goldScale       = 1.18f;
     public int   perPhaseHealth  = 1000;
     public float baseAtk         = 50f;
-    public float baseDef         = 50f;
+    public float baseDef         = 70f;
     public float moveSpeed       = 4.5f;
     public float contactDamageCd = 0.6f;
     public float naturalHealPct  = 0.0005f; // 0.05%/s
