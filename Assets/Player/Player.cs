@@ -487,9 +487,11 @@ public class Player : Attribute
 
         if (SkillList.childCount > 0)
         {
-            foreach (Transform Skill in SkillList)
+            for (int i = 0; i < SkillList.childCount; i++)
             {
+                Transform Skill = SkillList.GetChild(i);
                 Skillbase s = Skill.GetComponent<Skillbase>();
+                if (s == null) continue;
                 s.player = gameObject;
                 if (s.CDkey >= s.CDtime)
                     StartCoroutine(s.Useskill());
@@ -499,8 +501,9 @@ public class Player : Attribute
         // SSR9「三清化一」：释放合并过来的分身技能
         if (SkillListClone != null && SkillListClone.childCount > 0)
         {
-            foreach (Transform Skill in SkillListClone)
+            for (int i = 0; i < SkillListClone.childCount; i++)
             {
+                Transform Skill = SkillListClone.GetChild(i);
                 Skillbase s = Skill.GetComponent<Skillbase>();
                 if (s == null) continue;
                 s.player = gameObject;

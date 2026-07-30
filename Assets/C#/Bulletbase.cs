@@ -22,6 +22,22 @@ public class Bulletbase : MonoBehaviour
     public Vector3 distance;
     private Vector3 _baseEuler;
     //获取子弹所属技能的参数
+    // 静态缓存：playerlayer / enemylayer 在整个会话中从不改变，避免每颗子弹做 2 次 Find()
+    private static Attribute  s_cachedPlayer;
+    private static Transform s_cachedEnemyLayer;
+    private static bool       s_cacheReady;
+
+    private static void EnsureStaticCache()
+    {
+        if (s_cacheReady) return;
+        s_cacheReady = true;
+        var pl = GameObject.Find("playerlayer");
+        if (pl != null && pl.transform.childCount > 0)
+            s_cachedPlayer = pl.transform.GetChild(0).GetComponent<Attribute>();
+        var el = GameObject.Find("enemylayer");
+        if (el != null) s_cachedEnemyLayer = el.transform;
+    }
+
     public virtual void GetFather()
     {
         damage = fatherskill.damage;
@@ -30,8 +46,11 @@ public class Bulletbase : MonoBehaviour
         pass = fatherskill.pass;
         speed = fatherskill.speed;
         size = fatherskill.size;
-        player = GameObject.Find("playerlayer").transform.GetChild(0).GetComponent<Attribute>();
+        EnsureStaticCache();
+        player = s_cachedPlayer;
+        enemy  = s_cachedEnemyLayer;
         rb = GetComponent<Rigidbody>();
+        if (rb == null) return;
         rb.useGravity = false;          // 禁用重力，防止火球埋进地里
         // 火球术 / 地狱火 的子弹 Sprite 较大（size×scale 后视觉半径更大），
         // 出生时 transform 紧贴 player.position（玩家 pivot 在脚底 → y≈0），
@@ -45,7 +64,6 @@ public class Bulletbase : MonoBehaviour
         }
         rb.constraints = RigidbodyConstraints.FreezePositionY  // 锁定Y轴位置（在抬高后的高度）
                        | RigidbodyConstraints.FreezeRotation;  // 锁定旋转
-        enemy = GameObject.Find("enemylayer").transform;
         transform.localScale = transform.localScale * size;
         _baseEuler = transform.rotation.eulerAngles;
     }

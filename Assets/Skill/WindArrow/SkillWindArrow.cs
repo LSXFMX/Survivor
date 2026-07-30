@@ -201,10 +201,15 @@ public class SkillWindArrow : Skillbase
         }
     }
 
+    private static Transform s_cachedEnemyLayerWind;
+
     private List<Transform> GetEnemiesInRange()
     {
         List<Transform> result = new List<Transform>();
-        Transform enemylayer = GameObject.Find("enemylayer")?.transform;
+        // 风箭主力技能，每发子弹都做一次 Find 太贵。enemylayer 全局不改，静态缓存。
+        if (s_cachedEnemyLayerWind == null)
+            s_cachedEnemyLayerWind = GameObject.Find("enemylayer")?.transform;
+        Transform enemylayer = s_cachedEnemyLayerWind;
         if (enemylayer == null) return result;
 
         foreach (Transform e in enemylayer)
