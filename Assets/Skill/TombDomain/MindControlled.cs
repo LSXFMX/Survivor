@@ -1138,6 +1138,7 @@ public class MindControlled : MonoBehaviour
     }
 
     private static Material _overlayMaterial;
+}
 
 //  ────────────────────────────── 内部拖拽驱动 ──────────────────────────────
 
