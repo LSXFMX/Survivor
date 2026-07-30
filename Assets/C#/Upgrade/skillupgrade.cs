@@ -43,6 +43,9 @@ public class skillupgrade : Upgradeoptionsbase
                 // 地狱火 CD 下限与火球术同步 2.0s
                 if (choiceskill.Skillname == "地狱火")
                     choiceskill.CDtime = Mathf.Max(2f, choiceskill.CDtime);
+                // 飓风 CD 下限 2.0s
+                if (choiceskill.Skillname == "飓风")
+                    choiceskill.CDtime = Mathf.Max(2f, choiceskill.CDtime);
                 // 命途:寄生 CD 下限 2.5s（基础 3.0s，CD 升级卡 -0.1s×5 = -0.5s = 2.5s）
                 if (choiceskill.Skillname == "命途:寄生")
                     choiceskill.CDtime = Mathf.Max(2.5f, choiceskill.CDtime);
