@@ -1023,50 +1023,55 @@ public class MindControlled : MonoBehaviour
         if (_en == null) yield break;
         Vector3 pos = _en.transform.position;
         SpriteRenderer sr = _en.GetComponent<SpriteRenderer>();
+        Vector3 origScale = sr != null ? sr.transform.localScale : Vector3.one;
 
-        // 1. 缩放膨胀到 2 倍（0.3s）
+        // 防止 FixedUpdate 在爆炸期间把位置/缩放拉回去
+        Rigidbody rbEn = _en.GetComponent<Rigidbody>();
+        if (rbEn != null) { rbEn.isKinematic = true; rbEn.velocity = Vector3.zero; }
+
+        // ── 1. 快速膨胀到 2 倍 → 立即隐藏本体 ──
         if (sr != null)
         {
-            Vector3 orig = sr.transform.localScale;
-            Vector3 target = orig * 2f;
             float t = 0f;
-            while (t < 0.3f)
+            while (t < 0.25f)
             {
                 t += Time.deltaTime;
-                sr.transform.localScale = Vector3.Lerp(orig, target, t / 0.3f);
+                float p = Mathf.Min(1f, t / 0.25f);
+                sr.transform.localScale = Vector3.Lerp(origScale, origScale * 2f, p);
                 yield return null;
             }
+            sr.transform.localScale = origScale * 2f;
+            sr.enabled = false;   // 膨胀完毕 → 本体消失，接下来只看爆炸特效
         }
 
-        // 2. 爆炸特效（7帧序列，染暗紫色）
+        // ── 2. 爆炸特效（7帧，0.1s/帧，总 0.7s）──
         GameObject fx = new GameObject("MinionExplosion");
         fx.transform.position = pos + Vector3.up * 0.5f;
         var fxSr = fx.AddComponent<SpriteRenderer>();
-        fxSr.sortingOrder = 100;
-        Sprite[] frames = LoadExplosionFrames();
-        if (frames != null && frames.Length > 0)
+        fxSr.sortingOrder = 250;
+        fx.transform.localScale = Vector3.one * 3f;
+        fxSr.color = new Color(0.6f, 0.25f, 0.75f, 1f);
+
+        LoadExplosionFrames();
+        if (s_explosionFrames != null)
         {
-            for (int i = 0; i < frames.Length; i++)
+            for (int i = 0; i < s_explosionFrames.Length; i++)
             {
-                fxSr.sprite = frames[i];
-                fxSr.color = new Color(0.5f, 0.2f, 0.7f, 1f);
-                fx.transform.localScale = Vector3.one * 3f;
-                yield return new WaitForSeconds(0.08f);
+                if (s_explosionFrames[i] != null)
+                    fxSr.sprite = s_explosionFrames[i];
+                yield return new WaitForSeconds(0.1f);
             }
         }
         else
         {
-            fxSr.color = new Color(0.5f, 0.2f, 0.7f, 0.8f);
-            yield return new WaitForSeconds(0.5f);
+            // 回退：纯色圆闪烁
+            fxSr.sprite = Sprite.Create(new Texture2D(32, 32), new Rect(0, 0, 32, 32), Vector2.one * 0.5f);
+            fx.transform.localScale = Vector3.one * 4f;
+            yield return new WaitForSeconds(0.4f);
         }
-        Destroy(fx);
 
-        // 3. 隐藏自身精灵
-        if (sr != null) sr.enabled = false;
-
-        // 4. AoE：孢子伤害 ×2 轮
+        // ── 3. AoE 伤害：孢子 ×2 轮 ──
         int sporeDmg = 0;
-        // 孢子伤害：从当前玩家的 SkillTombDomain 实例上拿
         var td = SkillTombDomain.ResolveOnPlayer(FindObjectOfType<Player>());
         if (td != null) sporeDmg = Mathf.Max(1, td.GetCurrentSporeDamage());
         Transform host = GameObject.Find("enemylayer")?.transform;
@@ -1090,7 +1095,17 @@ public class MindControlled : MonoBehaviour
                 yield return new WaitForSeconds(0.25f);
         }
 
-        // 5. 销毁
+        // ── 4. 特效淡出 + 本体销毁 ──
+        float fadeT = 0f;
+        while (fadeT < 0.3f)
+        {
+            fadeT += Time.deltaTime;
+            float a = Mathf.Lerp(1f, 0f, fadeT / 0.3f);
+            fxSr.color = new Color(0.6f, 0.25f, 0.75f, a);
+            yield return null;
+        }
+        Destroy(fx);
+
         if (_en != null) { _en.health = 0; _en.Destroy1(); }
     }
 
