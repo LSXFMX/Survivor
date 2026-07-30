@@ -253,8 +253,7 @@ public class EquipmentIcon : MonoBehaviour
         else if (equipmentId == 3)
         {
             equipmentName = "血族血统";
-            description = "好感度达到 100 时，开局自动解锁【血族血统】技能\n\n" +
-                "蝙蝠群落的血脉遗产，让你的指尖流出鲜血与渴望。";
+            description = "解锁血族血统技能";
             howToGet = "首次击败蝙蝠公爵（蝙蝠社群好感度 +10）";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/好感度装备/003_new.png");
         }
