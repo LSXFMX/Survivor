@@ -40,12 +40,18 @@ public class MindControlled : MonoBehaviour
 {
     public bool isWorldBoss = false;
     public float minionLifetime = 15f;
-    public float minionDecayPerSecond = 0.02f;
+    public float minionDecayPerSecond = 0.20f;
     // 2026-06 二次调整：12 → 24 → 48（再翻倍）。
     //   bossLeashDistance 现在仅作为"开始向玩家走过去"的临界距离，不再是瞬移阈值。
     //   超过 bossLeashDistance × bossTeleportFactor（默认 2×=96）才会判定为"距离不正常的远"
     //   触发瞬移。让友军 Boss 在中等脱离距离上自然向玩家走回，避免顿挫的瞬移视觉。
     public float bossLeashDistance = 48f;
+
+    /// <summary>亡者领域复活小怪死亡时爆炸：AoE 半径（5 单位）</summary>
+    public float explosionRadius = 5f;
+    /// <summary>爆炸 AoE 伤害次数（每次触发孢子领域攻击）</summary>
+    public int explosionBursts = 2;
+    private bool _exploding;
 
     /// <summary>
     /// 距离 > bossLeashDistance × bossTeleportFactor 才触发瞬移；之间的区间走"步行回归"。
@@ -306,9 +312,9 @@ public class MindControlled : MonoBehaviour
                 int loss = Mathf.Max(1, Mathf.RoundToInt(_en.healthmax * minionDecayPerSecond));
                 _en.health -= loss;
                 _decayAccum -= 1f;
-                if (_en.health <= 0) { _en.Destroy1(); return; }
+                if (_en.health <= 0) { ExplodeAndDestroy(); return; }
             }
-            if (_aliveTimer >= minionLifetime) { _en.Destroy1(); return; }
+            if (_aliveTimer >= minionLifetime) { ExplodeAndDestroy(); return; }
         }
 
         // 世界Boss：每秒扣除0.5%血量上限（匀速出血，替代旧的2分钟50%暴毙）
@@ -571,8 +577,10 @@ public class MindControlled : MonoBehaviour
         else
         {
             // 复活小怪：正常造成伤害 + 紫色伤害数字（与原enemy攻击一致）
+            //   接触敌人后自身也爆炸（同归于尽式AoE）
             en.health -= dmg;
             SpawnAllyDamageNumber(en, dmg);
+            if (!isWorldBoss) { ExplodeAndDestroy(); return; }
             en.startturnred();
             TombDomainHook.MarkAllyDamage(en);
             if (en.health <= 0) en.Destroy1();
@@ -1010,6 +1018,129 @@ public class MindControlled : MonoBehaviour
 /// 隐藏的全局 driver：每渲染帧 tick 一次所有 MindControlled 的流光颜色。
 /// 单 Update，对应所有友军，不会因为友军数量翻倍而 Update callback 翻倍。
 /// </summary>
+    // ── 小怪爆炸：接触/死亡时播放特效 + AoE 伤害 ──
+    private void ExplodeAndDestroy()
+    {
+        if (_exploding) return;
+        _exploding = true;
+        isWorldBoss = false; // 世界Boss不爆炸，但保底防护
+        StartCoroutine(ExplosionRoutine());
+    }
+
+    private readonly struct ExplosionDamageEntry { public enemy target; public int dmg; }
+
+    private System.Collections.IEnumerator ExplosionRoutine()
+    {
+        if (_en == null) yield break;
+        Vector3 pos = _en.transform.position;
+        SpriteRenderer sr = _en.GetComponent<SpriteRenderer>();
+
+        // 1. 缩放 → 快速膨胀到 2 倍（0.3s）
+        if (sr != null)
+        {
+            Vector3 orig = sr.transform.localScale;
+            Vector3 target = orig * 2f;
+            float t = 0f;
+            while (t < 0.3f)
+            {
+                t += Time.deltaTime;
+                sr.transform.localScale = Vector3.Lerp(orig, target, t / 0.3f);
+                yield return null;
+            }
+        }
+
+        // 2. 实例化爆炸特效（7帧 sprite 序列）
+        GameObject fx = new GameObject("MinionExplosion");
+        fx.transform.position = pos + Vector3.up * 0.5f;
+        var fxSr = fx.AddComponent<SpriteRenderer>();
+        fxSr.sortingOrder = 100;
+        fxSr.material = _overlayMaterial != null ? new Material(_overlayMaterial) : null;
+
+        // 加载 Explosion 帧，每帧 0.1s
+        Sprite[] frames = LoadExplosionFrames();
+        if (frames != null && frames.Length > 0)
+        {
+            for (int i = 0; i < frames.Length; i++)
+            {
+                fxSr.sprite = frames[i];
+                // 颜色统一染成暗紫色匹配亡者领域主题
+                fxSr.color = new Color(0.5f, 0.2f, 0.7f, 1f);
+                fx.transform.localScale = Vector3.one * 3f;
+                yield return new WaitForSeconds(0.08f);
+            }
+        }
+        else
+        {
+            // 回退：简单圆形缩放
+            fxSr.sprite = Sprite.Create(new Texture2D(32, 32), new Rect(0, 0, 32, 32), Vector2.one * 0.5f);
+            fxSr.color = new Color(0.5f, 0.2f, 0.7f, 0.8f);
+            yield return new WaitForSeconds(0.5f);
+        }
+        Destroy(fx);
+
+        // 3. 清理自身精灵（爆炸后消失）
+        if (sr != null) sr.enabled = false;
+
+        // 4. AoE 伤害：对范围内敌人触发两次孢子领域攻击
+        int sporeDmg = 0;
+        var td = SkillTombDomain.Instance;
+        if (td != null) sporeDmg = Mathf.Max(1, td.GetCurrentSporeDamage());
+
+        Transform host = null;
+        var wbMgr = WorldBossManager.Instance;
+        if (wbMgr != null) host = GameObject.Find("enemylayer")?.transform;
+
+        for (int burst = 0; burst < explosionBursts; burst++)
+        {
+            if (sporeDmg > 0 && host != null)
+            {
+                foreach (Transform t in host)
+                {
+                    enemy e = t.GetComponent<enemy>();
+                    if (e == null || e == _en || e._mindControlledFlag || e.health <= 0) continue;
+                    if (Vector3.Distance(t.position, pos) > explosionRadius) continue;
+                    int d = Mathf.Max(1, sporeDmg - (int)e.def);
+                    e.health -= d;
+                    SpawnAllyDamageNumber(e, d);
+                    e.startturnred();
+                    TombDomainHook.MarkAllyDamage(e);
+                }
+            }
+            if (burst < explosionBursts - 1)
+                yield return new WaitForSeconds(0.25f); // 两次爆发之间短暂间隔
+        }
+
+        // 5. 销毁
+        if (_en != null)
+        {
+            _en.health = 0;
+            _en.Destroy1();
+        }
+    }
+
+    private static Sprite[] s_explosionFrames;
+    private static Sprite[] LoadExplosionFrames()
+    {
+        if (s_explosionFrames != null) return s_explosionFrames;
+        s_explosionFrames = new Sprite[7];
+        string basePath = "像素幸存者资源包/特效/Foozle_2DE0001_Pixel_Magic_Effects/Explosion/";
+        for (int i = 0; i < 7; i++)
+        {
+            string path = basePath + (i + 1).ToString("D3");
+            Texture2D tex = Resources.Load<Texture2D>(path);
+            if (tex != null)
+            {
+                s_explosionFrames[i] = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                    new Vector2(0.5f, 0.5f));
+            }
+        }
+        return s_explosionFrames;
+    }
+
+    private static Material _overlayMaterial;
+
+//  ────────────────────────────── 内部拖拽驱动 ──────────────────────────────
+
 internal sealed class MindControlledFlowDriver : MonoBehaviour
 {
     void Update()

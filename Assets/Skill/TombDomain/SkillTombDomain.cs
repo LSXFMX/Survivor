@@ -19,7 +19,7 @@ public class SkillTombDomain : Skillbase
     public float minionLifetime = 15f;
 
     [Tooltip("被控制的小怪每秒掉自身 maxHP 的百分比（0.02 = 2%）")]
-    [Range(0f, 1f)] public float minionDecayPerSecond = 0.02f;
+    [Range(0f, 1f)] public float minionDecayPerSecond = 0.20f;
 
     [Tooltip("被控制的世界 Boss 距玩家的最远距离（超过会触发回归行为）。\n" +
              "2026-06：从 12 翻倍到 24，再翻倍到 48。新行为分两段：\n" +
@@ -183,6 +183,12 @@ public class SkillTombDomain : Skillbase
         }
         inheritedFormOfWindEnabled = formOfWind != null ? 1 : 0;
         hasInheritanceSnapshot = true;
+    }
+
+    /// <summary>返回当前孢子领域伤害值（供 MindControlled 爆炸 AoE 等使用）</summary>
+    public int GetCurrentSporeDamage()
+    {
+        return Mathf.Max(1, inheritedSporeDamage);
     }
 
     /// <summary>玩家是否已学习「亡者领域」（供 BulletSporeField / 全局检测用）</summary>
