@@ -133,10 +133,6 @@ public class battleUI : MonoBehaviour
 
         // 运行时构造总结面板 & 属性面板
         EnsureSummaryAndStatsPanels();
-
-        // 世界Boss屏幕边缘箭头指示器
-        if (gameObject.GetComponent<WorldBossArrowIndicator>() == null)
-            gameObject.AddComponent<WorldBossArrowIndicator>();
     }
 
     // ── 自动模式按钮 ──
