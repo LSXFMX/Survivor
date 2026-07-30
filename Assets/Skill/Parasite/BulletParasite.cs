@@ -546,6 +546,18 @@ public class BulletParasite : Bulletbase
         }
         e.startturnred();
 
+        // 命途:寄生 2% 概率小幅度击退（约 2 单位，方向为触手→敌人）
+        if (Random.value < 0.02f && e != null)
+        {
+            Rigidbody rb = e.GetComponent<Rigidbody>();
+            if (rb != null && !rb.isKinematic)
+            {
+                Vector3 knockDir = (e.transform.position - transform.position).normalized;
+                knockDir.y = 0;
+                rb.AddForce(knockDir * 15f, ForceMode.VelocityChange);
+            }
+        }
+
         // 命途:寄生自带 1% 吸血
         TryLifesteal(dealt, e.atknumber);
 

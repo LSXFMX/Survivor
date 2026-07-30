@@ -47,7 +47,7 @@ MonoBehaviour:
   Skillname: "\u547D\u9014:\u5BC4\u751F"
   CDtime: 3
   CDkey: 3
-  damage: 25
+  damage: 5
   level: 1
   lifetime: 3
   pass: 0

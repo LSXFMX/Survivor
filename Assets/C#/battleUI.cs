@@ -573,10 +573,12 @@ public class battleUI : MonoBehaviour
                         if (opt == null) continue;
                         // 只统计指向同一技能名（即同一 entry 的 learn 关联技能）的卡片
                         if (opt.skill == null || opt.skill.Skillname != targetSkill) continue;
-                        if (string.IsNullOrEmpty(opt.upgradeGroup) || opt.maxUpgrades <= 0) continue;
+                        if (string.IsNullOrEmpty(opt.upgradeGroup)) continue;
                         if (!seenGroups.Add(opt.upgradeGroup)) continue;  // 已统计过同 group
                         totalCur += cui.GetGroupCount(opt.upgradeGroup);
-                        totalMax += cui.GetEffectiveMaxUpgrades(opt, isLearnOption: false);
+                        totalMax += (opt.maxUpgrades > 0)
+                            ? cui.GetEffectiveMaxUpgrades(opt, isLearnOption: false)
+                            : 0;
                         anyMatch = true;
                     }
                 }

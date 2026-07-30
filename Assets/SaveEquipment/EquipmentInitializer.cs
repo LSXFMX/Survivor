@@ -247,7 +247,7 @@ public class EquipmentInitializer : MonoBehaviour
         up.upgradenumber      = value;
         up.icon               = BulletParasite.LoadSpriteFallback("Wolf/icon_parasite");
         up.upgradeGroup       = "parasite_" + attr.ToString();
-        up.maxUpgrades        = 5;
+        up.maxUpgrades        = 0;
         go.SetActive(true);
         return go;
     }
