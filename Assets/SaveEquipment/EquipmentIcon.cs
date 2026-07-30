@@ -229,8 +229,7 @@ public class EquipmentIcon : MonoBehaviour
         if (equipmentId == 0)
         {
             equipmentName = "孢子之心";
-            description = "好感度达到 100 时，开局自动解锁【孢子领域】技能\n\n" +
-                "蘑菇群落的精髓，孕育着生命与衰变。";
+            description = "解锁孢子领域技能";
             howToGet = "首次击败蘑菇王（蘑菇社群好感度 +10）";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/好感度装备/000_new.png");
         }
