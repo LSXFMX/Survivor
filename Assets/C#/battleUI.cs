@@ -666,24 +666,24 @@ public class battleUI : MonoBehaviour
                 OnEndlessStage(stage);
             }
 
-            // 每分钟 +5 装备积分 + 扣除 20% 源木（传送门维持费用），每 5 分钟显示一次提示
+            // 每分钟 +5 装备积分，每 5 分钟扣除 10% 源木 + 显示提示
             int curMinute = (int)(_endlessElapsed / 60f);
             if (curMinute > _endlessPointsMinute)
             {
                 _endlessPointsMinute = curMinute;
                 ClearRecordManager.AddEquipmentPoints(5);
 
-                // 扣除 20% 源木作为传送门维持费用
-                if (YuanMuManager.Instance != null && YuanMuManager.Instance.Current > 0)
-                {
-                    int tax = Mathf.Max(1, Mathf.RoundToInt(YuanMuManager.Instance.Current * 0.1f));
-                    YuanMuManager.Instance.Spend(tax);
-                }
-
                 if (curMinute % 5 == 0)
                 {
                     int total = ClearRecordManager.Instance != null ? ClearRecordManager.Instance.GetEquipmentPoints() : 0;
                     ToastManager.Show($"<color=#D4AAFF>无尽 第{curMinute}分钟：装备积分 +5（合计 {total}）</color>");
+
+                    // 每 5 分钟扣除 10% 源木作为传送门维持费用
+                    if (YuanMuManager.Instance != null && YuanMuManager.Instance.Current > 0)
+                    {
+                        int tax = Mathf.Max(1, Mathf.RoundToInt(YuanMuManager.Instance.Current * 0.1f));
+                        YuanMuManager.Instance.Spend(tax);
+                    }
                 }
             }
         }
