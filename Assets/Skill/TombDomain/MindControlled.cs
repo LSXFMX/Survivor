@@ -1067,7 +1067,7 @@ public class MindControlled : MonoBehaviour
         // 4. AoE：孢子伤害 ×2 轮
         int sporeDmg = 0;
         // 孢子伤害：从当前玩家的 SkillTombDomain 实例上拿
-        var td = SkillTombDomain.ResolveOnPlayer(FindObjectOfType<Player>()?.GetComponent<Attribute>());
+        var td = SkillTombDomain.ResolveOnPlayer(FindObjectOfType<Player>());
         if (td != null) sporeDmg = Mathf.Max(1, td.GetCurrentSporeDamage());
         Transform host = GameObject.Find("enemylayer")?.transform;
         for (int burst = 0; burst < explosionBursts; burst++)
