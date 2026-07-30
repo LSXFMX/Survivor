@@ -997,36 +997,51 @@ public class battleUI : MonoBehaviour
     /// <summary>无尽模式：随机生成一个"已解锁"的社群 Boss（蘑菇/蝙蝠/狼人/史莱姆）。</summary>
     private void SpawnRandomCommunityBoss()
     {
-        // 候选：按通关记录判断解锁（通关过对应难度即视为解锁该社群 Boss）
+        // 候选：从 WorldBossManager 取真正的世界Boss预制体（而非关底 Boss）
         var candidates = new System.Collections.Generic.List<GameObject>();
-        var crm = ClearRecordManager.Instance;
-        // 蘑菇 Boss：N2 起就有，基本恒解锁
-        if (bossPrefab != null) candidates.Add(bossPrefab);
-        // 蝙蝠 Boss：通关 N7 解锁
-        if (batBossPrefab != null && (crm == null || crm.GetClearCount("N7") > 0)) candidates.Add(batBossPrefab);
-        // 狼人 Boss：通关 N9 解锁
-        if (wolfBossPrefab != null && (crm == null || crm.GetClearCount("N9") > 0)) candidates.Add(wolfBossPrefab);
-        // 史莱姆 Boss：通关 N11 解锁
-        GameObject slimeP = slimeBossPrefab != null ? slimeBossPrefab : Resources.Load<GameObject>("WorldBoss/SlimeBoss");
-        if (slimeP != null && (crm == null || crm.GetClearCount("N11") > 0)) candidates.Add(slimeP);
-
-        if (candidates.Count == 0) { if (bossPrefab != null) candidates.Add(bossPrefab); else return; }
+        var wbMgr = WorldBossManager.Instance;
+        if (wbMgr != null && wbMgr.worldBossEntries != null)
+        {
+            foreach (var entry in wbMgr.worldBossEntries)
+            {
+                if (entry.bossPrefab != null)
+                    candidates.Add(entry.bossPrefab);
+            }
+        }
+        // 回退：如果 WorldBossManager 未就绪，用场景中分配的世界Boss预制体
+        if (candidates.Count == 0)
+        {
+            var crm = ClearRecordManager.Instance;
+            if (bossPrefab != null) candidates.Add(bossPrefab);
+            if (batBossPrefab != null && (crm == null || crm.GetClearCount("N7") > 0)) candidates.Add(batBossPrefab);
+            if (wolfBossPrefab != null && (crm == null || crm.GetClearCount("N9") > 0)) candidates.Add(wolfBossPrefab);
+            if (slimeBossPrefab != null && (crm == null || crm.GetClearCount("N11") > 0)) candidates.Add(slimeBossPrefab);
+        }
+        if (candidates.Count == 0) return;
 
         GameObject prefab = candidates[Random.Range(0, candidates.Count)];
         Vector3 pos = GetBossSpawnPos(0, 1);
         GameObject obj = Instantiate(prefab, pos, Quaternion.Euler(45, 0, 0), enemylayer != null ? enemylayer : null);
 
-        // 按类型接线 + 注册血条（不进入 bossPhase，无尽模式不因 Boss 存活切换胜负流程）
-        var mush = obj.GetComponent<BossMushroomMan>();
-        if (mush != null) { mush.battleUI = this; BossHealthBarUI.Register(mush); }
-        var bat = obj.GetComponent<BossBat>();
-        if (bat != null) { bat.battleUI = this; BossHealthBarUI.Register(bat); }
-        var wolf = obj.GetComponent<WolfBoss>();
-        if (wolf != null) { wolf.battleUI = this; BossHealthBarUI.Register(wolf); }
-        var slime = obj.GetComponent<SlimeBoss>();
-        if (slime != null) { slime.battleUI = this; BossHealthBarUI.Register(slime); }
+        // 注册血条：世界Boss 继承自 enemy，BossHealthBarUI.Register 接受所有 enemy 子类
+        var bossEnemy = obj.GetComponent<enemy>();
+        if (bossEnemy != null)
+        {
+            BossHealthBarUI.Register(bossEnemy);
+            // 按类型接 battleUI 引用（部分 Boss 的 FixedUpdate 需要 battleUI.player 或回调）
+            var wbBase = obj.GetComponent<WorldBossBase>();
+            if (wbBase != null) wbBase.battleUI = this;
+            var wbSlime = obj.GetComponent<WorldBossSlime>();
+            if (wbSlime != null) wbSlime.battleUI = this;
+            var wbWolf = obj.GetComponent<WorldBossWolf>();
+            if (wbWolf != null) wbWolf.battleUI = this;
+            var wbBat = obj.GetComponent<WorldBossBat>();
+            if (wbBat != null) wbBat.battleUI = this;
+            var wbMush = obj.GetComponent<WorldBossMushroomMan>();
+            if (wbMush != null) wbMush.battleUI = this;
+        }
 
-        ToastManager.Show("<color=#FFD24A>无尽：一个社群Boss出现了！</color>");
+        ToastManager.Show("<color=#FFD24A>无尽：一个世界Boss出现了！</color>");
     }
 
     private void SpawnBoss()
