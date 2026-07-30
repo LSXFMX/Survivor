@@ -1018,8 +1018,6 @@ public class MindControlled : MonoBehaviour
         StartCoroutine(ExplosionRoutine());
     }
 
-    private readonly struct ExplosionDamageEntry { public enemy target; public int dmg; }
-
     private System.Collections.IEnumerator ExplosionRoutine()
     {
         if (_en == null) yield break;
