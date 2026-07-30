@@ -114,31 +114,18 @@ public class getnewskill : Upgradeoptionsbase
             if (cloneSb != null && ownerSb != null)
             {
                 cloneSb.player = player.gameObject;
-                cloneSb.CDtime   = ownerSb.CDtime;
-                cloneSb.damage   = ownerSb.damage;
-                cloneSb.lifetime = ownerSb.lifetime;
-                cloneSb.pass     = ownerSb.pass;
-                cloneSb.speed    = ownerSb.speed;
-                cloneSb.number   = ownerSb.number;
+                // 分身技能固定继承 30% 数值（与有无 SSR6 无关）
+                // 有 SSR6 时后续通过 SyncUpgradeToCloneSkills 实时同步；无 SSR6 时仅创建瞬间固定。
+                cloneSb.CDtime   = ownerSb.CDtime;                        // CD 不缩放
+                cloneSb.damage   = Mathf.RoundToInt(ownerSb.damage   * 0.3f);
+                cloneSb.lifetime = Mathf.RoundToInt(ownerSb.lifetime * 0.3f);
+                cloneSb.pass     = Mathf.RoundToInt(ownerSb.pass     * 0.3f);
+                cloneSb.speed    = Mathf.RoundToInt(ownerSb.speed    * 0.3f);
+                cloneSb.number   = Mathf.Max(1, Mathf.RoundToInt(ownerSb.number * 0.3f));
                 cloneSb.bullet   = ownerSb.bullet;
-                cloneSb.size     = ownerSb.size;
-                cloneSb.interval = ownerSb.interval;
-                cloneSb.angel    = ownerSb.angel;
-
-                // 有 SSR6「影分身之术」时应用 30% 缩放
-                bool hasSsr6 = EquipmentSystem.Instance != null &&
-                    EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, 8);
-                if (hasSsr6)
-                {
-                    cloneSb.damage   = Mathf.RoundToInt(ownerSb.damage   * 0.3f);
-                    cloneSb.lifetime = Mathf.RoundToInt(ownerSb.lifetime * 0.3f);
-                    cloneSb.pass     = Mathf.RoundToInt(ownerSb.pass     * 0.3f);
-                    cloneSb.speed    = Mathf.RoundToInt(ownerSb.speed    * 0.3f);
-                    cloneSb.number   = Mathf.Max(1, Mathf.RoundToInt(ownerSb.number * 0.3f));
-                    cloneSb.size     = ownerSb.size     * 0.9f;
-                    cloneSb.interval = ownerSb.interval * 0.3f;
-                    cloneSb.angel    = ownerSb.angel    * 0.3f;
-                }
+                cloneSb.size     = ownerSb.size     * 0.9f;
+                cloneSb.interval = ownerSb.interval * 0.3f;
+                cloneSb.angel    = ownerSb.angel    * 0.3f;
             }
         }
 
