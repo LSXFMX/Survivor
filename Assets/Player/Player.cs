@@ -595,8 +595,8 @@ public class Player : Attribute
         // 三选一/奇遇/暂停/总结/存档装备等面板打开时，Time.timeScale=0，此期间禁用鼠标点击移动
         if (Time.timeScale <= 0f) { _clickTarget = null; HideMarker(); return; }
 
-        bool clickedDown = Input.GetMouseButtonDown(0);
-        bool held        = Input.GetMouseButton(0);
+        bool clickedDown = Input.GetMouseButtonDown(1);
+        bool held        = Input.GetMouseButton(1);
         if (!clickedDown && !held) return;
 
         // 避免点击 UI 时触发移动：上溯父级链查找交互组件
