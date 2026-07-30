@@ -50,20 +50,20 @@ public class Bulletbase : MonoBehaviour
         player = s_cachedPlayer;
         enemy  = s_cachedEnemyLayer;
         rb = GetComponent<Rigidbody>();
-        if (rb == null) return;
-        rb.useGravity = false;          // 禁用重力，防止火球埋进地里
-        // 火球术 / 地狱火 的子弹 Sprite 较大（size×scale 后视觉半径更大），
-        // 出生时 transform 紧贴 player.position（玩家 pivot 在脚底 → y≈0），
-        // 直接锁 Y=0 的话子弹下半截会扎进地面里，看起来像"陷在地里"。
-        // 解决：发射前把出生 Y 抬高到 player 身体中部高度（约 1f），再锁 Y。
-        // 风箭/飓风/暗齿轮等细子弹原本视觉无问题，统一抬高也不会让它们看起来"漂浮过高"，
-        // 因此这里对所有子弹一致处理（保持行为一致性最重要）。
-        if (transform.position.y < 1f)
+        // 部分子类（如 BulletParasite 触手）使用 LineRenderer 判定移动，prefab 上无 Rigidbody；
+        // 此时 rb 为 null，跳过物理设置即可，不能 return（否则 scale/_baseEuler 丢失，
+        // 飓风等有 Rigidbody 的子类连 speed/size 都被吞掉 → 原地不动）。
+        if (rb != null)
         {
-            transform.position = new Vector3(transform.position.x, 1f, transform.position.z);
+            rb.useGravity = false;
+            // 火球术 / 地狱火 的子弹 Sprite 较大（size×scale 后视觉半径更大），
+            // 出生时 transform 紧贴 player.position（玩家 pivot 在脚底 → y≈0），
+            // 直接锁 Y=0 的话子弹下半截会扎进地面里，看起来像"陷在地里"。
+            // 解决：发射前把出生 Y 抬高到 player 身体中部高度（约 1f），再锁 Y。
+            if (transform.position.y < 1f)
+                transform.position = new Vector3(transform.position.x, 1f, transform.position.z);
+            rb.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotation;
         }
-        rb.constraints = RigidbodyConstraints.FreezePositionY  // 锁定Y轴位置（在抬高后的高度）
-                       | RigidbodyConstraints.FreezeRotation;  // 锁定旋转
         transform.localScale = transform.localScale * size;
         _baseEuler = transform.rotation.eulerAngles;
     }
