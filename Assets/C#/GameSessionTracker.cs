@@ -43,11 +43,31 @@ public class GameSessionTracker : MonoBehaviour
 
     void Start()
     {
-        // 对局开始：快照当前已解锁装备
+        // 对局开始：清空本局追踪数据 + 快照当前已解锁装备
+        // 修复：之前 bossesDefeated / skillsAcquired / skillDamage / equipmentUnlockedThisSession
+        //   是 DontDestroyOnLoad 单例的字段，跨对局累积 → N12 通关时显示 N7 的"蝙蝠公爵"和
+        //   N9 的"狼人首领"，且解锁装备页多列 N11/N12 等所有历史解锁。
+        BeginSession();
+    }
+
+    /// <summary>对局开始：清空本局追踪数据 + 快照当前装备解锁状态</summary>
+    public void BeginSession()
+    {
+        bossesDefeated.Clear();
+        skillsAcquired.Clear();
+        skillDamage.Clear();
+        equipmentUnlockedThisSession.Clear();
+        sessionStartTime = Time.realtimeSinceStartup;
+        sessionEndTime   = 0f;
+
+        // 快照当前已解锁装备
         SnapshotEquipment();
         // 订阅装备解锁事件
         if (EquipmentSystem.Instance != null)
+        {
+            EquipmentSystem.Instance.OnEquipmentUnlocked -= OnEquipmentUnlocked; // 防重复
             EquipmentSystem.Instance.OnEquipmentUnlocked += OnEquipmentUnlocked;
+        }
     }
 
     void OnDestroy()

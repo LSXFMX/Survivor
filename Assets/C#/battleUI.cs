@@ -43,7 +43,8 @@ public class battleUI : MonoBehaviour
     private BossBat spawnedBatBoss = null;
     private WolfBoss spawnedWolfBoss = null;
     private SlimeBoss spawnedSlimeBoss = null;
-    private int _doubleBossRemain = 0;
+    private int _doubleBossRemain      = 0;   // 双Boss模式下当前剩余Boss数
+    private int _doubleBossOrigCount   = 0;   // 双Boss总数（用于Toast显示进度）
 
     [Header("胜利/失败")]
     public GameObject victoryPanel;
@@ -106,6 +107,9 @@ public class battleUI : MonoBehaviour
 
     void Start()
     {
+        // 对局开始：清空上一局的追踪数据（修复历史Boss/装备跨局残留bug）
+        GameSessionTracker.Instance?.BeginSession();
+
         enemy.adventureHpMultiplier = 1.0f;
         enemy.adventureAtkMultiplier = 1.0f;
 
@@ -822,15 +826,19 @@ public class battleUI : MonoBehaviour
     {
         if (!bossPhase) return;
 
-        // 双Boss模式：需要两只都死
+        // 双Boss模式：每死一只记一次名，剩 0 才结算
         if (_doubleBossRemain > 0)
         {
             _doubleBossRemain--;
-            // 记录击败的Boss名称
             string bossName = DetermineBossName();
             if (!string.IsNullOrEmpty(bossName))
                 GameSessionTracker.Instance?.RecordBossDefeated(bossName);
-            if (_doubleBossRemain > 0) return; // 还有Boss存活
+            if (_doubleBossRemain > 0)
+            {
+                ToastManager.Show($"<color=#FFD24A>击败 1/{_doubleBossOrigCount} Boss，剩余继续战斗！</color>");
+                return; // 还有Boss存活，**不**结算
+            }
+            // 全部死亡，落到下方统一结算
         }
         else
         {
@@ -1051,7 +1059,8 @@ public class battleUI : MonoBehaviour
             if (label == "N12") { prefab = slimeBossPrefab != null ? slimeBossPrefab
                                             : Resources.Load<GameObject>("WorldBoss/SlimeBoss"); prefabPath = "WorldBoss/SlimeBoss"; }
             if (prefab == null) { Debug.LogWarning("[Boss] 双Boss预制体缺失"); return; }
-            _doubleBossRemain = 2;
+            _doubleBossRemain    = 2;
+            _doubleBossOrigCount = 2;
             for (int i = 0; i < 2; i++)
             {
                 Vector3 pos = GetBossSpawnPos(i, 2);
