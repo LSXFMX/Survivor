@@ -103,10 +103,44 @@ public class getnewskill : Upgradeoptionsbase
             PlayerSkinSkillBuff.ApplyXiaWuBloodlineBuff(newBloodline);
         }
 
-        // SSR9「三清化一」+ SSR6「影分身之术」联动（已移除）：
-        // SSR6 不再补齐技能——分身保持创建时的"随机一半"技能列表。
-        // 新学的技能只加到本体 SkillList，不同步到 SkillListClone。
-        // SkillListClone 中的技能列表在分身合并时就已固定。
+        // SSR9「三清化一」：新技能同步克隆到 SkillListClone
+        //   SkillListClone 存在 → 三清化一已被触发过 → 本体后续学新技能，
+        //   分身技能列表也自动补上该技能（属性继承按原逻辑：有 SSR6 时 30%，无 SSR6 时 100%）。
+        if (player.SkillListClone != null)
+        {
+            GameObject cloneObj = Instantiate(skill.gameObject, player.SkillListClone);
+            Skillbase cloneSb = cloneObj.GetComponent<Skillbase>();
+            Skillbase ownerSb = newSkillObj.GetComponent<Skillbase>();
+            if (cloneSb != null && ownerSb != null)
+            {
+                cloneSb.player = player.gameObject;
+                cloneSb.CDtime   = ownerSb.CDtime;
+                cloneSb.damage   = ownerSb.damage;
+                cloneSb.lifetime = ownerSb.lifetime;
+                cloneSb.pass     = ownerSb.pass;
+                cloneSb.speed    = ownerSb.speed;
+                cloneSb.number   = ownerSb.number;
+                cloneSb.bullet   = ownerSb.bullet;
+                cloneSb.size     = ownerSb.size;
+                cloneSb.interval = ownerSb.interval;
+                cloneSb.angel    = ownerSb.angel;
+
+                // 有 SSR6「影分身之术」时应用 30% 缩放
+                bool hasSsr6 = EquipmentSystem.Instance != null &&
+                    EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, 8);
+                if (hasSsr6)
+                {
+                    cloneSb.damage   = Mathf.RoundToInt(ownerSb.damage   * 0.3f);
+                    cloneSb.lifetime = Mathf.RoundToInt(ownerSb.lifetime * 0.3f);
+                    cloneSb.pass     = Mathf.RoundToInt(ownerSb.pass     * 0.3f);
+                    cloneSb.speed    = Mathf.RoundToInt(ownerSb.speed    * 0.3f);
+                    cloneSb.number   = Mathf.Max(1, Mathf.RoundToInt(ownerSb.number * 0.3f));
+                    cloneSb.size     = ownerSb.size     * 0.9f;
+                    cloneSb.interval = ownerSb.interval * 0.3f;
+                    cloneSb.angel    = ownerSb.angel    * 0.3f;
+                }
+            }
+        }
 
         battleUI.RefreshSkill();
         closechoice();
