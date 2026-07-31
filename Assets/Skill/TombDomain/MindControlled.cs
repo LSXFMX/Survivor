@@ -1077,7 +1077,7 @@ public class MindControlled : MonoBehaviour
             new Vector2(0.5f, 0.5f));
         sr.sortingOrder = 200;
         sr.color = new Color(0.3f, 0.06f, 0.4f, 0.85f);
-        go.transform.localScale = Vector3.one * 0.5f;
+        go.transform.localScale = Vector3.one * 0.1f;
         SporeFxHelper fxHelper = go.AddComponent<SporeFxHelper>();
         fxHelper.StartFade();
     }
@@ -1090,12 +1090,12 @@ public class MindControlled : MonoBehaviour
         {
             var sr = GetComponent<SpriteRenderer>();
             float t = 0f;
-            // 复制 sporefield.anim 的效果：0.6s 从 0.5x 扩到 5x，透明度 0.85→0
+            // 0.6s 从 0.1x 扩到 0.8x，透明度 0.85→0
             while (t < 0.6f)
             {
                 t += Time.deltaTime;
                 float p = t / 0.6f;
-                transform.localScale = Vector3.one * Mathf.Lerp(0.5f, 5f, p);
+                transform.localScale = Vector3.one * Mathf.Lerp(0.1f, 0.8f, p);
                 if (sr != null) sr.color = new Color(0.3f, 0.06f, 0.4f, Mathf.Lerp(0.85f, 0f, p));
                 yield return null;
             }
