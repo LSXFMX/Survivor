@@ -1063,25 +1063,43 @@ public class MindControlled : MonoBehaviour
         if (_en != null) { _en.health = 0; _en.Destroy1(); }
     }
 
-    /// <summary>在指定位置播放孢子领域特效（使用 Skill/SporeField/000.png 贴图 + 缩放淡出）</summary>
+    /// <summary>在指定位置播放孢子领域特效（优先 000.png，失败回退自生成圆）</summary>
     private static void SpawnSporeFx(Vector3 pos)
     {
+        // 优先加载真实孢子贴图
         if (s_sporeTex == null)
             s_sporeTex = RuntimeAssetLoader.LoadTexture(null, "Skill/SporeField/000", "Skill/SporeField/000.png");
-        if (s_sporeTex == null) return;
+        // 回退：自生成紫黑渐变圆（打包运行时游戏也能看到特效）
+        if (s_sporeTex == null)
+        {
+            if (s_fallbackTex == null)
+            {
+                s_fallbackTex = new Texture2D(32, 32, TextureFormat.RGBA32, false);
+                Color[] p = new Color[32 * 32]; Vector2 c = new Vector2(16, 16);
+                for (int y = 0; y < 32; y++)
+                    for (int x = 0; x < 32; x++)
+                    {
+                        float d = Vector2.Distance(new Vector2(x, y), c);
+                        float a = 1f - Mathf.Clamp01(d / 14f);
+                        p[y * 32 + x] = new Color(1, 1, 1, a);
+                    }
+                s_fallbackTex.Apply();
+            }
+            s_sporeTex = s_fallbackTex;
+        }
         var go = new GameObject("SporeFx");
         go.transform.position = pos + Vector3.up * 0.5f;
-        go.transform.rotation = Quaternion.Euler(45f, 0f, 0f); // 45° 视角
+        go.transform.rotation = Quaternion.Euler(45f, 0f, 0f);
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = Sprite.Create(s_sporeTex, new Rect(0, 0, s_sporeTex.width, s_sporeTex.height),
             new Vector2(0.5f, 0.5f));
         sr.sortingOrder = 200;
         sr.color = new Color(0.3f, 0.06f, 0.4f, 0.85f);
         go.transform.localScale = Vector3.one * 0.1f;
-        SporeFxHelper fxHelper = go.AddComponent<SporeFxHelper>();
-        fxHelper.StartFade();
+        go.AddComponent<SporeFxHelper>().StartFade();
     }
     private static Texture2D s_sporeTex;
+    private static Texture2D s_fallbackTex;
 
     private sealed class SporeFxHelper : MonoBehaviour
     {
