@@ -1127,34 +1127,24 @@ public class MindControlled : MonoBehaviour
         return s_explosionFrames;
     }
 
-    /// <summary>在指定位置播放一个孢子领域特效（纯视觉，紫黑渐变圆扩散 + 淡出）</summary>
+    /// <summary>在指定位置播放孢子领域特效（使用 Skill/SporeField/000.png 贴图 + 缩放淡出）</summary>
     private static void SpawnSporeFx(Vector3 pos)
     {
-        if (s_sporeCircleTex == null)
-        {
-            s_sporeCircleTex = new Texture2D(32, 32, TextureFormat.RGBA32, false);
-            Color[] p = new Color[32 * 32]; Vector2 c = new Vector2(16, 16);
-            for (int y = 0; y < 32; y++)
-                for (int x = 0; x < 32; x++)
-                {
-                    float d = Vector2.Distance(new Vector2(x, y), c);
-                    float a = 1f - Mathf.Clamp01(d / 14f);
-                    p[y * 32 + x] = new Color(1, 1, 1, a);
-                }
-            s_sporeCircleTex.Apply();
-        }
+        if (s_sporeTex == null)
+            s_sporeTex = RuntimeAssetLoader.LoadTexture(null, "Skill/SporeField/000", "Skill/SporeField/000.png");
+        if (s_sporeTex == null) return;
         var go = new GameObject("SporeFx");
         go.transform.position = pos + Vector3.up * 0.5f;
         var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = Sprite.Create(s_sporeCircleTex, new Rect(0, 0, 32, 32), Vector2.one * 0.5f);
+        sr.sprite = Sprite.Create(s_sporeTex, new Rect(0, 0, s_sporeTex.width, s_sporeTex.height),
+            new Vector2(0.5f, 0.5f));
         sr.sortingOrder = 200;
         sr.color = new Color(0.3f, 0.06f, 0.4f, 0.85f);
-        go.transform.localScale = Vector3.one * 2f;
-        // 渐大 + 渐隐
+        go.transform.localScale = Vector3.one * 0.5f;
         SporeFxHelper fxHelper = go.AddComponent<SporeFxHelper>();
         fxHelper.StartFade();
     }
-    private static Texture2D s_sporeCircleTex;
+    private static Texture2D s_sporeTex;
 
     private sealed class SporeFxHelper : MonoBehaviour
     {
@@ -1163,11 +1153,12 @@ public class MindControlled : MonoBehaviour
         {
             var sr = GetComponent<SpriteRenderer>();
             float t = 0f;
+            // 复制 sporefield.anim 的效果：0.6s 从 0.5x 扩到 5x，透明度 0.85→0
             while (t < 0.6f)
             {
                 t += Time.deltaTime;
                 float p = t / 0.6f;
-                transform.localScale = Vector3.one * Mathf.Lerp(2f, 6f, p);
+                transform.localScale = Vector3.one * Mathf.Lerp(0.5f, 5f, p);
                 if (sr != null) sr.color = new Color(0.3f, 0.06f, 0.4f, Mathf.Lerp(0.85f, 0f, p));
                 yield return null;
             }
