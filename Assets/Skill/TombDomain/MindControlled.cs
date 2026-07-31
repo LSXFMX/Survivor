@@ -1015,6 +1015,7 @@ public class MindControlled : MonoBehaviour
         if (_exploding) return;
         _exploding = true;
         isWorldBoss = false;
+        Debug.Log($"[MC] ExplodeAndDestroy: {_en?.name} at {_en?.transform.position}");
         StartCoroutine(ExplosionRoutine());
     }
 
