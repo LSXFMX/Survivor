@@ -1021,7 +1021,6 @@ public class MindControlled : MonoBehaviour
         if (_exploding) return;
         _exploding = true;
         isWorldBoss = false;
-        Debug.Log($"[MC] ExplodeAndDestroy: {_en?.name} at {_en?.transform.position}");
         StartCoroutine(ExplosionRoutine());
     }
 
@@ -1034,32 +1033,7 @@ public class MindControlled : MonoBehaviour
         // 立刻隐藏本体
         if (sr != null) sr.enabled = false;
 
-        // ── 1. 爆炸特效（7帧，0.1s/帧，总 0.7s，45°角倾斜）──
-        GameObject fx = new GameObject("MinionExplosion");
-        fx.transform.position = pos + Vector3.up * 0.5f;
-        fx.transform.rotation = Quaternion.Euler(45f, 0f, 0f); // 45° 视角对齐
-        var fxSr = fx.AddComponent<SpriteRenderer>();
-        fxSr.sortingOrder = 250;
-        fx.transform.localScale = Vector3.one * 1.8f;
-        fxSr.color = new Color(0.25f, 0.05f, 0.35f, 1f);
-
-        LoadExplosionFrames();
-        if (s_explosionFrames != null && s_explosionFrames[0] != null)
-        {
-            for (int i = 0; i < s_explosionFrames.Length; i++)
-            {
-                if (s_explosionFrames[i] != null)
-                    fxSr.sprite = s_explosionFrames[i];
-                yield return new WaitForSeconds(0.1f);
-            }
-        }
-        else
-        {
-            Debug.LogWarning("[MC] 爆炸帧加载失败，使用回退纯色圆");
-            yield return new WaitForSeconds(0.3f);
-        }
-
-        // ── 2. AoE 伤害：孢子 ×2 轮，每轮在受击敌人位置播放孢子特效 ──
+        // ── AoE 伤害：孢子 ×explosionBursts 轮，每轮对被击中的敌人播放孢子攻击动画 ──
         int sporeDmg = 0;
         var td = SkillTombDomain.ResolveOnPlayer(FindObjectOfType<Player>());
         if (td != null) sporeDmg = Mathf.Max(1, td.GetCurrentSporeDamage());
@@ -1078,7 +1052,7 @@ public class MindControlled : MonoBehaviour
                     SpawnAllyDamageNumber(e, d);
                     e.startturnred();
                     TombDomainHook.MarkAllyDamage(e);
-                    // 每个受击敌人播放一个孢子特效
+                    // 每个受击敌人播放孢子攻击动画
                     SpawnSporeFx(t.position);
                 }
             }
@@ -1086,46 +1060,7 @@ public class MindControlled : MonoBehaviour
                 yield return new WaitForSeconds(0.25f);
         }
 
-        // ── 3. 特效淡出 + 本体销毁 ──
-        float fadeT = 0f;
-        while (fadeT < 0.3f)
-        {
-            fadeT += Time.deltaTime;
-            float a = Mathf.Lerp(1f, 0f, fadeT / 0.3f);
-            fxSr.color = new Color(0.25f, 0.05f, 0.35f, a);
-            yield return null;
-        }
-        Destroy(fx);
-
         if (_en != null) { _en.health = 0; _en.Destroy1(); }
-    }
-
-    private static Sprite[] s_explosionFrames;
-    private static Sprite[] LoadExplosionFrames()
-    {
-        if (s_explosionFrames != null) return s_explosionFrames;
-        s_explosionFrames = new Sprite[7];
-        const string baseRel = "像素幸存者资源包/特效/Foozle_2DE0001_Pixel_Magic_Effects/Explosion/";
-        for (int i = 0; i < 7; i++)
-        {
-            string relPath = baseRel + (i + 1).ToString("D3") + ".png";
-            string resPath = baseRel + (i + 1).ToString("D3");
-            Texture2D tex = RuntimeAssetLoader.LoadTexture(null, resPath, relPath);
-            if (tex != null)
-            {
-                s_explosionFrames[i] = Sprite.Create(tex,
-                    new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
-            }
-        }
-        int loaded = 0;
-        for (int i = 0; i < 7; i++) if (s_explosionFrames[i] != null) loaded++;
-        if (loaded == 0)
-            Debug.LogError($"[MC] 爆炸帧全部加载失败！baseRel={baseRel}001.png");
-        else if (loaded < 7)
-            Debug.LogWarning($"[MC] 爆炸帧部分加载 ({loaded}/7)");
-        else
-            Debug.Log($"[MC] 爆炸帧全部加载成功 (7/7)");
-        return s_explosionFrames;
     }
 
     /// <summary>在指定位置播放孢子领域特效（使用 Skill/SporeField/000.png 贴图 + 缩放淡出）</summary>
