@@ -1034,12 +1034,13 @@ public class MindControlled : MonoBehaviour
         // 立刻隐藏本体
         if (sr != null) sr.enabled = false;
 
-        // ── 1. 爆炸特效（7帧，0.1s/帧，总 0.7s）──
+        // ── 1. 爆炸特效（7帧，0.1s/帧，总 0.7s，45°角倾斜）──
         GameObject fx = new GameObject("MinionExplosion");
         fx.transform.position = pos + Vector3.up * 0.5f;
+        fx.transform.rotation = Quaternion.Euler(45f, 0f, 0f); // 45° 视角对齐
         var fxSr = fx.AddComponent<SpriteRenderer>();
         fxSr.sortingOrder = 250;
-        fx.transform.localScale = Vector3.one * 8f;
+        fx.transform.localScale = Vector3.one * 1.8f;
         fxSr.color = new Color(0.25f, 0.05f, 0.35f, 1f);
 
         LoadExplosionFrames();
@@ -1135,6 +1136,7 @@ public class MindControlled : MonoBehaviour
         if (s_sporeTex == null) return;
         var go = new GameObject("SporeFx");
         go.transform.position = pos + Vector3.up * 0.5f;
+        go.transform.rotation = Quaternion.Euler(45f, 0f, 0f); // 45° 视角
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = Sprite.Create(s_sporeTex, new Rect(0, 0, s_sporeTex.width, s_sporeTex.height),
             new Vector2(0.5f, 0.5f));
