@@ -188,6 +188,8 @@ public class Bulletbase : MonoBehaviour
     {
         if (cango)
         {
+            // BulletParasite 触手使用 LineRenderer 判定移动，prefab 无 Rigidbody — 直接跳过物理更新
+            if (rb == null) { lifetime -= Time.fixedDeltaTime; if (lifetime <= 0) Destroy(); return; }
             Vector3 vect = new Vector3(distance.x, 0, distance.z).normalized * speed;
             rb.velocity = vect;
             float angle = Mathf.Atan2(distance.z, distance.x) * Mathf.Rad2Deg;
