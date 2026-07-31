@@ -1039,8 +1039,8 @@ public class MindControlled : MonoBehaviour
         fx.transform.position = pos + Vector3.up * 0.5f;
         var fxSr = fx.AddComponent<SpriteRenderer>();
         fxSr.sortingOrder = 250;
-        fx.transform.localScale = Vector3.one * 3f;
-        fxSr.color = new Color(0.6f, 0.25f, 0.75f, 1f);
+        fx.transform.localScale = Vector3.one * 8f;
+        fxSr.color = new Color(0.25f, 0.05f, 0.35f, 1f);
 
         LoadExplosionFrames();
         if (s_explosionFrames != null && s_explosionFrames[0] != null)
@@ -1091,7 +1091,7 @@ public class MindControlled : MonoBehaviour
         {
             fadeT += Time.deltaTime;
             float a = Mathf.Lerp(1f, 0f, fadeT / 0.3f);
-            fxSr.color = new Color(0.6f, 0.25f, 0.75f, a);
+            fxSr.color = new Color(0.25f, 0.05f, 0.35f, a);
             yield return null;
         }
         Destroy(fx);
@@ -1127,18 +1127,53 @@ public class MindControlled : MonoBehaviour
         return s_explosionFrames;
     }
 
-    /// <summary>在指定位置播放一个孢子领域特效（纯视觉，不造成伤害）</summary>
+    /// <summary>在指定位置播放一个孢子领域特效（纯视觉，紫黑渐变圆扩散 + 淡出）</summary>
     private static void SpawnSporeFx(Vector3 pos)
     {
-        if (s_sporeFxPrefab == null)
-            s_sporeFxPrefab = Resources.Load<GameObject>("Skill/SporeField/BulletSporeField");
-        if (s_sporeFxPrefab == null) return;
-        var fx = Instantiate(s_sporeFxPrefab, pos, Quaternion.identity);
-        // 视觉用：设置 damage=0 防止重复扣血，playerAttr=null 跳过伤害计算
-        var bs = fx.GetComponent<BulletSporeField>();
-        if (bs != null) { bs.damage = 0; bs.playerAttr = null; bs.targetEnemy = null; }
+        if (s_sporeCircleTex == null)
+        {
+            s_sporeCircleTex = new Texture2D(32, 32, TextureFormat.RGBA32, false);
+            Color[] p = new Color[32 * 32]; Vector2 c = new Vector2(16, 16);
+            for (int y = 0; y < 32; y++)
+                for (int x = 0; x < 32; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x, y), c);
+                    float a = 1f - Mathf.Clamp01(d / 14f);
+                    p[y * 32 + x] = new Color(1, 1, 1, a);
+                }
+            s_sporeCircleTex.Apply();
+        }
+        var go = new GameObject("SporeFx");
+        go.transform.position = pos + Vector3.up * 0.5f;
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = Sprite.Create(s_sporeCircleTex, new Rect(0, 0, 32, 32), Vector2.one * 0.5f);
+        sr.sortingOrder = 200;
+        sr.color = new Color(0.3f, 0.06f, 0.4f, 0.85f);
+        go.transform.localScale = Vector3.one * 2f;
+        // 渐大 + 渐隐
+        SporeFxHelper fxHelper = go.AddComponent<SporeFxHelper>();
+        fxHelper.StartFade();
     }
-    private static GameObject s_sporeFxPrefab;
+    private static Texture2D s_sporeCircleTex;
+
+    private sealed class SporeFxHelper : MonoBehaviour
+    {
+        public void StartFade() { StartCoroutine(FadeRoutine()); }
+        private System.Collections.IEnumerator FadeRoutine()
+        {
+            var sr = GetComponent<SpriteRenderer>();
+            float t = 0f;
+            while (t < 0.6f)
+            {
+                t += Time.deltaTime;
+                float p = t / 0.6f;
+                transform.localScale = Vector3.one * Mathf.Lerp(2f, 6f, p);
+                if (sr != null) sr.color = new Color(0.3f, 0.06f, 0.4f, Mathf.Lerp(0.85f, 0f, p));
+                yield return null;
+            }
+            Destroy(gameObject);
+        }
+    }
 }
 
 /// <summary>
