@@ -1024,28 +1024,11 @@ public class MindControlled : MonoBehaviour
         if (_en == null) yield break;
         Vector3 pos = _en.transform.position;
         SpriteRenderer sr = _en.GetComponent<SpriteRenderer>();
-        Vector3 origScale = sr != null ? sr.transform.localScale : Vector3.one;
 
-        // 防止 FixedUpdate 在爆炸期间把位置/缩放拉回去
-        Rigidbody rbEn = _en.GetComponent<Rigidbody>();
-        if (rbEn != null) { rbEn.isKinematic = true; rbEn.velocity = Vector3.zero; }
+        // 立刻隐藏本体
+        if (sr != null) sr.enabled = false;
 
-        // ── 1. 快速膨胀到 2 倍 → 立即隐藏本体 ──
-        if (sr != null)
-        {
-            float t = 0f;
-            while (t < 0.25f)
-            {
-                t += Time.deltaTime;
-                float p = Mathf.Min(1f, t / 0.25f);
-                sr.transform.localScale = Vector3.Lerp(origScale, origScale * 2f, p);
-                yield return null;
-            }
-            sr.transform.localScale = origScale * 2f;
-            sr.enabled = false;   // 膨胀完毕 → 本体消失，接下来只看爆炸特效
-        }
-
-        // ── 2. 爆炸特效（7帧，0.1s/帧，总 0.7s）──
+        // ── 1. 爆炸特效（7帧，0.1s/帧，总 0.7s）──
         GameObject fx = new GameObject("MinionExplosion");
         fx.transform.position = pos + Vector3.up * 0.5f;
         var fxSr = fx.AddComponent<SpriteRenderer>();
@@ -1054,7 +1037,7 @@ public class MindControlled : MonoBehaviour
         fxSr.color = new Color(0.6f, 0.25f, 0.75f, 1f);
 
         LoadExplosionFrames();
-        if (s_explosionFrames != null)
+        if (s_explosionFrames != null && s_explosionFrames[0] != null)
         {
             for (int i = 0; i < s_explosionFrames.Length; i++)
             {
@@ -1065,13 +1048,11 @@ public class MindControlled : MonoBehaviour
         }
         else
         {
-            // 回退：纯色圆闪烁
-            fxSr.sprite = Sprite.Create(new Texture2D(32, 32), new Rect(0, 0, 32, 32), Vector2.one * 0.5f);
-            fx.transform.localScale = Vector3.one * 4f;
-            yield return new WaitForSeconds(0.4f);
+            Debug.LogWarning("[MC] 爆炸帧加载失败，使用回退纯色圆");
+            yield return new WaitForSeconds(0.3f);
         }
 
-        // ── 3. AoE 伤害：孢子 ×2 轮 ──
+        // ── 2. AoE 伤害：孢子 ×2 轮 ──
         int sporeDmg = 0;
         var td = SkillTombDomain.ResolveOnPlayer(FindObjectOfType<Player>());
         if (td != null) sporeDmg = Mathf.Max(1, td.GetCurrentSporeDamage());
@@ -1096,7 +1077,7 @@ public class MindControlled : MonoBehaviour
                 yield return new WaitForSeconds(0.25f);
         }
 
-        // ── 4. 特效淡出 + 本体销毁 ──
+        // ── 3. 特效淡出 + 本体销毁 ──
         float fadeT = 0f;
         while (fadeT < 0.3f)
         {
@@ -1115,14 +1096,21 @@ public class MindControlled : MonoBehaviour
     {
         if (s_explosionFrames != null) return s_explosionFrames;
         s_explosionFrames = new Sprite[7];
-        string basePath = "像素幸存者资源包/特效/Foozle_2DE0001_Pixel_Magic_Effects/Explosion/";
+        const string baseRel = "像素幸存者资源包/特效/Foozle_2DE0001_Pixel_Magic_Effects/Explosion/";
         for (int i = 0; i < 7; i++)
         {
-            string path = basePath + (i + 1).ToString("D3");
-            Texture2D tex = Resources.Load<Texture2D>(path);
+            // 去掉扩展名作为 resourcesPath，完整路径作为 editor fallback
+            string relPath = baseRel + (i + 1).ToString("D3") + ".png";
+            string resPath = baseRel + (i + 1).ToString("D3");
+            Texture2D tex = RuntimeAssetLoader.LoadTexture(null, resPath, relPath);
             if (tex != null)
-                s_explosionFrames[i] = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+            {
+                s_explosionFrames[i] = Sprite.Create(tex,
+                    new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+            }
         }
+        if (s_explosionFrames[0] == null)
+            Debug.LogWarning($"[MC] 爆炸帧全部加载失败，路径={baseRel}001.png");
         return s_explosionFrames;
     }
 }
