@@ -1032,6 +1032,8 @@ public class MindControlled : MonoBehaviour
 
         // 立刻隐藏本体
         if (sr != null) sr.enabled = false;
+        // 爆炸中心也播一个孢子特效（代表小怪"爆开"的视觉反馈）
+        SpawnSporeFx(pos);
 
         // ── AoE 伤害：孢子 ×explosionBursts 轮，每轮对被击中的敌人播放孢子攻击动画 ──
         int sporeDmg = 0;
@@ -1040,6 +1042,7 @@ public class MindControlled : MonoBehaviour
         Transform host = GameObject.Find("enemylayer")?.transform;
         for (int burst = 0; burst < explosionBursts; burst++)
         {
+            yield return new WaitForSeconds(0.15f); // 轮间延迟
             if (sporeDmg > 0 && host != null)
             {
                 foreach (Transform t in host)
@@ -1052,12 +1055,9 @@ public class MindControlled : MonoBehaviour
                     SpawnAllyDamageNumber(e, d);
                     e.startturnred();
                     TombDomainHook.MarkAllyDamage(e);
-                    // 每个受击敌人播放孢子攻击动画
                     SpawnSporeFx(t.position);
                 }
             }
-            if (burst < explosionBursts - 1)
-                yield return new WaitForSeconds(0.25f);
         }
 
         if (_en != null) { _en.health = 0; _en.Destroy1(); }
@@ -1095,7 +1095,7 @@ public class MindControlled : MonoBehaviour
             new Vector2(0.5f, 0.5f));
         sr.sortingOrder = 200;
         sr.color = new Color(0.3f, 0.06f, 0.4f, 0.85f);
-        go.transform.localScale = Vector3.one * 0.1f;
+        go.transform.localScale = Vector3.one * 0.3f;
         go.AddComponent<SporeFxHelper>().StartFade();
     }
     private static Texture2D s_sporeTex;
@@ -1108,13 +1108,13 @@ public class MindControlled : MonoBehaviour
         {
             var sr = GetComponent<SpriteRenderer>();
             float t = 0f;
-            // 0.6s 从 0.1x 扩到 0.8x，透明度 0.85→0
-            while (t < 0.6f)
+            // 0.5s 从 0.3x 扩到 1.5x，透明度 0.9→0
+            while (t < 0.5f)
             {
                 t += Time.deltaTime;
-                float p = t / 0.6f;
-                transform.localScale = Vector3.one * Mathf.Lerp(0.1f, 0.8f, p);
-                if (sr != null) sr.color = new Color(0.3f, 0.06f, 0.4f, Mathf.Lerp(0.85f, 0f, p));
+                float p = t / 0.5f;
+                transform.localScale = Vector3.one * Mathf.Lerp(0.3f, 1.5f, p);
+                if (sr != null) sr.color = new Color(0.3f, 0.06f, 0.4f, Mathf.Lerp(0.9f, 0f, p));
                 yield return null;
             }
             Destroy(gameObject);
