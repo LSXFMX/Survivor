@@ -431,6 +431,12 @@ public class MindControlled : MonoBehaviour
             }
             else
             {
+                // 非Boss小怪：贴近敌人直接自爆（解决蝙蝠悬空碰不到人的问题）
+                if (!isWorldBoss)
+                {
+                    ExplodeAndDestroy();
+                    return;
+                }
                 _attackCooldown -= Time.fixedDeltaTime;
                 if (_attackCooldown <= 0f) { _attackCooldown = _attackInterval; DealMeleeHit(tgt); }
                 // 进入近战范围 → 停下来打 → 切回待机动画
@@ -1052,7 +1058,7 @@ public class MindControlled : MonoBehaviour
             yield return new WaitForSeconds(0.3f);
         }
 
-        // ── 2. AoE 伤害：孢子 ×2 轮 ──
+        // ── 2. AoE 伤害：孢子 ×2 轮，每轮在受击敌人位置播放孢子特效 ──
         int sporeDmg = 0;
         var td = SkillTombDomain.ResolveOnPlayer(FindObjectOfType<Player>());
         if (td != null) sporeDmg = Mathf.Max(1, td.GetCurrentSporeDamage());
@@ -1071,6 +1077,8 @@ public class MindControlled : MonoBehaviour
                     SpawnAllyDamageNumber(e, d);
                     e.startturnred();
                     TombDomainHook.MarkAllyDamage(e);
+                    // 每个受击敌人播放一个孢子特效
+                    SpawnSporeFx(t.position);
                 }
             }
             if (burst < explosionBursts - 1)
@@ -1099,7 +1107,6 @@ public class MindControlled : MonoBehaviour
         const string baseRel = "像素幸存者资源包/特效/Foozle_2DE0001_Pixel_Magic_Effects/Explosion/";
         for (int i = 0; i < 7; i++)
         {
-            // 去掉扩展名作为 resourcesPath，完整路径作为 editor fallback
             string relPath = baseRel + (i + 1).ToString("D3") + ".png";
             string resPath = baseRel + (i + 1).ToString("D3");
             Texture2D tex = RuntimeAssetLoader.LoadTexture(null, resPath, relPath);
@@ -1109,10 +1116,29 @@ public class MindControlled : MonoBehaviour
                     new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
             }
         }
-        if (s_explosionFrames[0] == null)
-            Debug.LogWarning($"[MC] 爆炸帧全部加载失败，路径={baseRel}001.png");
+        int loaded = 0;
+        for (int i = 0; i < 7; i++) if (s_explosionFrames[i] != null) loaded++;
+        if (loaded == 0)
+            Debug.LogError($"[MC] 爆炸帧全部加载失败！baseRel={baseRel}001.png");
+        else if (loaded < 7)
+            Debug.LogWarning($"[MC] 爆炸帧部分加载 ({loaded}/7)");
+        else
+            Debug.Log($"[MC] 爆炸帧全部加载成功 (7/7)");
         return s_explosionFrames;
     }
+
+    /// <summary>在指定位置播放一个孢子领域特效（纯视觉，不造成伤害）</summary>
+    private static void SpawnSporeFx(Vector3 pos)
+    {
+        if (s_sporeFxPrefab == null)
+            s_sporeFxPrefab = Resources.Load<GameObject>("Skill/SporeField/BulletSporeField");
+        if (s_sporeFxPrefab == null) return;
+        var fx = Instantiate(s_sporeFxPrefab, pos, Quaternion.identity);
+        // 视觉用：设置 damage=0 防止重复扣血，playerAttr=null 跳过伤害计算
+        var bs = fx.GetComponent<BulletSporeField>();
+        if (bs != null) { bs.damage = 0; bs.playerAttr = null; bs.targetEnemy = null; }
+    }
+    private static GameObject s_sporeFxPrefab;
 }
 
 /// <summary>
