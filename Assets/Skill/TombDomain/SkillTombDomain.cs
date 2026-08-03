@@ -19,7 +19,7 @@ public class SkillTombDomain : Skillbase
     public float minionLifetime = 5f;
 
     [Tooltip("被控制的小怪每秒掉自身 maxHP 的百分比（0.02 = 2%）")]
-    [Range(0f, 1f)] public float minionDecayPerSecond = 0.20f;
+    [Range(0f, 1f)] public float minionDecayPerSecond = 0.25f;
 
     [Tooltip("被控制的世界 Boss 距玩家的最远距离（超过会触发回归行为）。\n" +
              "2026-06：从 12 翻倍到 24，再翻倍到 48。新行为分两段：\n" +

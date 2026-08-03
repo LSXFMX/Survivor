@@ -40,7 +40,7 @@ public class MindControlled : MonoBehaviour
 {
     public bool isWorldBoss = false;
     public float minionLifetime = 15f;
-    public float minionDecayPerSecond = 0.20f;
+    public float minionDecayPerSecond = 0.25f;
     // 2026-06 二次调整：12 → 24 → 48（再翻倍）。
     //   bossLeashDistance 现在仅作为"开始向玩家走过去"的临界距离，不再是瞬移阈值。
     //   超过 bossLeashDistance × bossTeleportFactor（默认 2×=96）才会判定为"距离不正常的远"
