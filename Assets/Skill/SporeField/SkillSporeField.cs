@@ -150,6 +150,10 @@ public class SkillSporeField : Skillbase
         List<Transform> targets = GetEnemiesInRange();
         if (targets.Count == 0) yield break;
 
+        // 孢子领域 / 亡者领域：按技能名派发（柔和孢子噗散 / 幽冥阴森共鸣）
+        // AudioManager 按 key 限流（孢子 0.38s、亡者 0.55s），持续 AoE 不会糊成噪音
+        PlayCastSfx();
+
         foreach (Transform target in targets)
         {
             if (target == null) continue;

@@ -169,6 +169,8 @@ public class BossBat : enemy
 
         if (role == null) { EndBusy(BossState.move); yield break; }
 
+        AudioManager.PlaySfx(AudioManager.SfxKey.BossDive);   // 蝙蝠冲刺：俯冲下压 whoosh
+
         float dirX    = Mathf.Sign(role.transform.position.x - transform.position.x);
         float traveled = 0f;
 
@@ -191,6 +193,7 @@ public class BossBat : enemy
         _state       = BossState.summon;
         _summonTimer = 0f;
         SetAnim(false, false, true);
+        AudioManager.PlaySfx(AudioManager.SfxKey.BossSummon);   // 召唤蝙蝠群：诡异仪式共鸣
 
         yield return new WaitForSeconds(1.5f);
 

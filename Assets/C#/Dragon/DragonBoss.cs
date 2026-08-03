@@ -691,6 +691,7 @@ public class DragonBoss : enemy
         _busy = true;
         try
         {
+            AudioManager.PlaySfx(AudioManager.SfxKey.HellfireCast);  // 火矢：烈焰喷发
             for (int i = 0; i < 3; i++)
             {
                 FaceTarget();                       // 每发都重新瞄准当前玩家位置
@@ -799,6 +800,7 @@ public class DragonBoss : enemy
         try
         {
             FaceTarget();
+            AudioManager.PlaySfx(AudioManager.SfxKey.Hurricane);   // 龙卷：环形气旋
             yield return new WaitForSeconds(0.3f);
             for (int i = 0; i < 5; i++)
             {
@@ -821,6 +823,7 @@ public class DragonBoss : enemy
             Vector3 dir = AimDir();
 
             // 后撤蓄力（一小段）
+            AudioManager.PlaySfx(AudioManager.SfxKey.BossCharge);   // 爪击前摇：紧张蓄力
             float t = 0f;
             while (t < 0.28f) { t += Time.fixedDeltaTime; transform.position -= dir * 3.5f * Time.fixedDeltaTime; yield return new WaitForFixedUpdate(); }
             yield return new WaitForSeconds(0.1f);
@@ -904,6 +907,7 @@ public class DragonBoss : enemy
         {
             FaceTarget();
             SpawnRingFx(transform.position, SLIME_COL, 4f);
+            AudioManager.PlaySfx(AudioManager.SfxKey.BossSummon);   // 召唤史莱姆：仪式共鸣
             yield return new WaitForSeconds(0.3f);
             for (int i = 0; i < 6; i++)
             {
@@ -921,6 +925,7 @@ public class DragonBoss : enemy
         try
         {
             FaceTarget();
+            AudioManager.PlaySfx(AudioManager.SfxKey.BossSpit);   // 史莱姆吐射：黏腻喷吐
             yield return new WaitForSeconds(0.2f);
             for (int i = 0; i < 5; i++)
             {
@@ -990,6 +995,7 @@ public class DragonBoss : enemy
         try
         {
             FaceTarget();
+            AudioManager.PlaySfx(AudioManager.SfxKey.BossSlash);   // 龙鳞环射：金属锐鸣
             yield return new WaitForSeconds(0.15f);
             int n = 10;
             for (int i = 0; i < n; i++)

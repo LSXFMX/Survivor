@@ -373,6 +373,7 @@ public class SlimeBoss : enemy
         // 蓄力后仰
         yield return LerpZ(_swordObj, -25f, -75f, 0.14f);
         // 猛挥
+        AudioManager.PlaySfx(AudioManager.SfxKey.BossSlash);   // 剑气挥砍：厚重挥砍 + 金属锐鸣
         yield return LerpZ(_swordObj, -75f, 95f, 0.12f);
 
         // 打出剑气（世界方向 = 面向方向）
@@ -420,6 +421,8 @@ public class SlimeBoss : enemy
     private void FireArrows()
     {
         if (arrowPrefab == null || role == null) return;
+        // 弓箭齐射：借用挥砍音的锐利感（扇形多箭只播一次，AudioManager 按 key 限流 0.30s）
+        AudioManager.PlaySfx(AudioManager.SfxKey.BossSlash);
         Vector3 toP = role.transform.position - transform.position; toP.y = 0;
         Vector3 baseDir = toP.sqrMagnitude > 0.01f ? toP.normalized : FacingDir();
         float baseAngle = Mathf.Atan2(baseDir.z, baseDir.x) * Mathf.Rad2Deg;
@@ -491,6 +494,7 @@ public class SlimeBoss : enemy
     private void BreathVolley()
     {
         if (slimeBreathPrefab == null) return;
+        AudioManager.PlaySfx(AudioManager.SfxKey.BossBreath);   // 巨龙吐息：持续气流喷射
         Vector3 baseDir;
         if (role != null)
         {

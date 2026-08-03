@@ -102,6 +102,8 @@ public class SkillFormOfWind : Skillbase
         blade.SetInitialDirection(fireDir);
         blade.GetFather();
         blade.cango = true;
+        // 风之形：锐利风刃挥砍音（被动触发，AudioManager 按 key 限流 0.20s）
+        fo.PlayCastSfx();
         DbgOk($"已生成冲击波 dmg={dmg} pass={fo.pass}");
     }
 

@@ -175,6 +175,10 @@ public class SkillWindArrow : Skillbase
         // FixedUpdate 里 CDkey += dt，到 CDtime 后才会再次 >= CDtime 触发下一次 Useskill。
         CDkey = CDtime - effectiveCD;
 
+        // 风箭：轻盈破空音。number 可达 5 且 interval=0（一帧连发），
+        // 故放在循环外只播一次；AudioManager 另有 0.28s 按 key 限流兜底。
+        PlayCastSfx();
+
         SkillFormOfWind formOfWind = FindFormOfWindUnderSkillList();
 
         int count = Mathf.Min(number, targets.Count);

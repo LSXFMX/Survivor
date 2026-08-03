@@ -130,6 +130,9 @@ public class SkillParasite : Skillbase
         List<Transform> targets = GetEnemiesInRange(); // 内部走复用 List，无 GC
         if (targets.Count == 0) yield break;
 
+        // 命途·寄生：有机蠕动触手破土音（AudioManager 按 key 限流 0.45s）
+        PlayCastSfx();
+
         bool bounce = HasBounceFromEquipment();
         int shots   = Mathf.Max(1, number);
 

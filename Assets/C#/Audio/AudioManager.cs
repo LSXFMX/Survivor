@@ -47,6 +47,29 @@ public class AudioManager : MonoBehaviour
 
         DragonFlap,    // 龙翼扇动.wav —— 龙王进场翅膀扇动 whoosh
         DragonRoar,    // 龙吼.wav —— 龙王咆哮
+
+        // ── 玩家技能音效（_tools/gen_skill_sfx.py 程序化合成）─────────
+        WindCast,      // 风箭发射.wav   —— 风系：轻盈破空 whoosh
+        WindHit,       // 风箭命中.wav   —— 风系：干脆切割
+        Hurricane,     // 飓风.wav       —— 风系：环形气旋爆发
+        WindBlade,     // 风刃.wav       —— 风系：锐利挥砍
+        IceCast,       // 冰霜发射.wav   —— 冰系：结晶凝聚 + 霜冻嘶声
+        DarkCast,      // 暗影发射.wav   —— 暗影：低频压迫 + 齿轮摩擦
+        BloodCast,     // 血族发射.wav   —— 血族：液体涌动 + 心跳脉动
+        BloodHit,      // 血族命中.wav   —— 血族：湿润 splat
+        ParasiteCast,  // 寄生发射.wav   —— 寄生：有机蠕动触手
+        SporeCast,     // 孢子扩散.wav   —— 自然：柔和孢子噗散
+        TombCast,      // 亡者领域.wav   —— 幽冥：阴森低语共鸣
+        HellfireCast,  // 地狱火发射.wav —— 火系：三叉戟下坠 + 烈焰轰鸣
+
+        // ── Boss 技能音效 ────────────────────────────────────────────
+        BossSlash,     // Boss挥砍.wav   —— 物理：厚重挥砍 + 金属锐鸣
+        BossQuake,     // Boss震地.wav   —— 物理：极低频地鸣 + 碎石
+        BossBreath,    // Boss吐息.wav   —— 吐息：持续气流喷射
+        BossSpit,      // Boss吐射.wav   —— 黏腻弹丸喷吐
+        BossDive,      // Boss俯冲.wav   —— 俯冲下压 whoosh
+        BossSummon,    // Boss召唤.wav   —— 诡异召唤仪式共鸣
+        BossCharge,    // Boss蓄力.wav   —— 技能前摇紧张上扬
     }
 
     public enum BgmKey
@@ -78,6 +101,29 @@ public class AudioManager : MonoBehaviour
         { SfxKey.BossAppear,   "Boss出现" },
         { SfxKey.DragonFlap,   "龙翼扇动" },
         { SfxKey.DragonRoar,   "龙吼" },
+
+        // 玩家技能（_tools/gen_skill_sfx.py）
+        { SfxKey.WindCast,     "风箭发射" },
+        { SfxKey.WindHit,      "风箭命中" },
+        { SfxKey.Hurricane,    "飓风" },
+        { SfxKey.WindBlade,    "风刃" },
+        { SfxKey.IceCast,      "冰霜发射" },
+        { SfxKey.DarkCast,     "暗影发射" },
+        { SfxKey.BloodCast,    "血族发射" },
+        { SfxKey.BloodHit,     "血族命中" },
+        { SfxKey.ParasiteCast, "寄生发射" },
+        { SfxKey.SporeCast,    "孢子扩散" },
+        { SfxKey.TombCast,     "亡者领域" },
+        { SfxKey.HellfireCast, "地狱火发射" },
+
+        // Boss 技能
+        { SfxKey.BossSlash,    "Boss挥砍" },
+        { SfxKey.BossQuake,    "Boss震地" },
+        { SfxKey.BossBreath,   "Boss吐息" },
+        { SfxKey.BossSpit,     "Boss吐射" },
+        { SfxKey.BossDive,     "Boss俯冲" },
+        { SfxKey.BossSummon,   "Boss召唤" },
+        { SfxKey.BossCharge,   "Boss蓄力" },
     };
 
     private static readonly Dictionary<BgmKey, string> BgmFile = new Dictionary<BgmKey, string>
@@ -110,7 +156,63 @@ public class AudioManager : MonoBehaviour
 
     // 简易 SFX 限流，避免同一帧多次同音效叠加（如经验石批量拾取）
     private readonly Dictionary<SfxKey, float> _lastPlayTime = new Dictionary<SfxKey, float>();
-    private const float SfxMinInterval = 0.04f; // 40ms
+    private const float SfxMinInterval = 0.04f; // 40ms（默认值）
+
+    /// <summary>
+    /// 按音效单独配置的最小播放间隔（秒）。用于防止短 CD 技能的音效重叠成噪音。
+    ///
+    /// 取值原则：
+    ///   · 间隔 ≈ 音效自身时长，让上一声基本放完再触发下一声，听感清晰不糊；
+    ///   · 短 CD / 多弹连发技能（风箭 CD 0.3s × 5 连发、血族 CD 1.0s）取略大于单发音长；
+    ///   · 长 CD 技能（飓风 4.5s、地狱火、亡者领域）间隔无需太大，按音长设即可；
+    ///   · 未在此表中的 key 回落到 SfxMinInterval(40ms)，保持原有行为不变。
+    /// </summary>
+    private static readonly Dictionary<SfxKey, float> SfxIntervalOverride = new Dictionary<SfxKey, float>
+    {
+        // ── 玩家技能：发射音 ──
+        // 风箭：CDtime 0.3（可升级到 0.1），且 number 5 一帧连发 → 取 0.28s 使每轮只响一声
+        { SfxKey.WindCast,     0.28f },
+        // 风箭命中：多目标同时命中很常见，命中音 0.16s → 0.12s 保留密集感但不糊
+        { SfxKey.WindHit,      0.12f },
+        // 飓风：音效 0.85s，CD 4.5s，不会撞车，按音长留够
+        { SfxKey.Hurricane,    0.80f },
+        // 风之形风刃：被动触发（10% 概率），可能同时爆多个 → 0.20s
+        { SfxKey.WindBlade,    0.20f },
+        { SfxKey.IceCast,      0.30f },
+        // 黑暗齿轮：环绕型持续技能，发射音 0.4s
+        { SfxKey.DarkCast,     0.35f },
+        // 血族血统：CD 1.0s（好感 40 后 0.8s），音效 0.45s
+        { SfxKey.BloodCast,    0.45f },
+        // 血族吸血命中：蝙蝠 3 只高频命中 → 0.15s 稀释
+        { SfxKey.BloodHit,     0.15f },
+        // 命途·寄生：CD 下限 2.5s，音效 0.5s
+        { SfxKey.ParasiteCast, 0.45f },
+        // 孢子领域：持续 AoE，触发频繁 → 按音长 0.4s 限流
+        { SfxKey.SporeCast,    0.38f },
+        { SfxKey.TombCast,     0.55f },
+        // 地狱火：音效 0.72s，多枚三叉戟 0.04s 间隔连续落地 → 必须限流到整段只响一次
+        { SfxKey.HellfireCast, 0.70f },
+        // 火球：原有音效，多弹连发时限流
+        { SfxKey.FireballCast, 0.20f },
+        { SfxKey.FireballHit,  0.10f },
+        { SfxKey.IceHit,       0.10f },
+
+        // ── Boss 技能 ──
+        { SfxKey.BossSlash,    0.30f },
+        { SfxKey.BossQuake,    0.85f },
+        { SfxKey.BossBreath,   0.90f },
+        // 史莱姆吐息 volley 会连发多颗弹丸 → 0.25s
+        { SfxKey.BossSpit,     0.25f },
+        { SfxKey.BossDive,     0.35f },
+        { SfxKey.BossSummon,   0.65f },
+        { SfxKey.BossCharge,   0.55f },
+    };
+
+    /// <summary>取某音效的最小播放间隔；未配置则用默认 40ms。</summary>
+    private static float GetMinInterval(SfxKey key)
+    {
+        return SfxIntervalOverride.TryGetValue(key, out float v) ? v : SfxMinInterval;
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
@@ -222,8 +324,9 @@ public class AudioManager : MonoBehaviour
     // ── 内部实现 ──────────────────────────────────────────────────────
     private void PlaySfxInternal(SfxKey key)
     {
-        // 限流
-        if (_lastPlayTime.TryGetValue(key, out float last) && Time.unscaledTime - last < SfxMinInterval)
+        // 限流：按 key 独立配置的最小间隔（防止短 CD 技能音效重叠成噪音）
+        if (_lastPlayTime.TryGetValue(key, out float last)
+            && Time.unscaledTime - last < GetMinInterval(key))
             return;
         _lastPlayTime[key] = Time.unscaledTime;
 

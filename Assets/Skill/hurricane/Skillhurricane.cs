@@ -4,15 +4,16 @@ using UnityEngine;
 
 public class Skillhurricane : Skillbase
 {
-    public override IEnumerator Useskill()//ʹ�ü���
+    public override IEnumerator Useskill()//使用技能
     {
         CDkey = 0;
-        float perangle = 360 / number;//�ӽǶ�
+        PlayCastSfx();   // 飓风：环形气旋爆发音（AudioManager 已按 key 限流 0.80s）
+        float perangle = 360 / number;//加角度
         float nowangle = 0;
         for (int i = 0; i < number; i++)
         {
             Vector3 spawnPosition = player.transform.position + new Vector3(0, size, 0);
-            GameObject newbullet = Instantiate(bullet, spawnPosition, Quaternion.Euler(new Vector3(0, 0, angel)));//�����ӵ�
+            GameObject newbullet = Instantiate(bullet, spawnPosition, Quaternion.Euler(new Vector3(0, 0, angel)));//创建子弹
             Bulletbase n = newbullet.GetComponent<Bulletbase>();
             n.fatherskill = this;
             n.GetFather();

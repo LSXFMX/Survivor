@@ -146,10 +146,12 @@ public class BossMushroomMan : enemy
         // ── 预警阶段：站立不动 ──
         bossState = BossState.warning;
         ShowWarning(dashDir);
+        AudioManager.PlaySfx(AudioManager.SfxKey.BossCharge);   // 冲刺预警：紧张上扬蓄力音
         yield return new WaitForSeconds(warningDuration);
         HideWarning();
 
         // ── 冲刺阶段 ──
+        AudioManager.PlaySfx(AudioManager.SfxKey.BossDive);     // 冲刺突进：下压 whoosh
         float traveled = 0f;
         while (traveled < dashDistance)
         {

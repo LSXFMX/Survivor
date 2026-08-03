@@ -147,6 +147,9 @@ public class SkillBloodline : Skillbase
         List<Transform> targets = GetEnemiesInRange();
         if (targets.Count == 0) yield break;
 
+        // 血族血统：液体涌动 + 心跳脉动音（AudioManager 按 key 限流 0.45s）
+        PlayCastSfx();
+
         int targetIndex = 0;
         for (int i = 0; i < _familiars.Count && targetIndex < targets.Count; i++)
         {

@@ -101,6 +101,10 @@ public class SkillHellfire : Skillbase
         List<Transform> targets = GetClosestLivingEnemies(spawnCount);
         if (targets.Count == 0) yield break;
 
+        // 地狱火：三叉戟下坠 + 烈焰轰鸣。多枚戟以 strikeInterval(0.04s) 连续落地，
+        // 故只在整轮开始时播一次；AudioManager 另有 0.70s 按 key 限流兜底。
+        PlayCastSfx();
+
         for (int i = 0; i < spawnCount; i++)
         {
             Transform target = targets[i % targets.Count];

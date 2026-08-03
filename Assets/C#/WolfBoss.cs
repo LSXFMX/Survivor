@@ -295,6 +295,7 @@ public class WolfBoss : enemy
     {
         busy = true;
         SpawnClawFx(transform.position);
+        AudioManager.PlaySfx(AudioManager.SfxKey.BossQuake);   // 震地：极低频地鸣 + 碎石
         yield return new WaitForSeconds(0.3f);
         int dmg = Mathf.RoundToInt(atk * (wolf ? 1.2f : 1f));
         DamagePlayers(transform.position, quakeRadius, dmg, wolf ? 2f : 0f);
@@ -307,6 +308,7 @@ public class WolfBoss : enemy
     {
         _mcQuakeRunning = true;
         SpawnClawFx(transform.position);
+        AudioManager.PlaySfx(AudioManager.SfxKey.BossQuake);   // 震地音（友军版同样播放）
         yield return new WaitForSeconds(0.3f);
 
         // 遍历 enemylayer（和 MindControlled 索敌一致，不依赖特殊 Layer 命名）
@@ -413,6 +415,7 @@ public class WolfBoss : enemy
 
             // 前摇：后退蓄力
             PlayAnim("WolfRun");
+            AudioManager.PlaySfx(AudioManager.SfxKey.BossCharge);   // 扑击前摇：紧张上扬蓄力音
             float t = 0f;
             while (t < 0.6f)
             {
