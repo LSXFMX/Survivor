@@ -210,21 +210,13 @@ public class Bat : enemy
             if (en.health <= 0 || en.rolestate == state.dead) return;
             if (en.GetComponent<MindControlled>() != null) return; // 不打友军
 
+            // 亡者领域友军蝙蝠：俯冲攻击对敌人造成伤害（紫色飘字）
+            // 注：旧版残留"攻击=治疗"逻辑（绿色飘字），已按新设计移除——
+            //    亡者领域攻击仅对复活Boss友军生效治疗，小怪/蝙蝠一律正常造成伤害。
             int dmg = Mathf.Max(1, (int)(atk - en.def));
             _hitThisDive = true;
-            // 亡者领域友军蝙蝠：攻击=治疗（tomb主题复活），弹绿色飘字
-            if (isAllyMode)
-            {
-                int before = en.health;
-                en.health = Mathf.Min(en.healthmax, en.health + dmg);
-                int actualH = en.health - before;
-                if (actualH > 0) MindControlled.SpawnAllyHealNumber(en, actualH);
-            }
-            else
-            {
-                en.health -= dmg;
-                MindControlled.SpawnAllyDamageNumber(en, dmg);
-            }
+            en.health -= dmg;
+            MindControlled.SpawnAllyDamageNumber(en, dmg);
             en.startturnred();
             // 亡者领域：标记"被友军打过"，让它在 Destroy1 时进入"友军击杀复活链路"（20%）
             TombDomainHook.MarkAllyDamage(en);
