@@ -166,8 +166,9 @@ public class SkillSporeField : Skillbase
                 b.damage      = damage;
                 b.targetEnemy = en;
                 b.playerAttr  = player.GetComponent<Attribute>();
-                // 亡者领域：复活友军 → 治疗孢子（不伤害）
-                b._isHealSpore = en._mindControlledFlag;
+                // 亡者领域：仅复活的世界Boss友军可被治疗（小怪攻击不再治疗）
+                var mc = en.GetComponent<MindControlled>();
+                b._isHealSpore = en._mindControlledFlag && (mc != null && mc.isWorldBoss);
             }
         }
 
