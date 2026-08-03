@@ -16,7 +16,7 @@ public class SkillTombDomain : Skillbase
 {
     [Header("亡者领域专属")]
     [Tooltip("被控制的小怪存活时长（秒）。世界 Boss 永久。")]
-    public float minionLifetime = 5f;
+    public float minionLifetime = 4f;
 
     [Tooltip("被控制的小怪每秒掉自身 maxHP 的百分比（0.02 = 2%）")]
     [Range(0f, 1f)] public float minionDecayPerSecond = 0.25f;
