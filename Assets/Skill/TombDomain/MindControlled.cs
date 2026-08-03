@@ -46,9 +46,6 @@ public class MindControlled : MonoBehaviour
     //   超过 bossLeashDistance × bossTeleportFactor（默认 2×=96）才会判定为"距离不正常的远"
     //   触发瞬移。让友军 Boss 在中等脱离距离上自然向玩家走回，避免顿挫的瞬移视觉。
     public float bossLeashDistance = 48f;
-    public float explosionRadius = 5f;
-    public int explosionBursts = 2;
-    private bool _exploding;
 
     /// <summary>
     /// 距离 > bossLeashDistance × bossTeleportFactor 才触发瞬移；之间的区间走"步行回归"。
@@ -309,9 +306,9 @@ public class MindControlled : MonoBehaviour
                 int loss = Mathf.Max(1, Mathf.RoundToInt(_en.healthmax * minionDecayPerSecond));
                 _en.health -= loss;
                 _decayAccum -= 1f;
-                if (_en.health <= 0) { ExplodeAndDestroy(); return; }
+                if (_en.health <= 0) { _en.Destroy1(); return; }
             }
-            if (_aliveTimer >= minionLifetime) { ExplodeAndDestroy(); return; }
+            if (_aliveTimer >= minionLifetime) { _en.Destroy1(); return; }
         }
 
         // 世界Boss：每秒扣除0.5%血量上限（匀速出血，替代旧的2分钟50%暴毙）
@@ -433,12 +430,6 @@ public class MindControlled : MonoBehaviour
             }
             else
             {
-                // 非Boss小怪：贴近敌人直接自爆（解决蝙蝠悬空碰不到人的问题）
-                if (!isWorldBoss)
-                {
-                    ExplodeAndDestroy();
-                    return;
-                }
                 _attackCooldown -= Time.fixedDeltaTime;
                 if (_attackCooldown <= 0f) { _attackCooldown = _attackInterval; DealMeleeHit(tgt); }
                 // 进入近战范围 → 停下来打 → 切回待机动画
@@ -582,10 +573,8 @@ public class MindControlled : MonoBehaviour
         else
         {
             // 复活小怪：正常造成伤害 + 紫色伤害数字（与原enemy攻击一致）
-            //   接触敌人后自身也爆炸（同归于尽式AoE）
             en.health -= dmg;
             SpawnAllyDamageNumber(en, dmg);
-            if (!isWorldBoss) { ExplodeAndDestroy(); return; }
             en.startturnred();
             TombDomainHook.MarkAllyDamage(en);
             if (en.health <= 0) en.Destroy1();
@@ -1017,107 +1006,6 @@ public class MindControlled : MonoBehaviour
             _allyMark.color = mark;
         }
     }
-    // ── 小怪爆炸：接触/死亡时播放特效 + AoE 伤害 ──
-    private void ExplodeAndDestroy()
-    {
-        if (_exploding) return;
-        _exploding = true;
-        isWorldBoss = false;
-        StartCoroutine(ExplosionRoutine());
-    }
-
-    private System.Collections.IEnumerator ExplosionRoutine()
-    {
-        if (_en == null) yield break;
-        Vector3 pos = _en.transform.position;
-        SpriteRenderer sr = _en.GetComponent<SpriteRenderer>();
-
-        // 立刻隐藏本体
-        if (sr != null) sr.enabled = false;
-        // 爆炸中心也播一个孢子特效（代表小怪"爆开"的视觉反馈）
-        SpawnSporeFx(pos);
-
-        // ── AoE 伤害：孢子 ×explosionBursts 轮，每轮对被击中的敌人播放孢子攻击动画 ──
-        int sporeDmg = 0;
-        var td = SkillTombDomain.ResolveOnPlayer(FindObjectOfType<Player>());
-        if (td != null) sporeDmg = Mathf.Max(1, td.GetCurrentSporeDamage());
-        Transform host = GameObject.Find("enemylayer")?.transform;
-        for (int burst = 0; burst < explosionBursts; burst++)
-        {
-            yield return new WaitForSeconds(0.15f); // 轮间延迟
-            if (sporeDmg > 0 && host != null)
-            {
-                foreach (Transform t in host)
-                {
-                    enemy e = t.GetComponent<enemy>();
-                    if (e == null || e == _en || e._mindControlledFlag || e.health <= 0) continue;
-                    if (Vector3.Distance(t.position, pos) > explosionRadius) continue;
-                    int d = Mathf.Max(1, sporeDmg - (int)e.def);
-                    e.health -= d;
-                    SpawnAllyDamageNumber(e, d);
-                    e.startturnred();
-                    TombDomainHook.MarkAllyDamage(e);
-                    SpawnSporeFx(t.position);
-                }
-            }
-        }
-
-        if (_en != null) { _en.health = 0; _en.Destroy1(); }
-    }
-
-    /// <summary>
-    /// 在指定位置播放孢子领域攻击特效（与玩家释放孢子技能完全一致：复用 BulletSporeField 预制体，
-    /// damage=0 + targetEnemy=null → 只播动画不造成伤害，SporeRoutine 0.6s 后自毁）。
-    /// 若预制体尚未缓存（孢子技能未就绪），回退到自生成紫黑圆。
-    /// </summary>
-    private static void SpawnSporeFx(Vector3 pos)
-    {
-        // 优先复用真实孢子子弹预制体（与玩家攻击同动画）
-        // 注意：不修改共享预制体/静态颜色，通过 tintColorOverride 只改本次实例（亮紫≈友军伤害数字色）
-        if (SkillSporeField.sharedSporeBulletPrefab != null)
-        {
-            var fx = Instantiate(SkillSporeField.sharedSporeBulletPrefab, pos, Quaternion.identity);
-            var bs = fx.GetComponent<BulletSporeField>();
-            if (bs != null)
-            {
-                bs.damage = 0; bs.targetEnemy = null; bs.playerAttr = null;
-                bs.tintColorOverride = new Color(0.85f, 0.45f, 1.00f, 1f);
-            }
-            return;
-        }
-        // 回退：自生成紫黑渐变圆（孢子技能未就绪时使用）
-        if (s_sporeTex == null)
-            s_sporeTex = RuntimeAssetLoader.LoadTexture(null, "Skill/SporeField/000", "Skill/SporeField/000.png");
-        if (s_sporeTex == null)
-        {
-            if (s_fallbackTex == null)
-            {
-                s_fallbackTex = new Texture2D(32, 32, TextureFormat.RGBA32, false);
-                Color[] p = new Color[32 * 32]; Vector2 c = new Vector2(16, 16);
-                for (int y = 0; y < 32; y++)
-                    for (int x = 0; x < 32; x++)
-                    {
-                        float d = Vector2.Distance(new Vector2(x, y), c);
-                        float a = 1f - Mathf.Clamp01(d / 14f);
-                        p[y * 32 + x] = new Color(1, 1, 1, a);
-                    }
-                s_fallbackTex.Apply();
-            }
-            s_sporeTex = s_fallbackTex;
-        }
-        var go = new GameObject("SporeFx");
-        go.transform.position = pos + Vector3.up * 0.5f;
-        go.transform.rotation = Quaternion.Euler(45f, 0f, 0f);
-        var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = Sprite.Create(s_sporeTex, new Rect(0, 0, s_sporeTex.width, s_sporeTex.height),
-            new Vector2(0.5f, 0.5f));
-        sr.sortingOrder = 200;
-        sr.color = new Color(0.3f, 0.06f, 0.4f, 0.85f);
-        go.transform.localScale = Vector3.one * 0.1f;
-        Destroy(go, 0.5f);
-    }
-    private static Texture2D s_sporeTex;
-    private static Texture2D s_fallbackTex;
 }
 
 /// <summary>
