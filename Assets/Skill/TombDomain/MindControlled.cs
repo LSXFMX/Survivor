@@ -1095,7 +1095,7 @@ public class MindControlled : MonoBehaviour
             new Vector2(0.5f, 0.5f));
         sr.sortingOrder = 200;
         sr.color = new Color(0.3f, 0.06f, 0.4f, 0.85f);
-        go.transform.localScale = Vector3.one * 0.3f;
+        go.transform.localScale = Vector3.one * 0.1f;
         go.AddComponent<SporeFxHelper>().StartFade();
     }
     private static Texture2D s_sporeTex;
@@ -1108,12 +1108,12 @@ public class MindControlled : MonoBehaviour
         {
             var sr = GetComponent<SpriteRenderer>();
             float t = 0f;
-            // 0.5s 从 0.3x 扩到 1.5x，透明度 0.9→0
+            // 0.5s 从 0.1x 扩到 0.5x，透明度 0.9→0
             while (t < 0.5f)
             {
                 t += Time.deltaTime;
                 float p = t / 0.5f;
-                transform.localScale = Vector3.one * Mathf.Lerp(0.3f, 1.5f, p);
+                transform.localScale = Vector3.one * Mathf.Lerp(0.1f, 0.5f, p);
                 if (sr != null) sr.color = new Color(0.3f, 0.06f, 0.4f, Mathf.Lerp(0.9f, 0f, p));
                 yield return null;
             }
