@@ -177,9 +177,21 @@ public class Bat : enemy
         _state = BatState.rise;
         _stateEnterTime = Time.time;
         {
-            // 优先用当前 role 的 Y 做基准；role 为空（场上无敌人/缓存空窗）时退化为
-            // "在自身当前 Y 上叠加一个微抬"，避免无限循环。
-            float baseY = (role != null) ? role.transform.position.y : transform.position.y;
+            // 拉升基准 Y：
+            //   - 友军蝙蝠：用玩家高度（+flyHeight）作为稳定悬浮高度。
+            //     不能用 role(敌人) 的 Y——敌人蝙蝠也在飞，会导致友军蝙蝠追着敌人越飞越高，
+            //     两个蝙蝠"互相挤着上天"。
+            //   - 普通蝙蝠：role 是玩家，用 role.y 等价于玩家高度，保持原逻辑。
+            float baseY;
+            if (isAllyMode)
+            {
+                var p = player != null ? player.transform : null;
+                baseY = (p != null) ? p.position.y : transform.position.y;
+            }
+            else
+            {
+                baseY = (role != null) ? role.transform.position.y : transform.position.y;
+            }
             Vector3 riseTarget = new Vector3(
                 transform.position.x,
                 baseY + flyHeight,
