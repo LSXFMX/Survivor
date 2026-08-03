@@ -643,9 +643,14 @@ public class MindControlled : MonoBehaviour
     /// 路径——分身受伤同样会调 startturnred → OnPlayerTookDamage → HealAllControlledBosses，
     /// 对那条路径不需要改动，治疗机制本来就是"任一玩家受伤都治疗全部友军 Boss"。
     /// </summary>
+    private static Transform s_playerLayerCacheMC;
+
     private Player FindLivingPlayer()
     {
-        Transform pl = GameObject.Find("playerlayer")?.transform;
+        // 静态缓存 playerlayer：世界Boss leash 每物理帧都会调用本方法。
+        if (s_playerLayerCacheMC == null)
+            s_playerLayerCacheMC = GameObject.Find("playerlayer")?.transform;
+        Transform pl = s_playerLayerCacheMC;
         if (pl == null) return null;
 
         Player best = null;

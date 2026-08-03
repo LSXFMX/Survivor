@@ -25,17 +25,44 @@ public class Bulletbase : MonoBehaviour
     // 静态缓存：playerlayer / enemylayer 在整个会话中从不改变，避免每颗子弹做 2 次 Find()
     private static Attribute  s_cachedPlayer;
     private static Transform s_cachedEnemyLayer;
-    private static bool       s_cacheReady;
 
     private static void EnsureStaticCache()
     {
-        if (s_cacheReady) return;
-        s_cacheReady = true;
-        var pl = GameObject.Find("playerlayer");
-        if (pl != null && pl.transform.childCount > 0)
-            s_cachedPlayer = pl.transform.GetChild(0).GetComponent<Attribute>();
-        var el = GameObject.Find("enemylayer");
-        if (el != null) s_cachedEnemyLayer = el.transform;
+        // 【BUG 修复】原实现先置 s_cacheReady=true 再取值：若首帧对象尚未就绪（或场景重载后
+        //   静态字段残留 fake-null），缓存会被永久钉死为 null，导致子弹拿不到 player/enemy。
+        //   改为逐字段判空补齐——Unity 的 fake-null 也能被 == null 正确识别并重新查找。
+        if (s_cachedPlayer == null)
+        {
+            var pl = GameObject.Find("playerlayer");
+            if (pl != null && pl.transform.childCount > 0)
+                s_cachedPlayer = pl.transform.GetChild(0).GetComponent<Attribute>();
+        }
+        if (s_cachedEnemyLayer == null)
+        {
+            var el = GameObject.Find("enemylayer");
+            if (el != null) s_cachedEnemyLayer = el.transform;
+        }
+    }
+
+    /// <summary>
+    /// 清空静态缓存。项目当前为单场景常驻，正常不需要调用；
+    /// 保留此入口用于场景重载 / 编辑器反复进出 Play 模式时手动重置，避免 fake-null 残留。
+    /// </summary>
+    public static void ResetStaticCaches()
+    {
+        s_cachedPlayer = null;
+        s_cachedEnemyLayer = null;
+    }
+
+    /// <summary>
+    /// 供子类（如 Bulletdarkgear）复用同一份静态缓存，避免各自 GameObject.Find。
+    /// 只取引用，不做任何物理/缩放设置——需要那些副作用请直接调用 GetFather()。
+    /// </summary>
+    protected static void ResolveCachedRefs(out Attribute playerRef, out Transform enemyLayerRef)
+    {
+        EnsureStaticCache();
+        playerRef     = s_cachedPlayer;
+        enemyLayerRef = s_cachedEnemyLayer;
     }
 
     public virtual void GetFather()

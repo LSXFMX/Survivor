@@ -257,25 +257,33 @@ public class MushroomBabyPet : MonoBehaviour
     private enemy FindNearestAliveEnemy(float range)
     {
         if (enemyLayer == null || enemyLayer.childCount == 0) return null;
-        float best = range;
+        // 【性能】原实现每帧 foreach + Vector3.Distance(开平方) + 2×GetComponent。
+        //   改为 for + sqrMagnitude 比较（等价语义，省掉每次开平方），
+        //   并把 MindControlled 兜底 GetComponent 放到最后（多数敌人在前面的判断就被 continue 掉了）。
+        float bestSq = range * range;
         enemy bestEnemy = null;
-        foreach (Transform t in enemyLayer)
+        Vector3 self = transform.position;
+        int n = enemyLayer.childCount;
+        for (int i = 0; i < n; i++)
         {
+            Transform t = enemyLayer.GetChild(i);
             if (t == null) continue;
             enemy e = t.GetComponent<enemy>();
             if (e == null) continue;
             if (e.rolestate == enemy.state.dead) continue;
             // 亡者领域：宠物（蘑菇宝宝）不锁定/不攻击被控制为友军的敌人
             if (e._mindControlledFlag) continue;
+
+            Vector3 d = t.position - self;
+            float sq = d.sqrMagnitude;
+            if (sq > bestSq) continue;
+
             // 兜底：对象池/SetActive 会让 enemy.OnEnable 把 flag 清掉一次，加一道 GetComponent 兜底
+            // （放在距离筛选之后，绝大多数敌人不会走到这里）
             if (t.GetComponent<MindControlled>() != null) continue;
 
-            float d = Vector3.Distance(transform.position, t.position);
-            if (d <= best)
-            {
-                best = d;
-                bestEnemy = e;
-            }
+            bestSq = sq;
+            bestEnemy = e;
         }
         return bestEnemy;
     }

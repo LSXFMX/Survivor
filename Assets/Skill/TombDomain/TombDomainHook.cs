@@ -41,11 +41,43 @@ public static class TombDomainHook
     // 同一只敌人最后一次"被友军打"的时间。Destroy1 时如果命中窗口，视为友军杀死。
     private static readonly Dictionary<enemy, float> _lastAllyHitTime  = new Dictionary<enemy, float>();
 
+    // 【内存泄漏修复】上面两个字典以 enemy 为 key，原先只在场景重载时清理。
+    //   一局无尽模式可能击杀上万只怪 → 字典无限膨胀，且持有已 Destroy 的 enemy 强引用，
+    //   阻止 GC 回收整条 GameObject/Component 链。这里做惰性定期清理：
+    //   每 GC_INTERVAL 秒扫一次，剔除"已销毁"或"时间戳早已超出判定窗口"的条目。
+    private const float GC_INTERVAL = 10f;
+    private static float _nextGcTime;
+    private static readonly List<enemy> _gcScratch = new List<enemy>();
+
+    private static void PruneIfDue()
+    {
+        if (Time.time < _nextGcTime) return;
+        _nextGcTime = Time.time + GC_INTERVAL;
+        PruneDict(_lastSporeHitTime, SporeDamageWindow);
+        PruneDict(_lastAllyHitTime,  AllyDamageWindow);
+    }
+
+    private static void PruneDict(Dictionary<enemy, float> dict, float window)
+    {
+        if (dict.Count == 0) return;
+        _gcScratch.Clear();
+        float now = Time.time;
+        foreach (var kv in dict)
+        {
+            // key == null 能识别 Unity fake-null（对象已 Destroy）
+            if (kv.Key == null || (now - kv.Value) > window)
+                _gcScratch.Add(kv.Key);
+        }
+        for (int i = 0; i < _gcScratch.Count; i++) dict.Remove(_gcScratch[i]);
+        _gcScratch.Clear();
+    }
+
     /// <summary>BulletSporeField 在造成伤害时调用：记录"曾经被孢子打过"。</summary>
     public static void MarkSporeDamage(enemy en)
     {
         if (en == null) return;
         _lastSporeHitTime[en] = Time.time;
+        PruneIfDue();
     }
 
     public static bool WasRecentlySporeDamaged(enemy en)
@@ -59,6 +91,7 @@ public static class TombDomainHook
     {
         if (en == null) return;
         _lastAllyHitTime[en] = Time.time;
+        PruneIfDue();
     }
 
     public static bool WasRecentlyKilledByAlly(enemy en)
@@ -225,9 +258,14 @@ public static class TombDomainHook
         MindControlled.HealAllControlledBosses(td.worldBossHealOnPlayerDamage);
     }
 
+    // 静态缓存 playerlayer：本方法在"每只敌人死亡"+"每次玩家受伤"两条高频路径上都会被调用。
+    private static Transform s_playerLayerCache;
+
     private static Player ResolveAnyPlayer()
     {
-        Transform pl = GameObject.Find("playerlayer")?.transform;
+        if (s_playerLayerCache == null)
+            s_playerLayerCache = GameObject.Find("playerlayer")?.transform;
+        Transform pl = s_playerLayerCache;
         if (pl == null) return null;
         foreach (Transform t in pl)
         {
@@ -243,5 +281,6 @@ public static class TombDomainHook
     {
         _lastSporeHitTime.Clear();
         _lastAllyHitTime.Clear();
+        s_playerLayerCache = null;
     }
 }

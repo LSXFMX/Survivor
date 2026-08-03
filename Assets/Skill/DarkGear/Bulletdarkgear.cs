@@ -4,11 +4,15 @@ using UnityEngine;
 
 public class Bulletdarkgear : Bulletbase
 {
-    public float radius;//���ư뾶
-    public float initialangle=0;//��ʼ���ƽǶ�
+    public float radius;//环绕半径
+    public float initialangle=0;//初始环绕角度
 
     public override void GetFather()
     {
+        // 【性能】原实现每颗齿轮子弹都做 2 次 GameObject.Find（且无 null 保护）。
+        //   改为复用基类的静态缓存（EnsureStaticCache），但**不调用 base.GetFather()**——
+        //   基类会锁 Rigidbody 的 Y 轴 / 抬高出生点 / 乘 size 缩放，
+        //   而齿轮是 FixedUpdate 里直接写 transform.position 环绕，行为必须保持原样。
         damage = fatherskill.damage;
         level = fatherskill.level;
         lifetime = fatherskill.lifetime;
@@ -16,9 +20,8 @@ public class Bulletdarkgear : Bulletbase
         speed = fatherskill.speed;
         size = fatherskill.size;
         radius = fatherskill.GetComponent<Skilldarkgear>().radius;
-        player = GameObject.Find("playerlayer").transform.GetChild(0).GetComponent<Attribute>();
+        ResolveCachedRefs(out player, out enemy);
         rb = GetComponent<Rigidbody>();
-        enemy = GameObject.Find("enemylayer").transform;
     }
 
     void FixedUpdate()

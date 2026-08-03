@@ -35,9 +35,19 @@ public class getexp : MonoBehaviour
         if (myLayer >= 0) gameObject.layer = myLayer;
     }
 
+    // 静态缓存：每只敌人死亡都会生成经验石，逐颗 Find("playerlayer") 开销可观。
+    // playerlayer 全局唯一且不变，缓存一次即可；判空补齐可正确处理场景重载后的 fake-null。
+    private static Player s_cachedPlayer;
+
     private void OnEnable()
     {
-        player = GameObject.Find("playerlayer").transform.GetChild(0).gameObject.GetComponent<Player>();
+        if (s_cachedPlayer == null)
+        {
+            var pl = GameObject.Find("playerlayer");
+            if (pl != null && pl.transform.childCount > 0)
+                s_cachedPlayer = pl.transform.GetChild(0).GetComponent<Player>();
+        }
+        player = s_cachedPlayer;
     }
 
     private void OnCollisionEnter(Collision collision)

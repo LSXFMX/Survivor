@@ -271,26 +271,33 @@ public class BatBabyPet : MonoBehaviour
     private enemy FindNearestAliveEnemy(float range)
     {
         if (enemyLayer == null || enemyLayer.childCount == 0) return null;
-        float best = range;
+        // 【性能】原实现每帧 foreach + Vector3.Distance(开平方) + 2×GetComponent。
+        //   改为 for + sqrMagnitude（等价语义，省开平方），并把 MindControlled 兜底
+        //   移到距离筛选之后（绝大多数敌人在前面就被 continue 掉，不必付 GetComponent）。
+        float bestSq = range * range;
         enemy bestEnemy = null;
-        foreach (Transform t in enemyLayer)
+        Vector3 self = transform.position;
+        int n = enemyLayer.childCount;
+        for (int i = 0; i < n; i++)
         {
+            Transform t = enemyLayer.GetChild(i);
             if (t == null) continue;
             enemy e = t.GetComponent<enemy>();
             if (e == null) continue;
             if (e.rolestate == enemy.state.dead) continue;
             // 亡者领域：宠物（蝙蝠宝宝）不锁定被控制为友军的敌人。
-            // 双保险：flag 可能因为对象池/SetActive 流程被 enemy.OnEnable 临时重置，
-            // 这里再用 GetComponent<MindControlled>() 兜底一遍（性能损耗仅在跟随阶段每帧一次）。
             if (e._mindControlledFlag) continue;
+
+            Vector3 d = t.position - self;
+            float sq = d.sqrMagnitude;
+            if (sq > bestSq) continue;
+
+            // 双保险：flag 可能因为对象池/SetActive 流程被 enemy.OnEnable 临时重置，
+            // 这里再用 GetComponent<MindControlled>() 兜底一遍。
             if (t.GetComponent<MindControlled>() != null) continue;
 
-            float d = Vector3.Distance(transform.position, t.position);
-            if (d <= best)
-            {
-                best = d;
-                bestEnemy = e;
-            }
+            bestSq = sq;
+            bestEnemy = e;
         }
         return bestEnemy;
     }

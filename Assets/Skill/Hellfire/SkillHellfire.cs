@@ -211,10 +211,15 @@ public class SkillHellfire : Skillbase
         return null;
     }
 
+    private static Transform s_enemyLayerCacheHF;
+
     List<Transform> GetClosestLivingEnemies(int maxCount)
     {
         List<Transform> all = new List<Transform>();
-        Transform enemyLayer = GameObject.Find("enemylayer")?.transform;
+        // 静态缓存 enemylayer（每次地狱火施放都会调用）
+        if (s_enemyLayerCacheHF == null)
+            s_enemyLayerCacheHF = GameObject.Find("enemylayer")?.transform;
+        Transform enemyLayer = s_enemyLayerCacheHF;
         if (enemyLayer == null || player == null) return all;
 
         Vector3 center = player.transform.position;

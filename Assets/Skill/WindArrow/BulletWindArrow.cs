@@ -176,9 +176,14 @@ public class BulletWindArrow : Bulletbase
         return FindClosestLivingEnemyNear(impactPos, impactSnapRadius);
     }
 
+    // 静态缓存 enemylayer：风箭是主力技能，每支箭命中都做一次 Find 开销可观。
+    private static Transform s_enemyLayerCache;
+
     static enemy FindClosestLivingEnemyNear(Vector3 p, float maxDist)
     {
-        Transform layer = GameObject.Find("enemylayer")?.transform;
+        if (s_enemyLayerCache == null)
+            s_enemyLayerCache = GameObject.Find("enemylayer")?.transform;
+        Transform layer = s_enemyLayerCache;
         if (layer == null) return null;
 
         float maxSq = maxDist * maxDist;

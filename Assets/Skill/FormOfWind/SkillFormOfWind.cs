@@ -162,10 +162,15 @@ public class SkillFormOfWind : Skillbase
         return null;
     }
 
+    private static Transform s_enemyLayerCacheFoW;
+
     /// <summary>优先选最近的其他敌人作为「瞄准方向」；没有则瞄准当前命中的敌人。</summary>
     Transform PickAimTarget(Transform hitEnemy, Vector3 fromPos)
     {
-        Transform layer = GameObject.Find("enemylayer")?.transform;
+        // 静态缓存 enemylayer：本方法在"每次风箭命中"这条极高频路径上被调用。
+        if (s_enemyLayerCacheFoW == null)
+            s_enemyLayerCacheFoW = GameObject.Find("enemylayer")?.transform;
+        Transform layer = s_enemyLayerCacheFoW;
         if (layer == null) return hitEnemy;
 
         Transform bestOther = null;

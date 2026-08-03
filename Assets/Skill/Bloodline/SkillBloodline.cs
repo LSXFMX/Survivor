@@ -235,6 +235,8 @@ public class SkillBloodline : Skillbase
         return result;
     }
 
+    private static Transform s_playerLayerCacheBL;
+
     private void ResolveOwnerPlayer()
     {
         if (player != null)
@@ -243,7 +245,10 @@ public class SkillBloodline : Skillbase
             return;
         }
 
-        Transform layer = GameObject.Find("playerlayer")?.transform;
+        // 静态缓存 playerlayer（player 为 null 时本方法每帧被调用）
+        if (s_playerLayerCacheBL == null)
+            s_playerLayerCacheBL = GameObject.Find("playerlayer")?.transform;
+        Transform layer = s_playerLayerCacheBL;
         if (layer == null || layer.childCount == 0) return;
 
         Transform picked = null;

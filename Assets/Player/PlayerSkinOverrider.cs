@@ -174,6 +174,11 @@ public class PlayerSkinOverrider : MonoBehaviour
         }
 
         // 运行时实时检测玩家在橱窗里切换皮肤
+        // 【性能】PlayerPrefs.GetInt 每帧读取配置存储开销不小（玩家 + 分身都挂本组件）。
+        //   皮肤切换是极低频的手动操作，改为 0.5s 轮询一次，观感完全一致。
+        if (Time.unscaledTime < _nextSkinPollTime) return;
+        _nextSkinPollTime = Time.unscaledTime + 0.5f;
+
         int saved = PlayerPrefs.GetInt("SelectedSkin", 0);
         if (saved != _appliedSkinIndex)
         {
@@ -181,6 +186,8 @@ public class PlayerSkinOverrider : MonoBehaviour
             ApplySkinChoice();
         }
     }
+
+    private float _nextSkinPollTime;
 
 #if !UNITY_EDITOR
     // 运行时 Build 中 AnimationUtility 不可用，新 clip 没有 keyframe，
