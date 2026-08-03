@@ -35,7 +35,7 @@ public static class TombDomainHook
     public const float ReviveChance = ReviveChanceFromDomain;
 
     /// <summary>被复活的友军继承玩家攻击力的比例（0~1）。例：0.10 表示 +Player.atk × 10%。</summary>
-    public const float AllyAtkInheritFromPlayer = 0.10f;
+    public const float AllyAtkInheritFromPlayer = 0.30f;
 
     private static readonly Dictionary<enemy, float> _lastSporeHitTime = new Dictionary<enemy, float>();
     // 同一只敌人最后一次"被友军打"的时间。Destroy1 时如果命中窗口，视为友军杀死。
