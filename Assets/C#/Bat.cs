@@ -88,7 +88,14 @@ public class Bat : enemy
         {
             case BatState.idle:
                 SetMove(false);
-                if (role == null) getrole();
+                // 友军蝙蝠：role 由 MindControlled 每帧喂入（只喂敌人，绝不指向玩家）。
+                // 不能自己 getrole()——那会把 role 指到玩家，又被 MindControlled 覆盖成 null，
+                // 导致永远卡在 idle 原地不动。非友军模式保持原逻辑。
+                if (role == null)
+                {
+                    if (!isAllyMode) getrole();
+                    // 友军模式 role 仍为 null → 保持待机，等 MindControlled 给目标
+                }
                 else { _state = BatState.fly; _stateEnterTime = Time.time; }
                 break;
 
