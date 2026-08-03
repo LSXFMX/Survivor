@@ -21,8 +21,8 @@ public class SkillSporeField : Skillbase
     // 暗影岛/莫德凯撒系暗深邃绿色（替代原本的亮绿，与亡者领域复活遮罩同色系）
     public Color circleColor    = new Color(0.18f, 0.55f, 0.32f, 0.55f);
 
-    // 亡者领域解锁后用的紫色（暗影岛"幽冥紫"）
-    public static readonly Color TombDomainCircleColor = new Color(0.55f, 0.25f, 0.85f, 0.65f);
+    // 亡者领域解锁后用的紫色（与友军伤害数字 AllyDamageColor 相近的亮紫）
+    public static readonly Color TombDomainCircleColor = new Color(0.85f, 0.45f, 1.00f, 0.75f);
     // 亡者领域解锁后强制锁定的孢子领域半径
     public const float TombDomainLockedRadius = 10f;
 
