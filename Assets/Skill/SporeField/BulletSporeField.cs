@@ -39,15 +39,109 @@ public class BulletSporeField : MonoBehaviour
     /// <summary>玩家学了亡者领域时，把孢子动画染紫（沿用 SkillSporeField.TombDomainCircleColor，但 alpha=1 全不透明显示）。</summary>
     private void TryApplyTombDomainTint()
     {
-        if (!IsTombDomainLearnedCached(playerAttr)) return;
+        Color? finalTint = tintColorOverride;
+        if (!finalTint.HasValue)
+        {
+            // 无显式覆盖：仅当已学亡者领域才染成全局紫
+            if (!IsTombDomainLearnedCached(playerAttr)) return;
+            Color c = SkillSporeField.TombDomainCircleColor;
+            finalTint = new Color(c.r, c.g, c.b, 1f);
+        }
 
-        Color c = tintColorOverride ?? SkillSporeField.TombDomainCircleColor;
-        Color tint = new Color(c.r, c.g, c.b, 1f);
+        Color tint = finalTint.Value;
 
+        // SpriteRenderer.color 是乘法混合：绿色贴图×紫色仍偏绿。
+        // 这里把颜色烘焙进贴图副本，保证最终呈现为紫色。
         var srs = GetComponentsInChildren<SpriteRenderer>(true);
         for (int i = 0; i < srs.Length; i++)
         {
-            if (srs[i] != null) srs[i].color = tint;
+            if (srs[i] == null) continue;
+            if (tintColorOverride.HasValue && srs[i].sprite != null)
+            {
+                var newSpr = TintSpriteCopy(srs[i].sprite, tint);
+                if (newSpr != null) srs[i].sprite = newSpr;
+                srs[i].color = Color.white;
+            }
+            else
+            {
+                srs[i].color = tint;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 亡者领域自爆等单实例染色：动画可能逐帧切换 sprite，
+    /// 这里在 Update 里对"当前 sprite"补染（带静态缓存，避免重复读像素开销）。
+    /// 仅当 tintColorOverride 有值时启用，正常孢子攻击零开销。
+    /// </summary>
+    private Sprite _lastTintedSprite;
+    private Color? _lastTint;
+    private static readonly System.Collections.Generic.Dictionary<(Sprite, Color32), Sprite> s_tintCache
+        = new System.Collections.Generic.Dictionary<(Sprite, Color32), Sprite>();
+
+    private void Update()
+    {
+        if (!tintColorOverride.HasValue) return;
+        var sr = GetComponent<SpriteRenderer>();
+        if (sr == null || sr.sprite == null) return;
+        if (sr.sprite == _lastTintedSprite && _lastTint == tintColorOverride) return;
+
+        Color t = tintColorOverride.Value;
+        var key = (sr.sprite, (Color32)new Color(t.r, t.g, t.b, t.a));
+        if (!s_tintCache.TryGetValue(key, out var tinted))
+        {
+            tinted = TintSpriteCopy(sr.sprite, t);
+            if (tinted != null) s_tintCache[key] = tinted;
+        }
+        if (tinted != null)
+        {
+            sr.sprite = tinted;
+            sr.color = Color.white;
+        }
+        _lastTintedSprite = sr.sprite;
+        _lastTint = tintColorOverride;
+    }
+
+    /// <summary>复制贴图并把每个像素与 tint 相乘（保证最终是纯 tint 色）</summary>
+    private static Sprite TintSpriteCopy(Sprite src, Color tint)
+    {
+        try
+        {
+            Texture2D srcTex = src.texture;
+            if (srcTex == null) return null;
+            int w = Mathf.Max(1, srcTex.width), h = Mathf.Max(1, srcTex.height);
+            var rt = RenderTexture.GetTemporary(w, h, 0);
+            Graphics.Blit(srcTex, rt);
+            var prev = RenderTexture.active;
+            RenderTexture.active = rt;
+            var readable = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            readable.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+            readable.Apply();
+            RenderTexture.active = prev;
+            RenderTexture.ReleaseTemporary(rt);
+
+            Color[] px = readable.GetPixels();
+            for (int i = 0; i < px.Length; i++)
+            {
+                Color c = px[i];
+                px[i] = new Color(
+                    Mathf.Clamp01(c.r * tint.r),
+                    Mathf.Clamp01(c.g * tint.g),
+                    Mathf.Clamp01(c.b * tint.b),
+                    c.a * tint.a);
+            }
+            readable.SetPixels(px);
+            readable.Apply();
+            readable.name = src.name + "_tint";
+
+            return Sprite.Create(readable, src.rect,
+                new Vector2(src.pivot.x / (float)src.rect.width, src.pivot.y / (float)src.rect.height),
+                src.pixelsPerUnit);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[SporeField] 贴图染色失败：{ex.Message}");
+            return null;
         }
     }
 
