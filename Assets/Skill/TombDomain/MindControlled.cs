@@ -394,18 +394,27 @@ public class MindControlled : MonoBehaviour
             return;
         }
 
-        // Boss 型友军（SlimeBoss / WolfBoss）：
-        //   它们自身 FixedUpdate 里有完整的 CD 计时 + 技能协程，MindControlled 不应再做
-        //   简陋的"走→平A"循环。只需要把 role 喂给 Boss，让 Boss 面向敌人释放技能即可，
-        //   攻击方向由 Boss 自己的 FaceTarget() + SwordSwing/BowDraw/Quake 决定。
-        if (_en is SlimeBoss || _en is WolfBoss)
+        // Boss 型友军：它们自身 FixedUpdate 里有完整的 CD 计时 + 技能协程/状态机，
+        //   MindControlled 不应再做简陋的"走→平A"循环，只需把 role 喂成【敌方目标】，
+        //   让 Boss 自己的 FaceTarget / 技能选择逻辑正常运转。
+        //
+        // 【2026-08 修复】原先只放行 SlimeBoss / WolfBoss，其余 Boss 落到下面第 409 行
+        //   "每帧 _en.role = null"，导致：
+        //     · BossBat / WorldBossBat：状态机（move/dash/summon）注释写明"role 已被喂敌方目标"，
+        //       但实际每帧被清空 → dash 分支 `if (role == null) yield break` 永不触发俯冲，
+        //       只能靠 MindControlled 的通用平A，技能完全失效。
+        //     · BossMushroomMan / WorldBossMushroomMan：FixedUpdate 直接 return，
+        //       冲刺/喷吐技能永不释放。
+        //     · WorldBossBase 派生的所有世界 Boss：同上。
+        //   现在统一放行所有 Boss 型敌人，由各自状态机驱动技能。
+        if (IsBossTypeAlly(_en))
         {
             _en.role = (tgt != null) ? tgt.gameObject : null;
             SyncOverlayFrameIfChanged();
             return;
         }
 
-        // 保险：每帧再切断一次对玩家的索敌（仅地面友军；蝙蝠/Boss 分支已自管 role）
+        // 保险：每帧再切断一次对玩家的索敌（仅普通小怪友军；蝙蝠/Boss 分支已自管 role）
         _en.role = null;
 
         if (tgt != null)
@@ -530,6 +539,37 @@ public class MindControlled : MonoBehaviour
         return _enemyLayerCached;
     }
 
+    /// <summary>
+    /// 是否为"自带完整技能状态机、需要 MindControlled 只喂 role 后放手"的 Boss 型友军。
+    ///
+    /// 判定依据 = 该 Boss 的 FixedUpdate 在友军状态下是否会自行驱动移动与技能：
+    ///   ✓ SlimeBoss / WolfBoss（含 WorldBossSlime / WorldBossWolf，二者继承自它们）
+    ///       —— 有独立的 CD 计时 + 技能协程，且已按友军状态改写伤害目标。
+    ///   ✓ BossBat / WorldBossBat
+    ///       —— 状态机（move / dash / summon）依赖 role 指向敌方目标。
+    ///   ✓ BossMushroomMan / WorldBossMushroomMan
+    ///       —— 追击 + 冲刺状态机依赖 role。
+    ///   ✗ 其余 WorldBossBase 派生类
+    ///       —— 无独立技能协程，其 FixedUpdate 在友军状态下直接 return
+    ///          （且 enemy.FixedUpdate 也被 _mindControlledFlag 拦掉），
+    ///          必须交给 MindControlled 的通用"追击 + 近战"循环，否则会原地不动。
+    /// </summary>
+    private static bool IsBossTypeAlly(enemy en)
+    {
+        return en is SlimeBoss || en is WolfBoss
+            || en is BossBat || en is BossMushroomMan
+            || en is WorldBossBat || en is WorldBossMushroomMan;
+    }
+
+    /// <summary>索敌优先级用：是否为 Boss 级目标（权重 ×0.3，优先攻击）。</summary>
+    private static bool IsBossTarget(enemy en)
+    {
+        return en is SlimeBoss || en is WolfBoss
+            || en is BossBat || en is BossMushroomMan
+            || en is WorldBossBase
+            || en is WorldBossBat || en is WorldBossMushroomMan;
+    }
+
     private Transform FindAttackTarget()
     {
         Transform layer = GetEnemyLayer();
@@ -545,10 +585,15 @@ public class MindControlled : MonoBehaviour
             enemy en = e.GetComponent<enemy>();
             if (en == null || en.health <= 0 || en.rolestate == enemy.state.dead) continue;
             if (en._mindControlledFlag) continue; // 是友军就跳过
+            // 【2026-08 修复】Camp（营地）也继承 enemy 且挂在 enemylayer 下。
+            //   友军若把未占领营地当攻击目标，会一路跑去把营地打成"已占领"，
+            //   等于替玩家自动完成营地挑战，属于机制外收益；且会让友军远离战场。
+            //   与 SkillHellfire / SkillWindArrow 中"不攻击已占领营地"的既有约定保持一致，
+            //   这里更进一步：友军一律不把营地作为目标。
+            if (en is Camp) continue;
             float sq = (e.position - self).sqrMagnitude;
             // 优先攻击敌方Boss（权值×0.3，距离感知更近）
-            bool isBoss = en is BossMushroomMan || en is BossBat || en is WolfBoss || en is SlimeBoss
-                       || en is WorldBossMushroomMan || en is WorldBossBat || en is WorldBossWolf || en is WorldBossSlime;
+            bool isBoss = IsBossTarget(en);
             float score = isBoss ? sq * 0.3f : sq;
             if (score < bestScore) { bestScore = score; best = e; }
         }

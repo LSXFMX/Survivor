@@ -17,7 +17,16 @@ public class WorldBossSlime : SlimeBoss
     protected override void FixedUpdate()
     {
         if (rolestate == state.dead) return;
-        if (GetComponent<MindControlled>() != null) return;
+
+        // 亡者领域：被控制为友军后跳过"激活判定"（激活语义只针对玩家接近/受击），
+        //   直接进入 SlimeBoss 的技能状态机（role 已由 MindControlled 喂成最近的敌人）。
+        //   同时不再自然回血（"被操控后失去自然回血词条"）。
+        //   原实现在这里直接 return，导致友军世界史莱姆 Boss 完全不动、技能永不释放。
+        if (GetComponent<MindControlled>() != null)
+        {
+            base.FixedUpdate();
+            return;
+        }
 
         if (!_activated)
         {

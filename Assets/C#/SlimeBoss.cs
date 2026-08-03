@@ -241,8 +241,18 @@ public class SlimeBoss : enemy
             }
             else
             {
-                // MC：朝向看 role（MindControlled 会喂入敌方目标），只更新武器并释放技能
-                if (role != null) FaceTarget();
+                // MC：MindControlled 只喂 role 就 return（不接管移动），
+                // 因此这里要自己朝目标移动 + 播行走动画，否则友军史莱姆会站着不动只放技能。
+                if (role != null)
+                {
+                    FaceTarget();
+                    PlayAnim("Walk");
+                    MoveToward(role.transform.position, slimeSpeed, dt);
+                }
+                else
+                {
+                    PlayAnim("Walk");
+                }
                 if (!_weaponsCreated)
                 {
                     if (_swordObj == null) CreateSword();
@@ -382,7 +392,13 @@ public class SlimeBoss : enemy
             Vector3 spawnPos = transform.position + FacingDir() * 1.0f + Vector3.up * 0.5f;
             GameObject obj = Instantiate(swordQiPrefab, spawnPos, Quaternion.Euler(45, 0, 0));
             var proj = obj.GetComponent<SlimeBossProjectile>();
-            if (proj != null) { proj.flipFacing = true; proj.Launch(FacingDir(), Mathf.RoundToInt(atk * swordQiDamageMul), swordQiSpeed, swordQiLifetime); }
+            if (proj != null)
+            {
+                proj.flipFacing = true;
+                // 亡者领域友军：投射物改为伤害敌人
+                proj.allyOwned = GetComponent<MindControlled>() != null;
+                proj.Launch(FacingDir(), Mathf.RoundToInt(atk * swordQiDamageMul), swordQiSpeed, swordQiLifetime);
+            }
         }
 
         // 收回
@@ -436,7 +452,11 @@ public class SlimeBoss : enemy
             Vector3 dir = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)).normalized;
             GameObject obj = Instantiate(arrowPrefab, spawnPos, Quaternion.Euler(45, 0, 0));
             var proj = obj.GetComponent<SlimeBossProjectile>();
-            if (proj != null) proj.Launch(dir, dmg, arrowSpeed, arrowLifetime);
+            if (proj != null)
+            {
+                proj.allyOwned = GetComponent<MindControlled>() != null;
+                proj.Launch(dir, dmg, arrowSpeed, arrowLifetime);
+            }
         }
     }
 
@@ -517,7 +537,11 @@ public class SlimeBoss : enemy
             float spd = breathSpeed * Random.Range(0.85f, 1.15f);
             GameObject obj = Instantiate(slimeBreathPrefab, spawnPos, Quaternion.Euler(45, 0, 0));
             var proj = obj.GetComponent<SlimeBossProjectile>();
-            if (proj != null) proj.Launch(dir, dmg, spd, breathLifetime);
+            if (proj != null)
+            {
+                proj.allyOwned = GetComponent<MindControlled>() != null;
+                proj.Launch(dir, dmg, spd, breathLifetime);
+            }
         }
     }
 

@@ -84,11 +84,12 @@ public class BossMushroomMan : enemy
     {
         if (bossState == BossState.dead) return;
 
-        // 亡者领域：被控制为友军后，行为完全交给 MindControlled
-        if (GetComponent<MindControlled>() != null) return;
-
-        // 自然回血：放在 MindControlled 短路之后，等价于"被亡者领域操控后失去自然回血词条"。
-        TickNaturalHeal();
+        // 亡者领域：被控制为友军后，MindControlled 只负责把 role 喂成"最近的敌人"，
+        //   移动/冲刺状态机仍由本脚本驱动（原先在这里直接 return，导致友军蘑菇王
+        //   既不追敌也永不冲刺，只能靠 MindControlled 的通用平A，技能完全失效）。
+        // 自然回血在友军状态下失效（等价于"被亡者领域操控后失去自然回血词条"）。
+        bool mindControlled = GetComponent<MindControlled>() != null;
+        if (!mindControlled) TickNaturalHeal();
 
         if (role != null && bossState != BossState.dash)
         {
@@ -129,7 +130,45 @@ public class BossMushroomMan : enemy
 
             case BossState.dash:
                 transform.position += dashDir * dashSpeed * Time.fixedDeltaTime;
+                // 友军状态：碰撞伤害在 enemy 基类被 _mindControlledFlag 拦掉，
+                //   这里改用距离判定对敌人造成冲刺撞击伤害，让技能真正生效。
+                if (mindControlled) DashDamageEnemies();
                 break;
+        }
+    }
+
+    /// <summary>
+    /// 友军版冲刺撞击伤害：对身边敌人造成伤害（带 0.35s 内部 CD 防止一次冲刺反复结算）。
+    /// 敌对状态下走 enemy 基类的 OnCollisionEnter，不经过本方法。
+    /// </summary>
+    private float _allyDashHitCd = 0f;
+    private void DashDamageEnemies()
+    {
+        if (_allyDashHitCd > 0f) { _allyDashHitCd -= Time.fixedDeltaTime; return; }
+
+        Transform host = GameObject.Find("enemylayer")?.transform;
+        if (host == null) return;
+        const float HIT_R = 2.2f;
+        float r2 = HIT_R * HIT_R;
+        int n = host.childCount;
+        for (int i = 0; i < n; i++)
+        {
+            Transform t = host.GetChild(i);
+            if (t == null) continue;
+            enemy e = t.GetComponent<enemy>();
+            if (e == null || e == this) continue;
+            if (e.health <= 0 || e.rolestate == state.dead) continue;
+            if (e._mindControlledFlag) continue;   // 不打友军
+            if (e is Camp) continue;               // 不打营地
+            if ((t.position - transform.position).sqrMagnitude > r2) continue;
+
+            int d = Mathf.Max(1, (int)atk - (int)e.def);
+            e.health -= d;
+            MindControlled.SpawnAllyDamageNumber(e, d);
+            e.startturnred();
+            TombDomainHook.MarkAllyDamage(e);
+            if (e.health <= 0) e.Destroy1();
+            _allyDashHitCd = 0.35f;
         }
     }
 

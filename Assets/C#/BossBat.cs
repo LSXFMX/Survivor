@@ -173,6 +173,10 @@ public class BossBat : enemy
 
         float dirX    = Mathf.Sign(role.transform.position.x - transform.position.x);
         float traveled = 0f;
+        // 友军状态：碰撞伤害被 enemy 基类的 _mindControlledFlag 拦掉，
+        //   改用距离判定对敌人结算冲刺伤害，否则友军蝙蝠公爵冲刺不造成任何伤害。
+        bool allyMode = GetComponent<MindControlled>() != null;
+        float allyHitCd = 0f;
 
         while (traveled < dashDistance)
         {
@@ -180,10 +184,46 @@ public class BossBat : enemy
             float step = dashSpeed * Time.fixedDeltaTime;
             transform.position += new Vector3(dirX * step, 0, 0);
             traveled += step;
+            if (allyMode)
+            {
+                if (allyHitCd > 0f) allyHitCd -= Time.fixedDeltaTime;
+                else if (DashDamageEnemies()) allyHitCd = 0.3f;
+            }
             yield return new WaitForFixedUpdate();
         }
 
         EndBusy(BossState.move);
+    }
+
+    /// <summary>友军版冲刺撞击：对身边敌人造成伤害，返回是否命中。</summary>
+    private bool DashDamageEnemies()
+    {
+        Transform host = GameObject.Find("enemylayer")?.transform;
+        if (host == null) return false;
+        const float HIT_R = 2.0f;
+        float r2 = HIT_R * HIT_R;
+        bool hit = false;
+        int n = host.childCount;
+        for (int i = 0; i < n; i++)
+        {
+            Transform t = host.GetChild(i);
+            if (t == null) continue;
+            enemy e = t.GetComponent<enemy>();
+            if (e == null || e == this) continue;
+            if (e.health <= 0 || e.rolestate == state.dead) continue;
+            if (e._mindControlledFlag) continue;
+            if (e is Camp) continue;
+            if ((t.position - transform.position).sqrMagnitude > r2) continue;
+
+            int d = Mathf.Max(1, (int)atk - (int)e.def);
+            e.health -= d;
+            MindControlled.SpawnAllyDamageNumber(e, d);
+            e.startturnred();
+            TombDomainHook.MarkAllyDamage(e);
+            if (e.health <= 0) e.Destroy1();
+            hit = true;
+        }
+        return hit;
     }
 
     // ── 召唤蝙蝠 ──────────────────────────────────────
@@ -216,9 +256,19 @@ public class BossBat : enemy
                     var batEn = obj.GetComponent<enemy>();
                     if (batEn != null)
                     {
-                        batEn._mindControlledFlag = true;
+                        // 【2026-08 修复】原实现只 AddComponent + 设 isWorldBoss 字段，
+                        //   从不调用 Setup()，导致召唤出的友军蝙蝠：
+                        //     · _en 为 null → FixedUpdate 第一句就 Destroy(this) 自毁组件，
+                        //       蝙蝠退回敌对状态（_mindControlledFlag 却仍是 true → 变成
+                        //       "谁都不打、也不被打"的僵尸单位）；
+                        //     · _batSelfDriven / isAllyMode 未设置 → 俯冲仍然打玩家；
+                        //     · Rigidbody 未切 kinematic、寿命/衰减参数为默认值。
+                        //   现在改为走标准 Setup()，与 TombDomainHook.TryReviveAsAlly 一致。
                         var batMC = obj.AddComponent<MindControlled>();
-                        batMC.isWorldBoss = false;
+                        batMC.Setup(batEn, false,
+                                    mc.minionLifetime,
+                                    mc.minionDecayPerSecond,
+                                    mc.bossLeashDistance);
                     }
                 }
             }

@@ -67,7 +67,6 @@ public class WolfBoss : enemy
     private const float DASH_LIFT = 2.2f;   // 冲刺起跳抬高的高度（基于地面向上）
     private bool  busy             = false; // 技能演出中，暂停常规移动/选技能
     private bool  invincible       = false;
-    private bool  _mcQuakeRunning  = false; // MC 震地协程防重叠
     private int   lockedHealth;
     private string curAnim = "";
 
@@ -194,20 +193,13 @@ public class WolfBoss : enemy
     {
         if (phase == Phase.Dead) return;
 
-        // 亡者领域复活后：原版技能协程全部面向玩家（DamagePlayers 遍历 playerlayer），不适合 MC。
-        // 改为简单的"走到最近敌人→震地"循环，由 MindControlled 驱动移动。
-        MindControlled mc = GetComponent<MindControlled>();
-        if (mc != null)
-        {
-            if (_mcQuakeRunning) return;
-            cdQuake -= Time.fixedDeltaTime;
-            if (cdQuake <= 0f)
-            {
-                cdQuake = quakeInterval * 0.5f; // MC 下技能频率减半（不抢风头）
-                StartCoroutine(QuakeOnEnemies());
-            }
-            return;
-        }
+        // 亡者领域复活后：
+        //   DamagePlayers 已在源头改为"友军状态自动转向 enemylayer"（见 DamagePlayers 注释），
+        //   因此这里放行完整技能状态机，友军狼人拥有与敌方一致的技能表现。
+        //   仅屏蔽两类只对玩家有意义的演出：
+        //     · TransformRoutine（半血抓取处决 + 变身）：会锁玩家移动、抓取玩家，友军不应执行；
+        //     · PounceRoutine 的"距离检查"改为对 role（敌人）判定，保持逻辑一致。
+        bool mindControlled = GetComponent<MindControlled>() != null;
 
         if (busy)
         {
@@ -241,7 +233,8 @@ public class WolfBoss : enemy
             MoveToward(role.transform.position, humanSpeed, dt);
 
             // 半血抓取处决变身（最高优先级）
-            if (health <= healthmax * 0.5f)
+            // 友军状态跳过：该演出会抓取并锁定玩家移动，对友军无意义且会误伤主人。
+            if (health <= healthmax * 0.5f && !mindControlled)
             {
                 StartCoroutine(TransformRoutine());
                 return;
@@ -266,12 +259,15 @@ public class WolfBoss : enemy
             cdDash   -= dt;
             if (skillGap > 0f) { skillGap -= dt; return; }
 
-            // 距离检查：扑击只对近处玩家释放（避免远距离扑空浪费）
-            float distToPlayer = Vector3.Distance(transform.position, role.transform.position);
+            // 距离检查：扑击只对近处目标释放（避免远距离扑空浪费）
+            // role 在友军状态下由 MindControlled 喂成"最近敌人"，语义一致
+            float distToTarget = Vector3.Distance(transform.position, role.transform.position);
 
             _ready.Clear();
             if (cdQuake  <= 0f) _ready.Add(0);
-            if (cdPounce <= 0f && distToPlayer <= pounceTriggerRange) _ready.Add(1); // 近距离才放扑击
+            // 扑击（PounceRoutine）全程针对玩家：遍历 playerlayer 检测命中、抓取定身、按最大生命
+            // 百分比处决。友军状态下无法作用于敌人，且会误伤主人 → 从技能池剔除。
+            if (cdPounce <= 0f && distToTarget <= pounceTriggerRange && !mindControlled) _ready.Add(1);
             if (cdDash   <= 0f) _ready.Add(2);
             if (_ready.Count == 0) return;
 
@@ -301,33 +297,6 @@ public class WolfBoss : enemy
         DamagePlayers(transform.position, quakeRadius, dmg, wolf ? 2f : 0f);
         yield return new WaitForSeconds(0.3f);
         busy = false;
-    }
-
-    // ── 亡者领域复活版震地：打敌人而非玩家 ──
-    private IEnumerator QuakeOnEnemies()
-    {
-        _mcQuakeRunning = true;
-        SpawnClawFx(transform.position);
-        AudioManager.PlaySfx(AudioManager.SfxKey.BossQuake);   // 震地音（友军版同样播放）
-        yield return new WaitForSeconds(0.3f);
-
-        // 遍历 enemylayer（和 MindControlled 索敌一致，不依赖特殊 Layer 命名）
-        int dmg = Mathf.RoundToInt(atk * 1.2f);
-        Transform host = GameObject.Find("enemylayer")?.transform;
-        if (host != null)
-        {
-            foreach (Transform t in host)
-            {
-                enemy e = t.GetComponent<enemy>();
-                if (e == null || e == this || e._mindControlledFlag || e.health <= 0) continue;
-                if (Vector3.Distance(t.position, transform.position) > quakeRadius) continue;
-                int d = Mathf.Max(1, dmg - (int)e.def);
-                e.health -= d;
-                ShowDamageNumber(t.position, d);
-            }
-        }
-        yield return new WaitForSeconds(0.3f);
-        _mcQuakeRunning = false;
     }
 
     // ── 半血：抓取处决 → 变身 ──
@@ -586,6 +555,15 @@ public class WolfBoss : enemy
 
     private void DashTouchDamage()
     {
+        // 友军状态：改为对敌人造成接触伤害（复用统一的敌人范围伤害），
+        // 否则友军狼人三段冲刺会一路撞伤自己的主人。
+        if (GetComponent<MindControlled>() != null)
+        {
+            DamageEnemiesInRadius(transform.position, pounceRange * 0.9f,
+                                  Mathf.RoundToInt(atk * 1.3f), 3f);
+            dashHitCd = 0.5f;
+            return;
+        }
         if (playerlayer == null) return;
         foreach (Transform p in playerlayer)
         {
@@ -650,8 +628,18 @@ public class WolfBoss : enemy
     }
 
     // 范围伤害玩家（含闪避 Miss + 吸血）
+    //
+    // 【2026-08 修复】被亡者领域复活为友军后，本方法会遍历 playerlayer 伤害"真玩家"——
+    //   等于友军狼人一放技能就打自己的主人（扑击 PounceRoutine / 三连爪 等都走这里）。
+    //   现在在源头判定：处于友军状态时自动改为对 enemylayer 的敌人造成同等伤害，
+    //   保证"技能照常释放、伤害转向正确目标"，而不是直接静默失效。
     private void DamagePlayers(Vector3 center, float radius, int dmg, float knockback)
     {
+        if (GetComponent<MindControlled>() != null)
+        {
+            DamageEnemiesInRadius(center, radius, dmg, knockback);
+            return;
+        }
         if (playerlayer == null) return;
         foreach (Transform p in playerlayer)
         {
@@ -670,6 +658,40 @@ public class WolfBoss : enemy
                 if (kb.sqrMagnitude > 0.01f) p.position += kb.normalized * knockback;
             }
             if (pl.health <= 0) pl.death();
+        }
+    }
+
+    /// <summary>友军版范围伤害：对 enemylayer 内的敌人生效（跳过自己 / 其他友军 / 营地）。</summary>
+    private void DamageEnemiesInRadius(Vector3 center, float radius, int dmg, float knockback)
+    {
+        Transform host = GameObject.Find("enemylayer")?.transform;
+        if (host == null) return;
+        float r2 = radius * radius;
+        int n = host.childCount;
+        for (int i = 0; i < n; i++)
+        {
+            Transform t = host.GetChild(i);
+            if (t == null) continue;
+            enemy e = t.GetComponent<enemy>();
+            if (e == null || e == this) continue;
+            if (e.health <= 0 || e.rolestate == state.dead) continue;
+            if (e._mindControlledFlag) continue;   // 不打友军
+            if (e is Camp) continue;               // 不打营地
+            if ((t.position - center).sqrMagnitude > r2) continue;
+
+            int d = Mathf.Max(1, dmg - (int)e.def);
+            e.health -= d;
+            ShowDamageNumber(t.position, d);
+            WolfLifesteal(d);
+            e.startturnred();
+            // 亡者领域：标记"被友军打过"，让它死亡时进入友军击杀复活链路
+            TombDomainHook.MarkAllyDamage(e);
+            if (knockback > 0f)
+            {
+                Vector3 kb = (t.position - center); kb.y = 0;
+                if (kb.sqrMagnitude > 0.01f) t.position += kb.normalized * knockback;
+            }
+            if (e.health <= 0) e.Destroy1();
         }
     }
 

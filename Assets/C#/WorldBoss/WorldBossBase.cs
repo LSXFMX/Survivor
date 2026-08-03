@@ -63,7 +63,11 @@ public class WorldBossBase : enemy
     {
         if (rolestate == state.dead) return;
 
-        // 亡者领域：被控制为友军后，行为完全交给 MindControlled（不再追玩家、不再走激活逻辑）
+        // 亡者领域：被控制为友军后，行为完全交给 MindControlled 的通用"追击 + 近战"循环。
+        //   注意 enemy.FixedUpdate 内部第一句就是 `if (_mindControlledFlag) return;`，
+        //   因此这里调用 base.FixedUpdate() 也不会产生任何移动，直接 return 即可。
+        //   世界 Boss（蘑菇/蝙蝠世界版）本身没有独立技能协程，靠通用循环表现已经完整；
+        //   狼人/史莱姆世界版继承自 WolfBoss/SlimeBoss，走它们各自重写的 FixedUpdate，不经过这里。
         if (GetComponent<MindControlled>() != null) return;
 
         // 未激活：检测玩家距离

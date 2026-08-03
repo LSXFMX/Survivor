@@ -18,6 +18,15 @@ public class WorldBossWolf : WolfBoss
     {
         if (rolestate == state.dead) return;
 
+        // 亡者领域：被控制为友军后跳过"激活判定"（未激活时 _wasHit 为 false 会 return，
+        //   友军 Boss 永远等不到"被玩家攻击"这个条件，会一直站着不动）。
+        //   直接进入 WolfBoss 的技能状态机；同时不再自然回血。
+        if (GetComponent<MindControlled>() != null)
+        {
+            base.FixedUpdate();
+            return;
+        }
+
         if (!_activated)
         {
             if (health < healthmax) { _wasHit = true; health = healthmax; }

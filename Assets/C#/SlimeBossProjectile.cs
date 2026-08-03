@@ -23,6 +23,14 @@ public class SlimeBossProjectile : MonoBehaviour
     private float _hitCooldown = 0f;
     private GameObject _atknumber;
 
+    /// <summary>
+    /// 【2026-08 新增】友军归属标记。
+    /// 被亡者领域复活的史莱姆 Boss 释放剑气/箭矢时，投射物应当伤害【敌人】而不是玩家。
+    /// 由 SlimeBoss.SpawnFan() 在生成时根据自身是否挂有 MindControlled 传入。
+    /// </summary>
+    [HideInInspector] public bool allyOwned = false;
+    private Transform _enemylayer;
+
     /// <summary>发射：设定方向/伤害/速度/生命周期，并激活飞行。</summary>
     public void Launch(Vector3 dir, int dmg, float spd, float life)
     {
@@ -39,6 +47,8 @@ public class SlimeBossProjectile : MonoBehaviour
     {
         GameObject pl = GameObject.Find("playerlayer");
         if (pl != null) _playerlayer = pl.transform;
+        GameObject el = GameObject.Find("enemylayer");
+        if (el != null) _enemylayer = el.transform;
         // 备份伤害数字预制体（从任意敌人身上借用不可靠，改由自身可选字段/查找）
     }
 
@@ -61,9 +71,40 @@ public class SlimeBossProjectile : MonoBehaviour
         if (lifetime <= 0f) { Destroy(gameObject); return; }
 
         if (_hitCooldown > 0f) { _hitCooldown -= dt; return; }
-        if (_playerlayer == null) return;
 
         float r = hitRadius * Mathf.Max(0.3f, Mathf.Abs(transform.lossyScale.y));
+
+        // 友军投射物：伤害敌人（跳过友军 / 营地）
+        if (allyOwned)
+        {
+            if (_enemylayer == null) return;
+            int n = _enemylayer.childCount;
+            for (int i = 0; i < n; i++)
+            {
+                Transform t = _enemylayer.GetChild(i);
+                if (t == null) continue;
+                enemy e = t.GetComponent<enemy>();
+                if (e == null || e.health <= 0 || e.rolestate == enemy.state.dead) continue;
+                if (e._mindControlledFlag) continue;
+                if (e is Camp) continue;
+                if (Vector3.Distance(t.position, transform.position) > r) continue;
+
+                int d = Mathf.Max(1, damage - (int)e.def);
+                e.health -= d;
+                ShowDamage(t.position, d);
+                e.startturnred();
+                TombDomainHook.MarkAllyDamage(e);
+                if (e.health <= 0) e.Destroy1();
+
+                pass -= 1;
+                _hitCooldown = 0.15f;
+                if (pass < 0) { Destroy(gameObject); return; }
+            }
+            return;
+        }
+
+        if (_playerlayer == null) return;
+
         foreach (Transform p in _playerlayer)
         {
             var pl = p.GetComponent<Player>();
