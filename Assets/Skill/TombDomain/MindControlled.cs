@@ -1072,12 +1072,17 @@ public class MindControlled : MonoBehaviour
     /// </summary>
     private static void SpawnSporeFx(Vector3 pos)
     {
-        // 优先复用真实孢子子弹预制体（与玩家攻击同动画、同染色）
+        // 优先复用真实孢子子弹预制体（与玩家攻击同动画）
+        // 注意：不修改共享预制体/静态颜色，通过 tintColorOverride 只改本次实例（亮紫≈友军伤害数字色）
         if (SkillSporeField.sharedSporeBulletPrefab != null)
         {
             var fx = Instantiate(SkillSporeField.sharedSporeBulletPrefab, pos, Quaternion.identity);
             var bs = fx.GetComponent<BulletSporeField>();
-            if (bs != null) { bs.damage = 0; bs.targetEnemy = null; bs.playerAttr = null; }
+            if (bs != null)
+            {
+                bs.damage = 0; bs.targetEnemy = null; bs.playerAttr = null;
+                bs.tintColorOverride = new Color(0.85f, 0.45f, 1.00f, 1f);
+            }
             return;
         }
         // 回退：自生成紫黑渐变圆（孢子技能未就绪时使用）

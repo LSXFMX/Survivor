@@ -30,12 +30,18 @@ public class BulletSporeField : MonoBehaviour
         StartCoroutine(SporeRoutine());
     }
 
+    /// <summary>
+    /// 可选：按实例覆盖染色。置 null 用全局 SkillSporeField.TombDomainCircleColor；
+    /// 亡者领域自爆等场景仅希望单次实例换色时，由调用方赋值，不污染共享预制体/全局色。
+    /// </summary>
+    public Color? tintColorOverride;
+
     /// <summary>玩家学了亡者领域时，把孢子动画染紫（沿用 SkillSporeField.TombDomainCircleColor，但 alpha=1 全不透明显示）。</summary>
     private void TryApplyTombDomainTint()
     {
         if (!IsTombDomainLearnedCached(playerAttr)) return;
 
-        Color c = SkillSporeField.TombDomainCircleColor;
+        Color c = tintColorOverride ?? SkillSporeField.TombDomainCircleColor;
         Color tint = new Color(c.r, c.g, c.b, 1f);
 
         var srs = GetComponentsInChildren<SpriteRenderer>(true);
