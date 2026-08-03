@@ -36,8 +36,17 @@ public class SkillSporeField : Skillbase
     private Color        _lastCircleColor;
     private float        _tombProbeAccum; // 节流：每 0.5s 才探测一次"是否已学亡者领域"
 
+    /// <summary>
+    /// 亡者领域自爆复用孢子动画：静态缓存本技能的 BulletSporeField 预制体引用，
+    /// 供 MindControlled.SpawnSporeFx 直接实例化，播放与玩家攻击完全相同的孢子动画。
+    /// </summary>
+    public static GameObject sharedSporeBulletPrefab;
+
     private void Start()
     {
+        // 缓存孢子子弹预制体（供亡者自爆特效复用）
+        if (sharedSporeBulletPrefab == null && bullet != null)
+            sharedSporeBulletPrefab = bullet;
         // === Bug 修复："显示分身攻击距离" 按钮无效 ===
         // 分身由 Instantiate(主玩家) 克隆而来，prefab snapshot 里已有 Start 第一次创建的
         // "SporeRangeCircle" 子物体；clone 再次 Start 又新建一个，造成两个圈，旧圈未注册到

@@ -1065,13 +1065,24 @@ public class MindControlled : MonoBehaviour
         if (_en != null) { _en.health = 0; _en.Destroy1(); }
     }
 
-    /// <summary>在指定位置播放孢子领域特效（优先 000.png，失败回退自生成圆）</summary>
+    /// <summary>
+    /// 在指定位置播放孢子领域攻击特效（与玩家释放孢子技能完全一致：复用 BulletSporeField 预制体，
+    /// damage=0 + targetEnemy=null → 只播动画不造成伤害，SporeRoutine 0.6s 后自毁）。
+    /// 若预制体尚未缓存（孢子技能未就绪），回退到自生成紫黑圆。
+    /// </summary>
     private static void SpawnSporeFx(Vector3 pos)
     {
-        // 优先加载真实孢子贴图
+        // 优先复用真实孢子子弹预制体（与玩家攻击同动画、同染色）
+        if (SkillSporeField.sharedSporeBulletPrefab != null)
+        {
+            var fx = Instantiate(SkillSporeField.sharedSporeBulletPrefab, pos, Quaternion.identity);
+            var bs = fx.GetComponent<BulletSporeField>();
+            if (bs != null) { bs.damage = 0; bs.targetEnemy = null; bs.playerAttr = null; }
+            return;
+        }
+        // 回退：自生成紫黑渐变圆（孢子技能未就绪时使用）
         if (s_sporeTex == null)
             s_sporeTex = RuntimeAssetLoader.LoadTexture(null, "Skill/SporeField/000", "Skill/SporeField/000.png");
-        // 回退：自生成紫黑渐变圆（打包运行时游戏也能看到特效）
         if (s_sporeTex == null)
         {
             if (s_fallbackTex == null)
@@ -1098,7 +1109,6 @@ public class MindControlled : MonoBehaviour
         sr.sortingOrder = 200;
         sr.color = new Color(0.3f, 0.06f, 0.4f, 0.85f);
         go.transform.localScale = Vector3.one * 0.1f;
-        // 静态呈现 + 定时销毁（无每帧协程，避免大量特效卡顿）
         Destroy(go, 0.5f);
     }
     private static Texture2D s_sporeTex;
