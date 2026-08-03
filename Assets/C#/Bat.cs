@@ -185,8 +185,10 @@ public class Bat : enemy
             float baseY;
             if (isAllyMode)
             {
-                var p = player != null ? player.transform : null;
-                baseY = (p != null) ? p.position.y : transform.position.y;
+                // 用 playerlayer（玩家层）取玩家高度作稳定悬浮基准
+                baseY = (playerlayer != null && playerlayer.childCount > 0)
+                    ? playerlayer.GetChild(0).position.y
+                    : transform.position.y;
             }
             else
             {
