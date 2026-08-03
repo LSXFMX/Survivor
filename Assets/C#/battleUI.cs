@@ -110,8 +110,14 @@ public class battleUI : MonoBehaviour
         // 对局开始：清空上一局的追踪数据（修复历史Boss/装备跨局残留bug）
         GameSessionTracker.Instance?.BeginSession();
 
-        enemy.adventureHpMultiplier = 1.0f;
-        enemy.adventureAtkMultiplier = 1.0f;
+        // 【2026-08 修复】每局开始把敌人全部 static 倍率归零。
+        //   之前只重置了 adventure 两项，endless 两项仅在无尽模式分支里重置 ——
+        //   而"返回主菜单"是 SceneManager.LoadScene 重载同场景，static 不会归零，
+        //   于是打过一局无尽（endlessAtkMultiplier 累到 ×5~×10）后再选 N7，
+        //   小怪攻击 = base × 3.0(N7) × 残留倍率 → 上百伤害。
+        //   ResetSceneCaches 会一次性清掉 adventure/endless 四项 + playerlayer 缓存。
+        enemy.ResetSceneCaches();
+        TombDomainHook.ResetSceneCaches();
 
         DisableUINavigationSubmit();
         choiceUI.SetActive(false);
@@ -899,6 +905,11 @@ public class battleUI : MonoBehaviour
         }
 
         // 结算会话数据
+        // 【2026-08 修复】此前这条主结算路径（正常胜利 / 失败）漏了 RecordAcquiredSkills()，
+        //   只有 1258 行那条门挑战/特殊结束路径调了 —— 表现为：
+        //   常规通关后结算面板「获得技能数」恒为 0、第 4 页技能列表恒为空。
+        RecordAcquiredSkills();
+
         string difficulty = DifficultyManager.Instance != null
             ? DifficultyManager.Instance.Current.label : "??";
         int finalLvl = player != null ? player.level : 0;

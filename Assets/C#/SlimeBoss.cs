@@ -123,13 +123,8 @@ public class SlimeBoss : enemy
         var rb = GetComponent<Rigidbody>();
         if (rb != null) rb.mass = 501f;
 
-        if (DifficultyManager.Instance != null)
-        {
-            var cfg = DifficultyManager.Instance.Current;
-            healthmax = Mathf.RoundToInt(healthmax * cfg.hpMultiplier);
-            health    = healthmax;
-            atk       = Mathf.RoundToInt(atk * cfg.atkMultiplier);
-        }
+        // 难度缩放：统一走基类幂等方法（含难度 / 奇遇 / 无尽三重倍率），避免就地自乘累积。
+        ApplyDifficultyScaling();
 
         phase = Phase.Slime;
         Sca = bossScale;

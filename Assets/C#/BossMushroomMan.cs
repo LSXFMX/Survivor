@@ -64,13 +64,8 @@ public class BossMushroomMan : enemy
         var rb = GetComponent<Rigidbody>();
         if (rb != null) rb.mass = 501f; // Boss质量略高于玩家(500)，仍能推动玩家
 
-        if (DifficultyManager.Instance != null)
-        {
-            var cfg = DifficultyManager.Instance.Current;
-            healthmax = Mathf.RoundToInt(healthmax * cfg.hpMultiplier);
-            health    = healthmax;
-            atk       = Mathf.RoundToInt(atk * cfg.atkMultiplier);
-        }
+        // 难度缩放：统一走基类幂等方法（含难度 / 奇遇 / 无尽三重倍率），避免就地自乘累积。
+        ApplyDifficultyScaling();
 
         Sca = bossScale;
         transform.localScale = new Vector3(Sca, Sca, Sca);

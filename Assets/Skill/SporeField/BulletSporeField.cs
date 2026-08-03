@@ -17,6 +17,13 @@ public class BulletSporeField : MonoBehaviour
     [HideInInspector] public Attribute playerAttr;
     [HideInInspector] public bool    _isHealSpore; // true=治疗复活友军, false=伤害敌人
 
+    /// <summary>
+    /// 结算统计用技能名，由 SkillSporeField 注入（一般为"孢子领域"）。
+    /// 孢子子弹不继承 Bulletbase，没有 fatherskill 字段，所以必须单独传一份技能名，
+    /// 否则 GameSessionTracker 无从得知这份伤害归属哪个技能。
+    /// </summary>
+    [HideInInspector] public string skillNameForTracking;
+
     private void Start()
     {
         // 跟随目标
@@ -199,10 +206,25 @@ public class BulletSporeField : MonoBehaviour
                     int before = targetEnemy.health;
                     targetEnemy.health = Mathf.Min(targetEnemy.healthmax, targetEnemy.health + dealt);
                     int actualHeal = targetEnemy.health - before;
-                    if (actualHeal > 0) MindControlled.SpawnAllyHealNumber(targetEnemy, actualHeal);
+                    if (actualHeal > 0)
+                    {
+                        MindControlled.SpawnAllyHealNumber(targetEnemy, actualHeal);
+                        // 【2026-08 新增】治疗量纳入结算统计
+                        GameSessionTracker.Instance?.RecordHealing(actualHeal);
+                    }
                 }
                 else
                 {
+                    // 【2026-08 修复】孢子领域伤害此前完全没有埋点。
+                    //   孢子领域是亡者领域的前置/伤害来源，它不走 Bulletbase（独立实现），
+                    //   所以从来没被 GameSessionTracker 统计到 ——
+                    //   这是"亡者领域总输出未计算"的另一半原因。
+                    //   技能名从 skillNameForTracking 取（由 SkillSporeField 注入），
+                    //   为空时兜底显示"孢子领域"，保证结算页永远不会出现空行。
+                    GameSessionTracker.Instance?.RecordDamage(
+                        string.IsNullOrEmpty(skillNameForTracking) ? "孢子领域" : skillNameForTracking,
+                        dealt);
+
                     targetEnemy.health -= dealt;
 
                     if (targetEnemy.atknumber != null && DamageNumberSettings.Visible)

@@ -127,6 +127,12 @@ public class DragonBoss : enemy
         atk       = baseAtk;
         def       = baseDef;
 
+        // 【2026-08 补充】显式登记缩放基准。
+        //   基类改为"从快照重算"后，若不登记，快照会取第一次 OnEnable 时的
+        //   perPhaseHealth/baseAtk；虽然当前流程等价，但显式登记可保证
+        //   分阶段过程中若外部改了 perPhaseHealth/baseAtk 也能正确重算。
+        SetScalingBase(perPhaseHealth, baseAtk);
+
         // 调用基类：难度 / 奇遇 / 无尽倍率统一生效
         base.OnEnable();
 

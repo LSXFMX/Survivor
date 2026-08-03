@@ -29,16 +29,19 @@ public class InstructionsPanelUI : MonoBehaviour
     public TMP_FontAsset font;
     public Vector2 autoBuildSize = new Vector2(1100f, 760f);
 
-    [Header("幻灯片（Resources 路径）")]
-    public string[] slidePaths = new string[]
-    {
-        "InstructionsSlides/slide_01_move",
-        "InstructionsSlides/slide_02_levelup",
-        "InstructionsSlides/slide_03_gacha",
-        "InstructionsSlides/slide_04_difficulty",
-        "InstructionsSlides/slide_05_affinity",
-        "InstructionsSlides/slide_06_events",
-    };
+    [Header("幻灯片（Resources 路径，留空=纯文字模式）")]
+    /// <summary>
+    /// 图片幻灯片的 Resources 路径。
+    ///
+    /// 【2026-08 修复】默认值原为 6 条 "InstructionsSlides/slide_0X_*" 路径，
+    ///   但这些图片资源从未存在于 Resources 目录 —— 于是：
+    ///     • LoadSlidesIfNeeded 每次都白跑 6 次 Resources.Load 全部返回 null；
+    ///     • 更严重的是 EnsureDefaultSlideTexts 里 `slidePaths.Length` 会被这6 条
+    ///       覆盖判断，历史上曾导致总页数被截断到 6 页。
+    ///   现在默认留空（纯文字模式）。若将来真做了插画，在 Inspector 里逐页填即可，
+    ///   Refresh 会自动对"有图的页显示图、无图的页回落文字"。
+    /// </summary>
+    public string[] slidePaths = new string[0];
 
     /// <summary>文字模式：slidePaths 对应页 Sprite 加载失败时使用的文字内容。
     /// 使用 &lt;color=#RRGGBB&gt; 标签渲染彩色标题。</summary>
@@ -66,126 +69,191 @@ public class InstructionsPanelUI : MonoBehaviour
         EnsureDefaultSlideTexts();
     }
 
-    /// <summary>若 Inspector 未设置 slideTexts，则填充 12 页内置新手教程文字。</summary>
+    /// <summary>若 Inspector 未设置 slideTexts，则填充内置新手教程文字。
+    ///
+    /// 【2026-08 全面重写】移除过时内容 + 补充最新功能：
+    ///   移除/修正：
+    ///     • "抽卡装备(SSR)：消耗金币抽取" —— 项目里抽卡不消耗金币，表述错误；
+    ///     • "UR 角色通过抽卡 (SSR) 解锁" —— 实际是 UR 档位，不是 SSR；
+    ///     • "门挑战位于主界面门按钮" —— 实际入口在战斗场景内；
+    ///     • "装备共四种类型" —— 实际有五类（漏了继承装备）；
+    ///     • 难度页只笼统说"敌人变强"，未提 N3/N4/N5/N6/N7/N8 的关键解锁节点。
+    ///   新增（此前完全没有文档的系统）：
+    ///     • 亡者领域（三条复活链路 / 友军机制）
+    ///     • 世界 Boss、营地攻占、对局结算面板、读档币复活
+    ///     • 伤害公式与各项属性的实际作用
+    ///     • 四位角色的具体定位、装备积分、技能进化的真实条件
+    /// </summary>
     private void EnsureDefaultSlideTexts()
     {
         if (slideTexts != null && slideTexts.Length > 0) return;
-        slidePaths = new string[12]; // 12 页空路径 → 全部走文字模式
+
         slideTexts = new string[]
         {
-            "<size=36><color=#FFD24A>欢迎来到 Survivor</color></size>\n\n"
-            + "这是一款自动战斗 + Roguelite 的像素风生存游戏。\n\n"
-            + "<color=#80FFC0>核心目标</color>：在限时内生存在于击败关底 Boss。\n"
-            + "<color=#80FFC0>核心循环</color>：击杀敌人 → 获取经验 → 升级选择强化 → 更强 → 击败 Boss。\n\n"
-            + "本教程共 <color=#FFD24A>12 页</color>，用左右按钮翻页阅读。祝你生存愉快！",
+            // ── 0. 欢迎 ──
+            "<size=34><color=#FFD24A>欢迎来到 Survivor</color></size>\n\n"
+            + "这是一款 <color=#80FFC0>自动战斗 + Roguelite</color> 的像素生存游戏。\n\n"
+            + "<color=#80FFC0>核心目标</color>：在限时内生存，并击败关底首领。\n"
+            + "<color=#80FFC0>核心循环</color>：击杀敌人 → 获取经验 → 升级强化 → 变强 → 击败首领。\n\n"
+            + "你唯一需要手动做的事是 <color=#FF80C0>走位</color>，技能会自动释放。\n\n"
+            + "本教程共 <color=#FFD24A>14 页</color>，可用 <color=#FF80C0>← →</color> 按钮翻页。",
 
-            "<size=36><color=#FFD24A>1. 移动与自动战斗</color></size>\n\n"
-            + "<color=#80FFC0>移动</color>：WASD 或 方向键，或 <color=#FF80C0>鼠标左键点击地面</color>。\n"
-            + "<color=#80FFC0>自动释放技能</color>：你装备的技能会自动向最近的敌人释放，无需手动操作。\n\n"
-            + "每个技能有独立的 <color=#FFD24A>冷却时间 (CD)</color>，冷却完毕后自动触发。\n"
-            + "技能图标下方会显示冷却进度。\n\n"
-            + "<color=#80FFC0>拾取经验</color>：靠近经验石会自动飞向你，拾取后增加经验。\n"
-            + "蓝色圆圈范围即拾取范围，可被装备和加成扩大。",
+            // ── 1. 移动与自动战斗 ──
+            "<size=34><color=#FFD24A>1. 移动与自动战斗</color></size>\n\n"
+            + "<color=#80FFC0>移动</color>：WASD / 方向键，或 <color=#FF80C0>鼠标左键点击地面</color>。\n"
+            + "<color=#80FFC0>自动施法</color>：所有技能自动瞄准最近敌人释放，无需手动。\n\n"
+            + "每个技能有独立 <color=#FFD24A>冷却 (CD)</color>，冷却结束即自动触发；\n"
+            + "技能图标下方显示冷却进度。\n\n"
+            + "<color=#80FFC0>拾取经验</color>：靠近经验石会自动吸附。\n"
+            + "脚下的圆圈就是技能范围，可通过升级和装备扩大。\n\n"
+            + "<color=#888>提示：范围圈显示可在设置面板中开关。</color>",
 
-            "<size=36><color=#FFD24A>2. 升级三选一</color></size>\n\n"
-            + "经验满后升级，弹出 <color=#FFD24A>三选一卡牌</color>：\n\n"
+            // ── 2. 升级三选一 ──
+            "<size=34><color=#FFD24A>2. 升级三选一</color></size>\n\n"
+            + "经验条满后升级，弹出 <color=#FFD24A>三张卡牌</color> 供你选择：\n\n"
             + "<color=#80FFC0>学习新技能</color>：获得一个全新的自动攻击技能。\n"
-            + "开局第一次升级 <color=#FF80C0>保底三张全是学习卡</color>。\n\n"
-            + "<color=#80FFC0>技能升级</color>：增强已有技能的伤害、冷却、数量、范围等。\n"
-            + "每项属性有独立升级次数上限。\n\n"
-            + "<color=#80FFC0>人物升级</color>：提升基础属性（攻/防/血/速/暴击等）。\n\n"
-            + "若三张都不想要，可按 <color=#FF80C0>刷新按钮</color>（需有 R 级抽卡装备）。",
+            + "  <color=#888>开局第一次升级保底三张全是学习卡。</color>\n\n"
+            + "<color=#80FFC0>技能升级</color>：提升已有技能的伤害 / 冷却 / 数量 / 范围 / 穿透。\n"
+            + "  <color=#888>每项属性都有独立的升级次数上限。</color>\n\n"
+            + "<color=#80FFC0>人物升级</color>：提升基础属性（攻 / 防 / 血 / 速 / 暴击 / 闪避）。\n\n"
+            + "三张都不想要时，可点 <color=#FF80C0>刷新按钮</color> 重抽（需对应抽卡装备）。",
 
-            "<size=36><color=#FFD24A>3. 装备系统</color></size>\n\n"
-            + "共四种装备类型，持久化解锁，永久生效：\n\n"
-            + "<color=#FFD24A>成就装备</color>：达成特定条件自动解锁（如冲刺、三倍速等）。\n"
-            + "<color=#FF80C0>好感度装备</color>：各社群好感度达标解锁，提供强力技能。\n"
-            + "<color=#C0C0FF>抽卡装备 (SSR)</color>：消耗金币抽取，提供独特全局效果。\n"
-            + "<color=#80FFC0>通关装备</color>：按难度通关数量解锁。\n\n"
-            + "在存档界面可查看已解锁装备及获得条件。",
+            // ── 3. 属性与战斗公式 ──
+            "<size=34><color=#FFD24A>3. 属性与战斗公式</color></size>\n\n"
+            + "<color=#FFD24A>伤害公式</color>：\n"
+            + "  最终伤害 = 技能伤害 × (1 + 攻击力 × 0.1) − 目标防御\n"
+            + "  触发暴击时再乘以暴击伤害倍率。\n\n"
+            + "<color=#80FFC0>攻击力</color>：对所有技能生效的通用乘区，优先堆。\n"
+            + "<color=#80FFC0>防御力</color>：直接减免每次受到的伤害。\n"
+            + "<color=#80FFC0>暴击率 / 暴击伤害</color>：暴击时伤害数字显示为金色。\n"
+            + "<color=#80FFC0>闪避</color>：成功闪避会弹出青色 <color=#40E0D0>Miss</color>。\n"
+            + "<color=#80FFC0>经验效率</color>：提升每颗经验石收益，加快升级节奏。\n\n"
+            + "<color=#888>敌人同样拥有防御与闪避，高难度下需要足够攻击力才能破防。</color>",
 
-            "<size=36><color=#FFD24A>4. 好感度系统</color></size>\n\n"
-            + "游戏内有多个 <color=#FF80C0>社群</color>。击败 <color=#FFD24A>世界 Boss</color> 后解锁对应社群。\n\n"
-            + "每个社群都会：\n"
-            + "  • <color=#80FFC0>强化特定技能</color>，让该技能大幅变强\n"
-            + "  • 提供 <color=#80FFC0>额外属性加成</color>（攻/防/暴击/闪避/经验等）\n"
-            + "  • 好感度达到 <color=#FFD24A>10 / 50 / 100</color> 分三档解锁装备\n\n"
-            + "社群数量、对应技能及奖励请在主菜单社群面板查看。\n"
-            + "好感度 <color=#FF80C0>跨局持久保存</color>。",
+            // ── 4. 技能进化 (UR) ──
+            "<size=34><color=#FFD24A>4. 技能进化 (UR)</color></size>\n\n"
+            + "部分基础技能满足条件后，可进化为更强大的 <color=#FF80C0>UR 形态</color>。\n\n"
+            + "进化的通用条件：\n"
+            + "  • 学会全部 <color=#80FFC0>前置基础技能</color>\n"
+            + "  • 前置技能的关键属性（范围 / 数量等）达到门槛\n"
+            + "  • 已通过 <color=#FF80C0>UR 抽卡</color> 解锁该进化资格\n"
+            + "  • 满足难度门槛，并在三选一里选择进化卡\n\n"
+            + "进化后拥有全新攻击模式与视觉效果，成长曲线也完全不同。\n\n"
+            + "<color=#888>默认进化会消耗（移除）前置技能；\n"
+            + "「不忘初心」类装备可让前置技能保留。</color>",
 
-            "<size=36><color=#FFD24A>5. 冲刺</color></size>\n\n"
-            + "<color=#80FFC0>成就装备 2 解锁</color>后即可使用。\n\n"
-            + "操作：<color=#FF80C0>按住方向 + 空格键</color>\n"
-            + "向移动方向冲刺固定距离，有冷却。\n\n"
-            + "冲刺可突破包围、躲避 Boss 技能、快速走位，是保命核心。",
+            // ── 5. 亡者领域 ──
+            "<size=34><color=#C080FF>5. 亡者领域</color></size>\n\n"
+            + "「孢子领域」的 UR 进化，也是角色 <color=#C080FF>无罪</color> 的本命技能。\n\n"
+            + "效果：敌人死亡时有概率 <color=#FF80C0>复活为你的友军</color> 替你作战。\n"
+            + "概率取决于「是谁击杀了它」：\n"
+            + "  • 被 <color=#C080FF>领域(孢子)</color> 击杀 → <color=#80FF80>100%</color>\n"
+            + "  • 被 <color=#C080FF>已复活的友军</color> 击杀 → <color=#FFD24A>25%</color>\n"
+            + "  • 被其余技能击杀 → <color=#FF8080>5%</color>\n\n"
+            + "<color=#80FFC0>友军小怪</color>：存活数秒并持续掉血，之后自然消亡。\n"
+            + "<color=#80FFC0>友军世界 Boss</color>：<color=#FF80C0>永久</color> 跟随，且你每次受伤都会治疗它；\n"
+            + "  屏幕右侧会显示它的头像与血条。\n\n"
+            + "<color=#888>注意：关底 Boss 无法被复活，只有世界 Boss 可以。</color>",
 
-            "<size=36><color=#FFD24A>6. 源木与奇遇</color></size>\n\n"
-            + "<color=#FFD24A>源木</color>：局内货币，击杀敌人获取。\n\n"
-            + "消耗源木可触发 <color=#FF80C0>奇遇事件</color>：\n"
-            + "  • 随机抽取若干一次性效果供你选择\n"
-            + "  • 效果包括：临时增益 / 永久加成 / 技能强化\n"
-            + "  • 某些奇遇有难度门槛\n\n"
-            + "开局后按 <color=#FF80C0>奇遇按钮</color> 触发；某些 SSR 可解锁更多选项。",
+            // ── 6. 装备系统 ──
+            "<size=34><color=#FFD24A>6. 装备系统</color></size>\n\n"
+            + "装备一律 <color=#FF80C0>持久化解锁、跨局永久生效</color>，共五类：\n\n"
+            + "<color=#FFD24A>成就装备</color>：达成条件自动解锁（冲刺、三倍速、自动模式…）。\n"
+            + "<color=#FF80C0>好感度装备</color>：各社群好感度达标解锁，多为强力技能。\n"
+            + "<color=#C0C0FF>抽卡装备</color>：抽卡获得，SSR / UR 直接影响局内战斗。\n"
+            + "<color=#80FFC0>通关装备</color>：按难度通关解锁，主要提供面板属性。\n"
+            + "<color=#C0A060>继承装备</color>：特殊继承奖励。\n\n"
+            + "在 <color=#FFD24A>存档界面</color> 可查看每件装备的效果与获得条件。\n\n"
+            + "<color=#888>重复获得的抽卡装备会转为「装备积分」，可兑换通关装备。</color>",
 
-            "<size=36><color=#FFD24A>7. 门挑战 (N5+)</color></size>\n\n"
-            + "位于主界面 <color=#FFD24A>门按钮</color>，N5+ 难度解锁。\n\n"
-            + "共 <color=#FFD24A>13</color> 层递增难度，每层生成强化敌人。\n"
-            + "每层通关奖励：<color=#80FFC0>所有技能升级上限永久 +1</color>。\n"
-            + "额外随机获得攻、防、经验效率、闪避 +2。\n\n"
-            + "通关全部 13 层额外获得经验效率 +10。\n"
-            + "敌人自带回血，需要足够输出才能攻克。",
+            // ── 7. 抽卡系统 ──
+            "<size=34><color=#C0C0FF>7. 抽卡系统</color></size>\n\n"
+            + "共 <color=#FFD24A>R / SR / SSR / UR</color> 四档，带 <color=#FF80C0>软保底</color>：\n"
+            + "连续不中会逐步提升出率，避免长期空手。\n\n"
+            + "<color=#C0C0FF>R</color>：消耗品（Remake、量子源木、<color=#FFD24A>读档币</color>）。\n"
+            + "<color=#80FFC0>SR</color>：各类灵果，永久提升某项面板属性。\n"
+            + "<color=#FFD24A>SSR</color>：独特全局效果（开局资金、分身翻倍、全能吸血…）。\n"
+            + "<color=#FF80C0>UR</color>：解锁 <color=#FF80C0>技能进化路线</color> 与对应 UR 角色。\n\n"
+            + "<color=#FFD24A>读档币</color>：死亡时可消耗 1 张原地满血复活，每局限一次。\n\n"
+            + "<color=#888>UR 有难度硬门槛，需先通关对应难度才会进池。</color>",
 
-            "<size=36><color=#FFD24A>8. 技能进化系统</color></size>\n\n"
-            + "部分基础技能在满足条件后，会进化为更强大的 <color=#FF80C0>UR 形态</color>。\n\n"
-            + "进化需要：\n"
-            + "  • 学会前置基础技能\n"
-            + "  • 满足特定学习条件（部分需好感度或 SSR 解锁）\n"
-            + "  • 通过三选一卡牌出现时选择进化卡\n\n"
-            + "进化后的技能会有全新的攻击模式、视觉效果和成长曲线。\n"
-            + "具体哪些技能可进化，进入游戏后自己探索。",
+            // ── 8. 好感度与社群 ──
+            "<size=34><color=#FF80C0>8. 好感度与社群</color></size>\n\n"
+            + "游戏内有四个 <color=#FF80C0>社群</color>：蘑菇 / 蝙蝠 / 狼人 / 史莱姆。\n\n"
+            + "击败对应的 <color=#FFD24A>世界 Boss</color> 即可解锁社群并累积好感度。\n\n"
+            + "每个社群会：\n"
+            + "  • <color=#80FFC0>强化一个特定技能</color>，使其大幅变强\n"
+            + "  • 提供额外面板加成\n"
+            + "  • 在好感度 <color=#FFD24A>10 / 50 / 100</color> 三档各解锁一件装备\n\n"
+            + "好感度 <color=#FF80C0>跨局永久保存</color>，是长线养成的核心。\n\n"
+            + "<color=#888>具体社群对应哪个技能，请在主菜单社群面板查看。</color>",
 
-            "<size=36><color=#FFD24A>9. 皮肤与 UR 角色</color></size>\n\n"
-            + "目前共 <color=#FFD24A>4</color> 位可选角色，在主菜单切换：\n\n"
-            + "默认角色始终解锁。\n"
-            + "UR 角色（其余 3 位）通过 <color=#FFD24A>抽卡 (SSR)</color> 解锁。\n\n"
-            + "每位 UR 角色都有独特的：\n"
-            + "  • 本命技能加成\n"
-            + "  • 开局自带技能\n"
-            + "  • 风箭染色 / 视觉风格\n\n"
-            + "选好角色后，整局战斗都会体验不同。",
+            // ── 9. 世界 Boss 与营地 ──
+            "<size=34><color=#FFD24A>9. 世界 Boss 与营地</color></size>\n\n"
+            + "<color=#FF6060>世界 Boss</color>（N6 起解锁）：\n"
+            + "  • 属性为同名关底 Boss 的 <color=#FF6060>两倍</color>，并自带每秒回血\n"
+            + "  • 击败后解锁对应社群，好感度 +1\n"
+            + "  • 血厚且持续恢复，必须有足够持续输出才能击杀\n\n"
+            + "<color=#80FFC0>中立营地</color>：\n"
+            + "  • 战场上会出现不会攻击你的营地\n"
+            + "  • 打掉它即可 <color=#FFD24A>攻占</color>，之后每秒自动产出源木\n"
+            + "  • 累计攻占达标可解锁成就装备\n\n"
+            + "<color=#888>无尽模式每 5 分钟随机刷出一只已解锁社群的 Boss。</color>",
 
-            "<size=36><color=#FFD24A>10. 难度体系</color></size>\n\n"
-            + "共 <color=#FFD24A>N1 ~ N13</color> 共 13 个难度 + <color=#FF80C0>无尽模式</color>。\n\n"
-            + "随难度提升：\n"
-            + "  • 敌人血量与攻击大幅增长\n"
-            + "  • 关底 Boss 越来越强\n"
-            + "  • 对局时长逐渐增加\n\n"
-            + "通关当前难度解锁下一难度。\n"
-            + "<color=#FF80C0>无尽模式</color> 永远上涨，永远没有上限。\n\n"
-            + "不同难度的具体 Boss 等你亲自去揭开。",
+            // ── 10. 源木与奇遇 ──
+            "<size=34><color=#C0A060>10. 源木与奇遇</color></size>\n\n"
+            + "<color=#C0A060>源木</color>：局内货币，来自击杀敌人与已占领的营地。\n\n"
+            + "<color=#FF80C0>奇遇事件</color>（N3 起开放）：\n"
+            + "  • 消耗源木触发，随机给出若干效果供你选择其一\n"
+            + "  • 效果包含临时增益、永久面板加成、技能强化等\n"
+            + "  • 部分强力奇遇有难度门槛，低难度不会出现\n\n"
+            + "点击战斗界面的 <color=#FF80C0>奇遇按钮</color> 即可触发。\n"
+            + "特定 SSR 可让可选项从二选一变为三选一。\n\n"
+            + "<color=#888>无尽模式下每分钟会扣除 10% 源木，需持续补充。</color>",
 
-            "<size=36><color=#FFD24A>11. 倍速与暂停</color></size>\n\n"
-            + "<color=#FFD24A>倍速</color>：点击倍速按钮在 1x / 2x / 3x 间切换。\n"
-            + "3x 倍速需成就装备 4 解锁。\n\n"
-            + "<color=#FFD24A>暂停</color>：按 <color=#FF80C0>ESC</color> 打开暂停菜单。\n"
-            + "  包含：继续 / 设置 / 操作说明 / 返回主菜单\n\n"
-            + "设置面板可调整：\n"
-            + "  • 攻击范围显示\n"
-            + "  • 伤害数字开关与大小\n"
-            + "  • BGM 与 SFX 音量\n"
-            + "  • 全屏 / 窗口化与分辨率\n"
-            + "  • 后台运行\n\n"
-            + "右键点击面板可快速关闭。",
+            // ── 11. 门挑战 ──
+            "<size=34><color=#FFD24A>11. 门挑战 (N5+)</color></size>\n\n"
+            + "N5 及以上难度的战斗中会出现 <color=#FFD24A>门</color>，点击即可进入挑战。\n\n"
+            + "共 <color=#FFD24A>13 层</color>，逐层递增，每层生成强化过的守门敌人。\n\n"
+            + "每层通关奖励：\n"
+            + "  • <color=#80FFC0>所有技能的升级上限永久 +1</color>\n"
+            + "  • 随机获得 攻击 / 防御 / 经验效率 / 闪避 +2\n\n"
+            + "全部 13 层通关：额外获得 <color=#FFD24A>经验效率 +10</color>。\n\n"
+            + "<color=#888>守门人自带回血，输出不足会陷入僵持，建议中后期再挑战。</color>",
 
-            "<size=36><color=#80FFC0>祝你在 Survivor 中生存愉快！</color></size>\n\n"
-            + "提示：操作说明随时可从暂停菜单 (ESC) 重新打开。\n\n"
-            + "新手建议：\n"
-            + "  1. 先尝试 N1 ~ N5，熟悉基础操作\n"
-            + "  2. 优先升级伤害与数量类属性\n"
-            + "  3. 好感度装备可大幅改变技能体验\n"
-            + "  4. 冲刺是保命核心，尽早点出\n\n"
-            + "<color=#FFD24A>每局都是新的开始，积累实力，步步为营。</color>"
+            // ── 12. 角色与冲刺 ──
+            "<size=34><color=#FFD24A>12. 角色与冲刺</color></size>\n\n"
+            + "共 <color=#FFD24A>4</color> 位角色，在主菜单切换。默认角色始终可用，\n"
+            + "其余 3 位通过 <color=#FF80C0>UR 抽卡</color> 解锁：\n\n"
+            + "  • <color=#80FFC0>琪诺露</color> — 默认角色，均衡，享受难度攻击加成\n"
+            + "  • <color=#40E0D0>南筱风</color> — 风系特化，风箭范围与数量大幅领先\n"
+            + "  • <color=#FF6060>夏  无</color> — 火系特化，倾向火球进化路线\n"
+            + "  • <color=#C080FF>无  罪</color> — 亡者领域本命，领域范围随时间持续扩张\n\n"
+            + "<color=#FFD24A>冲刺</color>（成就装备解锁）：<color=#FF80C0>方向键 + 空格</color>\n"
+            + "向移动方向瞬移一段距离，有独立冷却，是核心保命手段。\n\n"
+            + "<color=#888>可通过升级为冲刺附加无敌 / 穿怪效果。</color>",
+
+            // ── 13. 难度、结算与设置 ──
+            "<size=34><color=#FFD24A>13. 难度 · 结算 · 设置</color></size>\n\n"
+            + "<color=#FFD24A>难度</color>：N1 ~ N13 + <color=#FF80C0>无尽模式</color>，通关当前解锁下一档。\n"
+            + "  关键节点：<color=#80FFC0>N3</color> 奇遇 · <color=#80FFC0>N4</color> 蝙蝠 · <color=#80FFC0>N5</color> 门挑战\n"
+            + "  <color=#80FFC0>N6</color> 世界 Boss · <color=#80FFC0>N7</color> 血攻翻倍 · <color=#80FFC0>N8</color> 社群挑战\n"
+            + "  <color=#FF80C0>无尽</color>（通关 N8 解锁）：难度无上限持续上涨。\n\n"
+            + "<color=#FFD24A>对局结算</color>：结束后弹出总结面板，共 4 页 ——\n"
+            + "  概览（伤害 / DPS / 击杀 / 承伤 / 治疗）、技能伤害占比、\n"
+            + "  击败首领、本局技能与新解锁装备。\n"
+            + "  可用 <color=#FF80C0>← →</color> 按钮、方向键或 <color=#FF80C0>鼠标滚轮</color> 翻页。\n\n"
+            + "<color=#FFD24A>倍速</color>：1x / 2x / 3x 切换（3x 需成就装备）。\n"
+            + "<color=#FFD24A>暂停</color>：<color=#FF80C0>ESC</color> — 继续 / 设置 / 操作说明 / 返回主菜单。\n\n"
+            + "<color=#888>右键点击面板可快速关闭。祝你生存愉快！</color>"
         };
+
+        // 全部走文字模式（不加载图片幻灯片）。
+        // 【关键】长度必须由 slideTexts.Length 推导，不能像旧版那样硬编码 12：
+        //   Refresh() 用 _loadedSlides.Length 作为总页数，一旦文案条数多于这里的长度，
+        //   末尾几页将永远无法翻到（旧版正是 12 vs 13 条，最后一页玩家从未见过）。
+        slidePaths = new string[slideTexts.Length];
+
         _loadedSlides = null; // 强制重新加载
     }
 
@@ -211,14 +279,43 @@ public class InstructionsPanelUI : MonoBehaviour
         gameObject.SetActive(false);
         if (_autoMode) { _autoMode = false; Time.timeScale = 1f; }
     }
-    public void PrevPage() { if (_loadedSlides == null || _loadedSlides.Length == 0) return; _pageIndex = (_pageIndex - 1 + _loadedSlides.Length) % _loadedSlides.Length; Refresh(); }
-    public void NextPage() { if (_loadedSlides == null || _loadedSlides.Length == 0) return; _pageIndex = (_pageIndex + 1) % _loadedSlides.Length; Refresh(); }
+    // 翻页用 TotalPages（图片/文字页数取大者），而不是只看 _loadedSlides.Length，
+    // 否则纯文字模式下若 slidePaths 比 slideTexts 短，末尾页数将无法翻到。
+    public void PrevPage() { int n = TotalPages; if (n == 0) return; _pageIndex = (_pageIndex - 1 + n) % n; Refresh(); }
+    public void NextPage() { int n = TotalPages; if (n == 0) return; _pageIndex = (_pageIndex + 1) % n; Refresh(); }
+
+    /// <summary>【2026-08 新增】方向键 / 滚轮翻页，与结算面板交互保持一致。</summary>
+    private void Update()
+    {
+        if (!gameObject.activeInHierarchy) return;
+
+        if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A)) PrevPage();
+        else if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D)) NextPage();
+
+        float scroll = Input.mouseScrollDelta.y;
+        if (scroll > 0.1f) PrevPage();
+        else if (scroll < -0.1f) NextPage();
+
+        // 右键快速关闭（原注释里承诺过此行为，但代码从未实现）
+        if (Input.GetMouseButtonDown(1)) Close();
+    }
 
     private void Refresh()
     {
-        int total = _loadedSlides?.Length ?? 0;
-        bool hasSprite = total > 0 && _pageIndex < total && _loadedSlides[_pageIndex] != null;
-        bool hasText   = slideTexts != null && _pageIndex < slideTexts.Length && !string.IsNullOrEmpty(slideTexts[_pageIndex]);
+        // 【2026-08 修复】总页数改为「图片页数 与 文字页数 取较大值」。
+        //   旧版只用 _loadedSlides.Length（= slidePaths.Length）作为总页数，
+        //   若场景 Inspector 里的 slidePaths 残留着旧版 6 条路径，
+        //   而 slideTexts 有 14 条，玩家就只能翻到第 6 页 —— 后 8 页永远看不到。
+        int spriteCount = _loadedSlides?.Length ?? 0;
+        int textCount   = slideTexts?.Length ?? 0;
+        int total = Mathf.Max(spriteCount, textCount);
+
+        // 页码越界保护（slideTexts 被外部改短时 _pageIndex 可能超界）
+        if (total > 0) _pageIndex = Mathf.Clamp(_pageIndex, 0, total - 1);
+        else _pageIndex = 0;
+
+        bool hasSprite = _pageIndex < spriteCount && _loadedSlides[_pageIndex] != null;
+        bool hasText   = _pageIndex < textCount && !string.IsNullOrEmpty(slideTexts[_pageIndex]);
 
         if (slideImage != null)
         {
@@ -229,11 +326,23 @@ public class InstructionsPanelUI : MonoBehaviour
         {
             slideText.text = hasText ? slideTexts[_pageIndex] : "";
             slideText.gameObject.SetActive(hasText && !hasSprite); // 文字模式仅在没有图片时显示
+            if (font != null && slideText.font != font) slideText.font = font;
         }
         if (pageIndicator != null)
         {
             pageIndicator.text = total > 0 ? $"{_pageIndex + 1} / {total}" : "0 / 0";
             if (font != null && pageIndicator.font != font) pageIndicator.font = font;
+        }
+    }
+
+    /// <summary>翻页可用的总页数（图片页与文字页取较大值）。</summary>
+    private int TotalPages
+    {
+        get
+        {
+            int sc = _loadedSlides?.Length ?? 0;
+            int tc = slideTexts?.Length ?? 0;
+            return Mathf.Max(sc, tc);
         }
     }
 

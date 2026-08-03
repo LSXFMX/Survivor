@@ -606,6 +606,15 @@ public class MindControlled : MonoBehaviour
         if (en == null || en.health <= 0) return;
         int dmg = Mathf.Max(1, (int)(_en.atk - en.def));
 
+        // 【2026-08 修复】亡者领域总输出未计入结算面板。
+        //   友军（被复活的小怪 / 世界 Boss）的近战输出此前完全没有埋点，
+        //   导致结算页「总伤害输出」把亡者领域这条主要输出来源整体算作 0 ——
+        //   对无罪（本命技能为亡者领域）来说，结算数据几乎完全失真。
+        //   这里统一归到 TombDomainAllyDamageKey 一行下，
+        //   而不是按每只友军的 rolename 分行（否则一局会刷出上百行"友军·蘑菇人"）。
+        GameSessionTracker.Instance?.RecordDamage(
+            GameSessionTracker.TombDomainAllyDamageKey, dmg);
+
         if (isWorldBoss)
         {
             // 复活Boss：正常造成伤害 + 暗紫色伤害数字（与小怪亮紫色区分）

@@ -26,6 +26,9 @@ public class YuanMuManager : MonoBehaviour
     {
         if (amount <= 0) return;
         _current += amount;
+        // 【2026-08】源木累计纳入结算统计。Add 是全项目唯一的源木增加入口
+        //（击杀掉落 / 营地每秒 / 奇遇给源木都走这里），埋在此处天然全覆盖。
+        GameSessionTracker.Instance?.RecordWood(amount);
         OnYuanMuAdded?.Invoke(amount);
     }
 

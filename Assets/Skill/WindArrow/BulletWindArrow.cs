@@ -143,15 +143,24 @@ public class BulletWindArrow : Bulletbase
             isCrit = true;
         }
         finaldamage -= e.def;
+        if (finaldamage < 1f) finaldamage = 1f;
 
-        e.health -= (int)finaldamage;
+        int dealt = (int)finaldamage;
+
+        // 【2026-08 修复】风箭伤害此前没有埋点（ApplyWindArrowImpact 是重写的独立结算路径，
+        //   没走 Bulletbase.OnTriggerEnter），导致结算面板里风箭这个最核心的基础技能
+        //   伤害恒为 0，总伤害因此长期偏低。
+        if (GameSessionTracker.Instance != null && fatherskill != null)
+            GameSessionTracker.Instance.RecordDamage(fatherskill.Skillname, dealt);
+
+        e.health -= dealt;
 
         if (DamageNumberSettings.Visible)
         {
             GameObject num = Instantiate(e.atknumber, hitTransform.position, default);
             num.transform.localScale *= DamageNumberSettings.SizeScale;
             var txt = num.transform.GetChild(0).GetComponent<TMPro.TextMeshProUGUI>();
-            txt.text = ((int)finaldamage).ToString();
+            txt.text = dealt.ToString();
             if (isCrit) txt.color = new Color32(255, 215, 0, 255);
         }
         e.startturnred();

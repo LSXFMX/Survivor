@@ -237,6 +237,13 @@ public class Bat : enemy
             int dmg = Mathf.Max(1, (int)(atk - en.def));
             _hitThisDive = true;
             en.health -= dmg;
+
+            // 【2026-08 修复】亡者领域总输出未计算：友军蝙蝠的俯冲伤害此前也没埋点。
+            //   与 MindControlled.DealMeleeHit 用同一个统计 key，保证结算页
+            //   「亡者领域·友军」这一行覆盖友军的全部输出（近战 + 蝙蝠俯冲）。
+            GameSessionTracker.Instance?.RecordDamage(
+                GameSessionTracker.TombDomainAllyDamageKey, dmg);
+
             MindControlled.SpawnAllyDamageNumber(en, dmg);
             en.startturnred();
             // 亡者领域：标记"被友军打过"，让它在 Destroy1 时进入"友军击杀复活链路"（20%）
@@ -259,13 +266,20 @@ public class Bat : enemy
         }
 
         _hitThisDive = true;
-        player.health -= (int)atk;
+
+        // 【2026-08 修复】原写法 `player.health -= (int)atk` 完全无视玩家防御力，
+        //   是全项目唯一一处普通小怪的"真实伤害"。这直接放大了玩家对
+        //   "N7 小怪打出上百伤害"的感知：蝙蝠从 N4 起进入刷怪池，
+        //   N7 时 atk 已被难度倍率放大，而玩家堆的 def 一点都用不上。
+        //   现与 enemy.OnCollisionEnter 统一口径：减防御、至少 1 点。
+        int dmg = Mathf.Max(1, (int)(atk - player.def));
+        player.health -= dmg;
 
         if (atknumber != null && DamageNumberSettings.Visible)
         {
             GameObject number = Instantiate(atknumber, other.transform.position, Quaternion.identity);
             number.transform.localScale *= DamageNumberSettings.SizeScale;
-            number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = atk.ToString();
+            number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = dmg.ToString();
         }
 
         player.startturnred();

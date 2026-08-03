@@ -50,9 +50,17 @@ public class WorldBossBase : enemy
 
         // 世界Boss属性应用：原关底Boss属性×2
         // prefab 里保留原值（用于退回关底使用），世界Boss激活时强制覆盖为 ×2
+        //
+        // 【2026-08 说明】这里刻意**不再叠加难度倍率**：
+        //   doubledHealthMax / doubledAttack 已经是"绝对值"口径（1000 / 100），
+        //   若再乘一遍 cfg.atkMultiplier，N7 世界 Boss 攻击会变成 300，属于重复放大。
+        //   同时这里是直接赋值（不是自乘），因此反复 OnEnable 也不会累积膨胀。
         healthmax = doubledHealthMax;
         health    = healthmax;
         atk       = doubledAttack;
+        // 登记缩放基准：万一后续有子类/奇遇调用 ApplyDifficultyScaling，
+        // 也能以 ×2 值为基准重算，而不是拿"已缩放过的当前值"再乘。
+        SetScalingBase(doubledHealthMax, doubledAttack);
         // 世界Boss额外能力：+5%/s 自然回血
         naturalHealPctPerSecond = worldBossHealPctPerSecond;
 

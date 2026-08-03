@@ -32,13 +32,10 @@ public class Camp : enemy
         }
         fixedPosition = transform.position;
 
-        // 应用难度倍率到营地血量
-        if (DifficultyManager.Instance != null)
-        {
-            var cfg = DifficultyManager.Instance.Current;
-            healthmax = Mathf.RoundToInt(healthmax * cfg.hpMultiplier);
-            health    = healthmax;
-        }
+        // 应用难度倍率到营地血量。
+        // 营地不会攻击玩家（OnCollisionEnter 已被置空），所以只缩放血量、跳过攻击。
+        // 走基类幂等方法，避免营地在 SetActive 翻转后血量被反复累乘。
+        ApplyDifficultyScaling(applyHp: true, applyAtk: false);
     }
 
     protected override void FixedUpdate()

@@ -114,6 +114,14 @@ public class title : MonoBehaviour
         AudioManager.PlayBgm(AudioManager.BgmKey.Battle);
         // 重置每局静态状态，避免上一局残留
         getexp.triggerMultiplier = 1;
+
+        // 【2026-08 修复】敌人难度倍率的 static 归零。
+        //   battleUI.Start 只在 fightscene 首次激活时执行一次；如果玩家不重载场景
+        //   直接从主菜单再开一局（fightscene.SetActive(true) 复用），Start 不会再跑，
+        //   上一局的 endless/adventure 倍率就会残留并叠加到本局
+        //   （表现为"N7 小怪打出上百伤害"）。这里在真正的开局入口再清一次。
+        enemy.ResetSceneCaches();
+        TombDomainHook.ResetSceneCaches();
         if (enemylayer.childCount > 0)
         {
             foreach (Transform enemy in enemylayer)

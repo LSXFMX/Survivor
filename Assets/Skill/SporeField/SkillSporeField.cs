@@ -170,6 +170,9 @@ public class SkillSporeField : Skillbase
                 b.damage      = damage;
                 b.targetEnemy = en;
                 b.playerAttr  = player.GetComponent<Attribute>();
+                // 结算统计用技能名：孢子子弹不继承 Bulletbase（无 fatherskill），必须显式传入。
+                // Skillname 为空时留空，由 BulletSporeField侧兜底为"孢子领域"。
+                b.skillNameForTracking = Skillname;
                 // 亡者领域：仅复活的世界Boss友军可被治疗（小怪攻击不再治疗）
                 var mc = en.GetComponent<MindControlled>();
                 b._isHealSpore = en._mindControlledFlag && (mc != null && mc.isWorldBoss);

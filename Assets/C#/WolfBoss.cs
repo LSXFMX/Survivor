@@ -110,13 +110,8 @@ public class WolfBoss : enemy
         foreach (var c in GetComponents<Collider>())
             if (c.enabled && !c.isTrigger) { _bodyCol = c; break; }
 
-        if (DifficultyManager.Instance != null)
-        {
-            var cfg = DifficultyManager.Instance.Current;
-            healthmax = Mathf.RoundToInt(healthmax * cfg.hpMultiplier);
-            health    = healthmax;
-            atk       = Mathf.RoundToInt(atk * cfg.atkMultiplier);
-        }
+        // 难度缩放：统一走基类幂等方法（含难度 / 奇遇 / 无尽三重倍率），避免就地自乘累积。
+        ApplyDifficultyScaling();
 
         phase = Phase.Human;
         Sca = humanScale;

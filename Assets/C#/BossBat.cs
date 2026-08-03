@@ -60,13 +60,10 @@ public class BossBat : enemy
         if (rb != null) rb.mass = 501f;
         _rb  = GetComponent<Rigidbody>();
 
-        if (DifficultyManager.Instance != null)
-        {
-            var cfg = DifficultyManager.Instance.Current;
-            healthmax = Mathf.RoundToInt(healthmax * cfg.hpMultiplier);
-            health    = healthmax;
-            atk       = Mathf.RoundToInt(atk * cfg.atkMultiplier);
-        }
+        // 难度缩放：统一走基类幂等方法（含难度 / 奇遇 / 无尽三重倍率）。
+        // 旧写法 `atk = RoundToInt(atk * cfg.atkMultiplier)` 是就地自乘，
+        // SetActive 翻转时会累乘，且漏掉奇遇/无尽倍率，口径与小怪不一致。
+        ApplyDifficultyScaling();
 
         Sca = bossScale;
         transform.localScale = new Vector3(Sca, Sca, Sca);

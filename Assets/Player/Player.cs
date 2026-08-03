@@ -61,6 +61,11 @@ public class Player : Attribute
     // 死亡防重入：避免多个敌人同帧打死时重复触发返回主菜单协程
     private bool _isDead = false;
 
+    // 【2026-08】结算面板承伤/治疗统计用的上一帧血量快照。
+    // _statsTrackInited 保证第一帧只采样、不产生差分（否则出生时 0→healthmax 会被算成巨额治疗）。
+    private int  _lastTrackedHealth;
+    private bool _statsTrackInited = false;
+
     /// <summary>复活时重置死亡防重入标志。公开方法替代反射（反射在 IL2CPP 剥离下会失败）。</summary>
     public void ResetDeadFlag() { _isDead = false; }
 
@@ -320,6 +325,29 @@ public class Player : Attribute
 
     void Update()
     {
+        // ============================================================
+        //  【2026-08 新增】玩家承伤 / 治疗集中式统计
+        //  ----------------------------------------------------------
+        //  为什么用"逐帧对比 health 变化"而不是在每个伤害源里埋点：
+        //    项目里对player.health 做减法的地方有 20+ 处（enemy 碰撞、蝙蝠俯冲、
+        //    各Boss 技能、龙王弹幕、门挑战守门人……），逐一埋点极易漏且后续新增
+        //    伤害源还会继续漏。这里在唯一的 Update 入口做差分，天然覆盖全部来源。
+        //  只统计主玩家（tag=="Player"）：分身(Clone)的血量变化不计入玩家承伤。
+        //  注意顺序：必须放在自然回血之前采样，否则 regen 会把本帧掉血抹平。
+        // ============================================================
+        if (_statsTrackInited && gameObject.CompareTag("Player"))
+        {
+            int delta = _lastTrackedHealth - health;
+            if (delta > 0)
+                GameSessionTracker.Instance?.RecordDamageTaken(delta);
+            else if (delta < 0 && _lastTrackedHealth > 0)
+                // 血量上升且原本没死 → 计为治疗（regen / 吸血 /奇遇回血）。
+                // 排除 _lastTrackedHealth<=0 的情形，避免"死亡复活满血"被算成一次巨额治疗。
+                GameSessionTracker.Instance?.RecordHealing(-delta);
+        }
+        _lastTrackedHealth = health;
+        _statsTrackInited  = true;
+
         // 自然回血：每秒恢复 regen 点血量
         if (regen > 0)
         {

@@ -34,6 +34,113 @@ public class enemy : Attribute
         endlessAtkMultiplier = 1.0f;
     }
 
+    // ============================================================================
+    // 【2026-08 重大数值 Bug 修复】"N7 小怪打出上百伤害"
+    //
+    // 症状：同一次运行里连续开局（尤其打过一局「无尽」后再选 N1~N13），敌人血量/攻击
+    //       会成倍膨胀，N7 的普通蘑菇人能打出上百伤害。
+    //
+    // 根因（两条叠加）：
+    //   ① static 倍率跨局残留。
+    //      endlessHpMultiplier / endlessAtkMultiplier 是 static，但**只在无尽模式的
+    //      battleUI.starttime() 里被重置为 1**；非无尽模式（N1~N13）完全不重置。
+    //      而本项目「返回主菜单」走的是 SceneManager.LoadScene 重载同场景，
+    //      C# static 字段在 LoadScene 时**不会**归零（只有 domain reload 才会，
+    //      而运行中/打包后都不会 reload）。
+    //      → 打一局无尽把 endlessAtkMultiplier 累到 ×5~×10，退出后选 N7，
+    //        小怪 atk = base × 3.0(N7) × 10(残留) = 上百。血量同理爆炸。
+    //      ResetSceneCaches() 虽然写了，但**全项目从无任何调用点**，形同虚设。
+    //
+    //   ② OnEnable 里是"原地自乘"（atk = atk * mult），不是"由基础值推导"。
+    //      任何 SetActive(false)→(true)（对象池复用、fightscene 整体开关、
+    //      亡者领域复活演出等）都会让同一个实例再乘一遍，指数级放大。
+    //
+    // 修复思路：
+    //   • 首次 OnEnable 时把 prefab 的原始 healthmax/atk 快照下来（_baseHealthmax/_baseAtk）；
+    //   • 之后每次缩放都从**快照**重算，而不是在当前值上累乘 → 天然幂等，
+    //     且"先以默认 N3 算过一次、之后玩家真正选了 N7"也能得到正确结果（按最后一次算）；
+    //   • ResetSceneCaches 接入 sceneLoaded + RuntimeInitializeOnLoadMethod 自动调用，
+    //     彻底杜绝 static 跨局残留。
+    // ============================================================================
+
+    /// <summary>prefab 原始血量上限（首次 OnEnable 快照）。-1 表示尚未快照。</summary>
+    private int   _baseHealthmax = -1;
+    /// <summary>prefab 原始攻击力（首次 OnEnable 快照）。</summary>
+    private float _baseAtk;
+
+    /// <summary>
+    /// 按「难度 × 奇遇 × 无尽」倍率缩放血量与攻击力。
+    ///
+    /// 幂等：内部始终基于首次快照的基础值重算，重复调用 / 反复 SetActive 都不会累乘。
+    /// 所有子类（Boss / 世界 Boss / 营地）都应调用本方法，而不要自己手写
+    /// `atk = atk * cfg.atkMultiplier`——那种写法既会累乘，又容易漏掉奇遇/无尽倍率。
+    /// </summary>
+    /// <param name="applyHp">是否缩放血量（营地等只吃血量的单位可关掉攻击缩放）。</param>
+    /// <param name="applyAtk">是否缩放攻击力。</param>
+    protected void ApplyDifficultyScaling(bool applyHp = true, bool applyAtk = true)
+    {
+        // 首次调用：快照 prefab 原始数值
+        if (_baseHealthmax < 0)
+        {
+            _baseHealthmax = healthmax;
+            _baseAtk       = atk;
+        }
+
+        var mgr = DifficultyManager.Instance;
+        if (mgr == null)
+        {
+            // 没有难度管理器：直接还原为基础值，避免残留上一次缩放结果
+            if (applyHp)  { healthmax = _baseHealthmax; health = healthmax; }
+            if (applyAtk) atk = _baseAtk;
+            return;
+        }
+
+        var cfg = mgr.Current;
+
+        if (applyHp)
+        {
+            healthmax = Mathf.Max(1, Mathf.RoundToInt(
+                _baseHealthmax * cfg.hpMultiplier * adventureHpMultiplier * endlessHpMultiplier));
+            health = healthmax;
+        }
+        if (applyAtk)
+        {
+            atk = Mathf.Max(1, Mathf.RoundToInt(
+                _baseAtk * cfg.atkMultiplier * adventureAtkMultiplier * endlessAtkMultiplier));
+        }
+    }
+
+    /// <summary>
+    /// 覆写基础值快照。供"运行时才决定基准数值"的单位使用
+    /// （如世界 Boss 的 ×2 数值、龙王的分阶段血量），调用后再走 ApplyDifficultyScaling
+    /// 即可保证幂等。
+    /// </summary>
+    protected void SetScalingBase(int baseHealthmax, float baseAtk)
+    {
+        _baseHealthmax = baseHealthmax;
+        _baseAtk       = baseAtk;
+    }
+
+    // ── static 归零兜底：场景重载 / 进入运行时自动清理 ──
+    // 之所以两个都挂：
+    //   • RuntimeInitializeOnLoadMethod：覆盖"编辑器关闭 domain reload"与打包后首次启动；
+    //   • sceneLoaded：覆盖游戏内「返回主菜单 = LoadScene 重载同场景」这条主路径。
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void HookSceneResetOnce()
+    {
+        ResetSceneCaches();
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnAnySceneLoaded;
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnAnySceneLoaded;
+    }
+
+    private static void OnAnySceneLoaded(
+        UnityEngine.SceneManagement.Scene scene,
+        UnityEngine.SceneManagement.LoadSceneMode mode)
+    {
+        ResetSceneCaches();
+        TombDomainHook.ResetSceneCaches();
+    }
+
     private const string KEY_SPORE_MUTATION_ENABLED = "SporeMutationEnabled";
     private static readonly Color[] SporeMutationColors =
     {
@@ -96,14 +203,10 @@ public class enemy : Attribute
         _turnRedTimer = 0f;
         _turnRedActive = false;
 
-        // 根据难度缩放基础属性
-        if (DifficultyManager.Instance != null)
-        {
-            var cfg = DifficultyManager.Instance.Current;
-            healthmax = Mathf.RoundToInt(healthmax * cfg.hpMultiplier * adventureHpMultiplier * endlessHpMultiplier);
-            health    = healthmax;
-            atk       = Mathf.RoundToInt(atk * cfg.atkMultiplier * adventureAtkMultiplier * endlessAtkMultiplier);
-        }
+        // 根据难度缩放基础属性。
+        // 走 ApplyDifficultyScaling 而不是就地自乘 —— 后者在对象池复用 / SetActive 翻转时
+        // 会指数级累乘（历史 bug："N7 小怪打出上百伤害"）。
+        ApplyDifficultyScaling();
 
         // 物理质量：Boss(500) > 玩家(100) > 小怪(10) > 复活Boss(5) > 复活小怪(1)
         var rb = GetComponent<Rigidbody>();
@@ -243,6 +346,15 @@ public class enemy : Attribute
             _sporeMutationOverlayRenderer.flipY = _sporeMutationBaseRenderer.flipY;
     }
 
+    // 碰撞伤害内置 CD。
+    // 【2026-08 修复】基类原先没有任何 CD，只有 BossMushroomMan(0.1s)/BossBat(0.2s) 自己加了。
+    //   小怪贴身时，多个 Collider / 物理重新接触会在极短时间内触发多次 OnCollisionEnter，
+    //   每次都完整结算一次伤害 —— 玩家观感就是"一个小怪一瞬间打掉上百血"。
+    //   这里给所有敌人一个统一的 0.5s 最小伤害间隔（与移动速度下的接触节奏匹配），
+    //   子类若已有更严格的 CD 仍然生效（它们在 base 调用之前判断）。
+    private float _lastContactDamageTime = -999f;
+    protected const float ContactDamageInterval = 0.5f;
+
     protected virtual void OnCollisionEnter(Collision collision)
     {
         if (rolestate != state.dead)
@@ -257,6 +369,10 @@ public class enemy : Attribute
                 {
                     // SSR「虚空斗篷」：冲刺期间无敌
                     if (Player.IsDashInvincibleActive) return;
+
+                    // 接触伤害节流：同一只敌人在 ContactDamageInterval 内只结算一次
+                    if (Time.time - _lastContactDamageTime < ContactDamageInterval) return;
+                    _lastContactDamageTime = Time.time;
 
                     // 玩家闪避判定
                     float evaRoll = UnityEngine.Random.value * 100;
@@ -440,6 +556,13 @@ public class enemy : Attribute
             }
 
             rolestate =state.dead;
+
+            // 【2026-08 新增】击杀数统计。
+            //放在复活拦截之后：被亡者领域复活为友军的敌人不算"击杀"（它没真死）。
+            //   放在 rolestate=dead 之后：确保只在真正进入死亡流程时+1，
+            //   配合上面的 `if (rolestate != state.dead)` 外层判断天然防重复计数。
+            GameSessionTracker.Instance?.RecordKill();
+
             // 关键修复：彩色蘑菇（孢子异变）把 base SpriteRenderer.enabled 置 false 来显示彩色覆盖层，
             //   而死亡动画切换的是 base SpriteRenderer 的 sprite——base 被禁，死亡动画就"看不见"。
             //   死亡前先恢复 base、隐藏覆盖层，让 SetTrigger("dead") 切出来的死亡帧能正常显示。

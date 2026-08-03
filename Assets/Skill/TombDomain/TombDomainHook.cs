@@ -244,6 +244,9 @@ public static class TombDomainHook
         _lastSporeHitTime.Remove(en);
         _lastAllyHitTime.Remove(en);
 
+        // 【2026-08 新增】复活友军数纳入结算统计（结算页"亡者领域"专栏）
+        GameSessionTracker.Instance?.RecordAllyRevived();
+
         Debug.Log($"[亡者领域·复活] 成功！{en.gameObject.name} 转为友军（链路={reason}, isWorldBoss={isWorldBoss}, hp={en.healthmax}, atk={en.atk:F1}（含 +{bonus:F1} 来自玩家）)");
         return true;
     }
