@@ -417,7 +417,9 @@ public class MindControlled : MonoBehaviour
             float chazhi = tgt.position.x - transform.position.x;
             transform.localScale = new Vector3((chazhi > 0 ? 1 : -1) * sca, sca, sca);
 
-            float dist = Vector3.Distance(transform.position, tgt.position);
+            // 只算 XZ 平面距离（蝙蝠等飞行友军 Y 轴高度差很大，但水平贴近敌人就该自爆）
+            Vector3 delta = transform.position - tgt.position; delta.y = 0;
+            float dist = delta.magnitude;
             if (dist > _attackRange)
             {
                 Vector3 dir = (tgt.position - transform.position); dir.y = 0; dir = dir.normalized;
@@ -1096,30 +1098,11 @@ public class MindControlled : MonoBehaviour
         sr.sortingOrder = 200;
         sr.color = new Color(0.3f, 0.06f, 0.4f, 0.85f);
         go.transform.localScale = Vector3.one * 0.1f;
-        go.AddComponent<SporeFxHelper>().StartFade();
+        // 静态呈现 + 定时销毁（无每帧协程，避免大量特效卡顿）
+        Destroy(go, 0.5f);
     }
     private static Texture2D s_sporeTex;
     private static Texture2D s_fallbackTex;
-
-    private sealed class SporeFxHelper : MonoBehaviour
-    {
-        public void StartFade() { StartCoroutine(FadeRoutine()); }
-        private System.Collections.IEnumerator FadeRoutine()
-        {
-            var sr = GetComponent<SpriteRenderer>();
-            float t = 0f;
-            // 0.5s 从 0.1x 扩到 0.5x，透明度 0.9→0
-            while (t < 0.5f)
-            {
-                t += Time.deltaTime;
-                float p = t / 0.5f;
-                transform.localScale = Vector3.one * Mathf.Lerp(0.1f, 0.5f, p);
-                if (sr != null) sr.color = new Color(0.3f, 0.06f, 0.4f, Mathf.Lerp(0.9f, 0f, p));
-                yield return null;
-            }
-            Destroy(gameObject);
-        }
-    }
 }
 
 /// <summary>
