@@ -578,7 +578,8 @@ public class battleUI : MonoBehaviour
                         var opt = upGo.GetComponent<Upgradeoptionsbase>();
                         if (opt == null) continue;
                         // 只统计指向同一技能名（即同一 entry 的 learn 关联技能）的卡片
-                        if (opt.skill == null || opt.skill.Skillname != targetSkill) continue;
+                        if (opt.skill == null) continue;
+                        if (!IsSameSkillForUpgradeCount(opt.skill.Skillname, targetSkill)) continue;
                         if (string.IsNullOrEmpty(opt.upgradeGroup)) continue;
                         if (!seenGroups.Add(opt.upgradeGroup)) continue;  // 已统计过同 group
                         totalCur += cui.GetGroupCount(opt.upgradeGroup);
@@ -595,6 +596,28 @@ public class battleUI : MonoBehaviour
             countText.text = totalCur + "/" + totalMax;
         else
             countText.text = "";
+    }
+
+    /// <summary>
+    /// 判断一张升级卡是否应计入某技能的「已升级/上限」计数。
+    ///
+    /// 【2026-08 修复】阴史莱姆与阳史莱姆共用同一批升级卡（共享升级，见
+    /// SlimeFactionRegistrar.BuildSharedUpgrades），而这些卡的<c>opt.skill</c> 只能
+    /// 指向其中一支（阴）。原来的严格等名比较会导致：
+    ///   • 阴史莱姆：4 个共享升级组全部命中 → 显示 16/32
+    ///   • 阳史莱姆：全部被跳过，只剩学习卡 → 显示 1/4
+    /// 但二者的成长实际上完全同步（SlimeSharedUpgrade 会同时升两支），
+    /// 计数理应一致。这里把这对技能视为等价即可。
+    /// </summary>
+    private static bool IsSameSkillForUpgradeCount(string optSkillName, string targetSkill)
+    {
+        if (optSkillName == targetSkill) return true;
+
+        bool optIsSlimePair = optSkillName == SlimeFactionAssets.SKILL_YIN
+                || optSkillName == SlimeFactionAssets.SKILL_YANG;
+        bool tgtIsSlimePair = targetSkill == SlimeFactionAssets.SKILL_YIN
+                           || targetSkill == SlimeFactionAssets.SKILL_YANG;
+        return optIsSlimePair && tgtIsSlimePair;
     }
 
     public void starttime()

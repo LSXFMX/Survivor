@@ -92,8 +92,20 @@ public class skillupgrade : Upgradeoptionsbase
                 if (bl != null) bl.attackRadius += upgradenumber;
                 SkillParasite sp = choiceskill as SkillParasite;
                 if (sp != null) sp.attackRadius += upgradenumber;
+                // 阴/阳史莱姆：attackRadius 定义在 SkillYinYangSlime 上，
+                // 若不在这里加分支，「范围 +3」升级卡会被静默吞掉（选了没反应）。
+                SkillYinYangSlime ys = choiceskill as SkillYinYangSlime;
+                if (ys != null) ys.attackRadius += upgradenumber;
                 break;
         }
+
+        // 阴/阳史莱姆「升级卡共享」兜底。
+        // 正常路径下史莱姆的升级卡走 SlimeSharedUpgrade（它自己就会同时升两支），
+        // 不会进到这里。保留本调用是为了覆盖两种边缘情况：
+        //   1. 将来有人在场景里手工配了一张普通 skillupgrade 卡指向阴或阳；
+        //   2. 其它系统（奇遇/ 门挑战）复用 skillupgrade 改到了其中一支。
+        // 两支都不存在或只有一支时本方法直接返回，无副作用。
+        SyncYinYangSlimePair(player);
 
         // SSR9「三清化一」+ SSR6「影分身之术」联动：
         // 本体技能升级后，同步升级 SkillListClone 中同名技能（维持 SSR6 "实时同步" 语义）
@@ -104,11 +116,40 @@ public class skillupgrade : Upgradeoptionsbase
     }
 
     /// <summary>
-    /// SSR9「三清化一」联动：把本体技能升级同步到 SkillListClone 中同名技能。
-    /// 仅当 SSR6 解锁时生效（SSR6 语义 = 分身技能继承本体 30% 数值）。
-    /// 无 SSR6 时分身技能保持创建时的固定数值，不跟随本体升级。
-    /// 有 SSR6 时：升级增量按 30% 缩放后同步到 SkillListClone。
+    /// 把玩家身上的阴/阳史莱姆两支数值拉平（共享升级）。
+    /// 逻辑与 TaijiSlimeWatcher.SyncSharedStats 一致：CDtime 取 Min，其余取 Max。
+    /// 只有两支都存在时才需要同步；只有一支时什么都不做。
     /// </summary>
+    private static void SyncYinYangSlimePair(Player p)
+    {
+        if (p == null || p.SkillList == null) return;
+
+        SkillYinYangSlime yin = null, yang = null;
+        foreach (Transform t in p.SkillList)
+        {
+            if (t == null) continue;
+            var s = t.GetComponent<SkillYinYangSlime>();
+            if (s == null) continue;
+            if (s.isYin) { if (yin == null) yin = s; }
+            else { if (yang == null) yang = s; }
+        }
+        if (yin == null || yang == null) return;
+
+        yin.damage = yang.damage = Mathf.Max(yin.damage, yang.damage);
+        yin.number = yang.number = Mathf.Max(yin.number, yang.number);
+        yin.pass = yang.pass = Mathf.Max(yin.pass, yang.pass);
+        yin.speed = yang.speed = Mathf.Max(yin.speed, yang.speed);
+        yin.lifetime = yang.lifetime = Mathf.Max(yin.lifetime, yang.lifetime);
+        yin.attackRadius = yang.attackRadius = Mathf.Max(yin.attackRadius, yang.attackRadius);
+
+        float cdA = yin.CDtime > 0.01f ? yin.CDtime : float.MaxValue;
+        float cdB = yang.CDtime > 0.01f ? yang.CDtime : float.MaxValue;
+        float cd = Mathf.Min(cdA, cdB);
+        if (cd < float.MaxValue) yin.CDtime = yang.CDtime = cd;
+    }
+
+    /// <summary>
+    /// SSR9「三清化一」联动：把本体技能升级同步到 SkillListClone 中同名技能。</summary>
     private void SyncUpgradeToCloneSkills(Player p, string skillName, skillAttribute attr, float value)
     {
         if (p == null || p.SkillListClone == null || p.SkillListClone.childCount == 0) return;
@@ -152,6 +193,8 @@ public class skillupgrade : Upgradeoptionsbase
                     if (cbl != null) cbl.attackRadius += scaledValue;
                     SkillParasite csp = s as SkillParasite;
                     if (csp != null) csp.attackRadius += scaledValue;
+                    SkillYinYangSlime cys = s as SkillYinYangSlime;
+                    if (cys != null) cys.attackRadius += scaledValue;
                     break;
             }
         }

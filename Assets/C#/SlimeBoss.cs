@@ -569,11 +569,67 @@ public class SlimeBoss : enemy
         StopAllCoroutines();
         if (_swordObj != null) Destroy(_swordObj.gameObject);
         if (_bowObj != null)   Destroy(_bowObj.gameObject);
+
+        GrantSlimeFactionFavor();
+
         battleUI?.OnBossDefeated();
         PlayAnim("Death");
         foreach (var col in GetComponents<Collider>()) col.enabled = false;
         if (expstone != null) Instantiate(expstone, transform.position, Quaternion.Euler(45, 0, 0));
         StartCoroutine(DieAfter());
+    }
+
+    /// <summary>
+    /// 史莱姆社群好感度结算。模板同 WolfBoss.Destroy1 尾部 / BossBat.Destroy1 尾部。
+    ///
+    /// 规格：
+    ///   • 首次击败 → 解锁「阴史莱姆」(FavorEquipment 9) 并 好感度 +10
+    ///     （对应表格"在解锁阴史莱姆后，好感度＋10"）
+    ///   • 每次击败 → 好感度 +1
+    ///
+    /// 注意用 virtual：WorldBossSlime 继承本类，它走的是 WorldBossManager 的
+    /// 社群解锁流程（OnWorldBossDefeated），不应重复走关底 Boss 这套 +10/+1，
+    /// 因此在子类里覆写为空实现，只保留它自己的 +1。
+    /// </summary>
+    protected virtual void GrantSlimeFactionFavor()
+    {
+        if (EquipmentSystem.Instance != null)
+        {
+            bool already = EquipmentSystem.Instance.IsEquipmentUnlocked(
+                EquipmentType.FavorEquipment, SlimeFactionAssets.EQUIP_YIN);
+            EquipmentSystem.Instance.UnlockEquipment(
+                EquipmentType.FavorEquipment, SlimeFactionAssets.EQUIP_YIN);
+
+            if (!already)
+            {
+                ToastManager.Show("史莱姆巨龙倒下了！「阴史莱姆」已获得，史莱姆社群好感度 +10");
+                if (FavorManager.Instance != null)
+                {
+                    FavorManager.Instance.AddFavor(FactionType.Slime, 10);
+                    ToastManager.Show($"史莱姆社群好感度 +10（当前：{FavorManager.Instance.GetFavor(FactionType.Slime)}）");
+                }
+                else
+                {
+                    // FavorManager 尚未初始化时直接落 PlayerPrefs，键名与 FavorManager 保持一致
+                    int cur = Mathf.Clamp(UnityEngine.PlayerPrefs.GetInt("Favor_Slime", 0) + 10, 0, 100);
+                    UnityEngine.PlayerPrefs.SetInt("Favor_Slime", cur);
+                    UnityEngine.PlayerPrefs.Save();
+                }
+            }
+        }
+
+        // 每次击败史莱姆 Boss → 好感度 +1
+        if (FavorManager.Instance != null)
+        {
+            FavorManager.Instance.AddFavor(FactionType.Slime, 1);
+            ToastManager.Show($"史莱姆社群好感度 +1（当前：{FavorManager.Instance.GetFavor(FactionType.Slime)}）");
+        }
+        else
+        {
+            int cur = Mathf.Clamp(UnityEngine.PlayerPrefs.GetInt("Favor_Slime", 0) + 1, 0, 100);
+            UnityEngine.PlayerPrefs.SetInt("Favor_Slime", cur);
+            UnityEngine.PlayerPrefs.Save();
+        }
     }
 
     private IEnumerator DieAfter()

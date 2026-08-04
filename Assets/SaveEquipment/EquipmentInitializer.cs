@@ -73,10 +73,38 @@ public class EquipmentInitializer : MonoBehaviour
                     PlayerPrefs.SetInt("Favor_Wolf", 90);
                 Debug.Log($"[TestMode] 狼人好感度 {curFavor} → 90（学习卡门槛已满足）");
             }
+
+            // 测试模式：史莱姆好感度同样拉到 90。
+            //   ≥50 让「阴史莱姆」「阳史莱姆」两张学习卡都进卡池（可现场验证合体），
+            //   但不到 100 → 不触发装备11的开局自带，保留"靠三选一凑齐两支"的完整体验路径。
+            int curSlimeFavor = FavorManager.Instance != null
+                ? FavorManager.Instance.GetFavor(FactionType.Slime)
+                : PlayerPrefs.GetInt("Favor_Slime", 0);
+            if (curSlimeFavor < 90)
+            {
+                if (FavorManager.Instance != null)
+                    FavorManager.Instance.SetFavor(FactionType.Slime, 90);
+                else
+                    PlayerPrefs.SetInt("Favor_Slime", 90);
+                Debug.Log($"[TestMode] 史莱姆好感度 {curSlimeFavor} → 90（阴/阳学习卡门槛均已满足）");
+            }
         }
 
         // 命途:寄生 升级卡注册（替换原有 Registrar，内联同步，100% 可靠）
         EnsureWolfFactionRegistered();
+
+        // 史莱姆社群：阴/阳史莱姆 学习卡 + 共享升级卡注册。
+        // 必须放在 ApplyAllEquipments 之后 —— ApplyFavorEquipment11 需要用到
+        // 注册器构建出的技能模板；而注册器本身不依赖装备状态，放末尾最安全。
+        SlimeFactionRegistrar.Register(this);
+        // 合体看守者：负责"阴+阳 → 太极史莱姆"检测与共享升级数值拉平。
+        // 无论好感度多少都要挂 —— 玩家可能靠三选一而非装备凑齐两支技能。
+        SlimeFactionRegistrar.EnsureWatcher(player);
+        // 装备 11 的开局注入依赖模板，所以在 Register 之后补跑一次
+        if (EquipmentSystem.Instance != null &&
+            EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment,
+                                SlimeFactionAssets.EQUIP_TAIJI))
+            SlimeFactionRegistrar.ApplyEquip11_TaijiLiangYi(player, playerSkillList);
     }
 
     /// <summary>
@@ -335,6 +363,20 @@ public class EquipmentInitializer : MonoBehaviour
         if (wolfFavor >= 10)  EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, 6);
         if (wolfFavor >= 50)  EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, 7);
         if (wolfFavor >= 100) EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, 8);
+
+        // 史莱姆社群好感度装备 9–11
+        //  9 = 阴史莱姆（好感度 ≥10  解锁「阴史莱姆」学习资格）
+        // 10 = 阳史莱姆（好感度 ≥50  解锁「阳史莱姆」学习资格）
+        // 11 = 太极两仪（好感度 ≥100，开局自带阴+阳（即太极史莱姆）+ 太极图宠物）
+        int slimeFavor = FavorManager.Instance != null
+            ? FavorManager.Instance.GetFavor(FactionType.Slime)
+            : PlayerPrefs.GetInt("Favor_Slime", 0);
+        if (slimeFavor >= SlimeFactionAssets.FAVOR_YIN)
+            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, SlimeFactionAssets.EQUIP_YIN);
+        if (slimeFavor >= SlimeFactionAssets.FAVOR_YANG)
+            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, SlimeFactionAssets.EQUIP_YANG);
+        if (slimeFavor >= SlimeFactionAssets.FAVOR_TAIJI)
+            EquipmentSystem.Instance.UnlockEquipment(EquipmentType.FavorEquipment, SlimeFactionAssets.EQUIP_TAIJI);
     }
 
     public void ApplyAllEquipments()
@@ -676,6 +718,16 @@ if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.ClearEquipment, 3
             ApplyFavorEquipment7_ParasiteShadow();
         if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment, 8))
             ApplyFavorEquipment8_RedMoonClone();
+
+        // 史莱姆社群好感度 9–11
+        // 9/10 只是"学习资格"提示；真正的开局注入在 11（太极两仪）。
+        // 注意：11 的实际执行放在 Start 末尾 SlimeFactionRegistrar.Register 之后
+        // ——它需要注册器构建出来的技能模板，此刻模板可能还不存在。
+        if (EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment,
+                SlimeFactionAssets.EQUIP_YIN) ||
+            EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment,
+                                                        SlimeFactionAssets.EQUIP_YANG))
+            SlimeFactionRegistrar.ApplyEquip9And10();
     }
 
     /// <summary>成就装备0：初始解锁风箭技能</summary>

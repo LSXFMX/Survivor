@@ -139,6 +139,11 @@ public class enemy : Attribute
     {
         ResetSceneCaches();
         TombDomainHook.ResetSceneCaches();
+        // 史莱姆社群：Sprite 缓存绑定在旧场景的 Texture2D 上，静态技能模板也会变成
+        // fake-null，必须一并清理，否则新一局的阴/阳史莱姆会拿到已销毁的模板。
+        SlimeFactionAssets.ResetCaches();
+        SkillYinYangSlime.ResetStaticCaches();
+        SlimeFactionRegistrar.ResetStatics();
     }
 
     private const string KEY_SPORE_MUTATION_ENABLED = "SporeMutationEnabled";
@@ -172,6 +177,37 @@ public class enemy : Attribute
     // 被多次命中只保持一份 turn-red，避免群战时协程数量爆炸。
     private float _turnRedTimer;
     private bool  _turnRedActive;
+
+    // ============================================================
+    //  【史莱姆社群 · 太极印】禁止移动（immobilize）
+    // ------------------------------------------------------------
+    //  太极史莱姆的第一种攻击方式「太极印」会从敌人头顶威压压制，
+    //  规格要求"正在被攻击的敌人无法移动"。
+    //
+    //  实现选择：用一个到期时间戳而不是 bool + 协程。
+    //    • 多个太极印同时压同一只怪时，取最晚到期时间即可，天然幂等；
+    //    • 不需要每只怪挂一个额外 MonoBehaviour / 协程（群战时开销大）；
+    //    • FixedUpdate 只读一次 float 比较，热路径几乎零成本。
+    //
+    //  注意：只锁"主动位移"，不锁朝向翻转与动画——被压制的怪仍会面向玩家、
+    //  仍播move 动画，视觉上是"想走但被按住"，比整只怪僵死更自然。
+    //  也不锁 OnCollisionEnter：贴身的怪依然能造成接触伤害（否则太极印等同于无敌控场）。
+    // ============================================================
+    [System.NonSerialized] private float _immobilizeUntil;
+
+    /// <summary>当前是否处于禁止移动状态（太极印压制中）。</summary>
+    public bool IsImmobilized => Time.time < _immobilizeUntil;
+
+    /// <summary>
+    /// 施加禁止移动，持续 <paramref name="duration"/> 秒。
+    /// 重复调用取"最晚到期时间"，不会因为后一次较短的压制而提前解锁。
+    /// </summary>
+    public void ApplyImmobilize(float duration)
+    {
+        if (duration <= 0f) return;
+        float until = Time.time + duration;
+        if (until > _immobilizeUntil) _immobilizeUntil = until;
+    }
     public enum state
     {
         idle,
@@ -202,6 +238,9 @@ public class enemy : Attribute
         _reviveAttempted = false; // 对象池/重生时重置：每次"活过来"都允许投一次复活骰
         _turnRedTimer = 0f;
         _turnRedActive = false;
+        // 【史莱姆社群·太极印】禁止移动状态必须在对象池复用时清零，
+        // 否则一只被太极印压制过的怪被回收后重新出生仍会站着不动。
+        _immobilizeUntil = 0f;
 
         // 根据难度缩放基础属性。
         // 走 ApplyDifficultyScaling 而不是就地自乘 —— 后者在对象池复用 / SetActive 翻转时
@@ -489,11 +528,15 @@ public class enemy : Attribute
                 {
                     //1.获取目标坐标和自己坐标
                     //2.设置移动向量，并赋值给刚体
-                    Vector3 postion1=role.transform.position;//目标坐标
-                    Vector3 postion2=transform.position;//自己坐标
-                    Vector3 distance =postion1 - postion2;
-                    Vector3 vect =new Vector3(distance.x, 0, distance.z).normalized*speed;
-                    transform.position += vect * Time.fixedDeltaTime;
+                    // 【史莱姆社群·太极印】被压制期间跳过位移（朝向/动画照常，视觉上"被按住"）
+                    if (!IsImmobilized)
+                    {
+                        Vector3 postion1=role.transform.position;//目标坐标
+                        Vector3 postion2=transform.position;//自己坐标
+                        Vector3 distance =postion1 - postion2;
+                        Vector3 vect =new Vector3(distance.x, 0, distance.z).normalized*speed;
+                        transform.position += vect * Time.fixedDeltaTime;
+                    }
                 }
 
 

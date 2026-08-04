@@ -65,8 +65,18 @@ public class WorldBossSlime : SlimeBoss
         // 亡者领域复活检查（与WorldBossBat/WorldBossMushroomMan一致）
         if (!_reviveAttempted) { _reviveAttempted = true; if (TombDomainHook.TryReviveAsAlly(this)) { Debug.Log("[亡者领域] 世界史莱姆Boss被永久控制为友军"); return; } }
         worldBossManager?.OnWorldBossDefeated(faction);
+        // 世界Boss 击败 → 好感度 +1（与 WorldBossWolf.Destroy1 一致；
+        // 此前史莱姆世界 Boss 漏了这一行，导致打世界 Boss 不涨好感度）
+        FavorManager.Instance?.AddFavor(FactionType.Slime, 1);
         var saved = battleUI; battleUI = null;
         base.Destroy1();
         battleUI = saved;
     }
+
+    /// <summary>
+    /// 世界 Boss 不走关底 Boss 的「首杀解锁阴史莱姆 +10 / 每杀 +1」流程 ——
+    /// 它的社群解锁与好感度由 WorldBossManager.OnWorldBossDefeated +
+    /// 本类 Destroy1 里的 AddFavor(1) 负责，否则一次击败会重复加两次好感度。
+    /// </summary>
+    protected override void GrantSlimeFactionFavor() { }
 }

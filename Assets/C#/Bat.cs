@@ -272,14 +272,15 @@ public class Bat : enemy
         //   "N7 小怪打出上百伤害"的感知：蝙蝠从 N4 起进入刷怪池，
         //   N7 时 atk 已被难度倍率放大，而玩家堆的 def 一点都用不上。
         //   现与 enemy.OnCollisionEnter 统一口径：减防御、至少 1 点。
-        int dmg = Mathf.Max(1, (int)(atk - player.def));
-        player.health -= dmg;
+        //   注意变量名不能与上方友军分支的 dmg 重复（同一方法作用域，CS0136）。
+        int playerDmg = Mathf.Max(1, (int)(atk - player.def));
+        player.health -= playerDmg;
 
         if (atknumber != null && DamageNumberSettings.Visible)
         {
             GameObject number = Instantiate(atknumber, other.transform.position, Quaternion.identity);
             number.transform.localScale *= DamageNumberSettings.SizeScale;
-            number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = dmg.ToString();
+            number.transform.GetChild(0).GetComponent<TextMeshProUGUI>().text = playerDmg.ToString();
         }
 
         player.startturnred();

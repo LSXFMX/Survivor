@@ -294,6 +294,18 @@ public class WorldBossManager : MonoBehaviour
             if (favor >= 80) { ToastManager.Show("命途:寄生 数量 +1"); yield return new WaitForSeconds(0.4f); }
             if (favor >= 90) { ToastManager.Show("自然回血 +1"); yield return new WaitForSeconds(0.4f); }
         }
+        else if (faction == FactionType.Slime)
+        {
+            if (favor >= 10) { ToastManager.Show("经验效率 +5"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 20) { ToastManager.Show("攻击力 +10");   yield return new WaitForSeconds(0.4f); }
+            if (favor >= 30) { ToastManager.Show("移动速度 +2"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 40) { ToastManager.Show("阴/阳史莱姆 冷却 -20%"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 50) { ToastManager.Show("防御力 +2");   yield return new WaitForSeconds(0.4f); }
+            if (favor >= 60) { ToastManager.Show("阴/阳史莱姆 范围 +10"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 70) { ToastManager.Show("闪避率 +1");   yield return new WaitForSeconds(0.4f); }
+            if (favor >= 80) { ToastManager.Show("阴/阳史莱姆 数量 +5"); yield return new WaitForSeconds(0.4f); }
+            if (favor >= 90) { ToastManager.Show("自然回血 +1"); yield return new WaitForSeconds(0.4f); }
+        }
 
         // 应用实际加成
         ApplyFactionBonus(faction);
@@ -393,6 +405,71 @@ public class WorldBossManager : MonoBehaviour
             if (favor >= 90) player.regen += 1;
             if (favor >= 100)
                 EquipmentSystem.Instance?.UnlockEquipment(EquipmentType.FavorEquipment, 8);
+        }
+        else if (faction == FactionType.Slime)
+        {
+            // 表格对应：
+            //   10 经验效率+5     + 解锁阴史莱姆(FavorEquipment 9,  含「阴史莱姆」学习资格)
+            //   20 攻击力+10
+            //   30 移动速度+2
+            //   40 阴/阳史莱姆 冷却 -20%
+            //   50 防御力+2      + 解锁阳史莱姆(FavorEquipment 10, 含「阳史莱姆」学习资格)
+            //   60 阴/阳史莱姆 范围 +10
+            //   70 闪避率+1
+            //   80 阴/阳史莱姆 数量 +5
+            //   90 自然回血+1
+            //  100                + 解锁太极两仪(FavorEquipment 11, 太极图宠物 + 开局自带阴+阳)
+            //
+            // 注意：DR 在本项目里被当作「经验效率」使用（与蝙蝠/狼人分支的既有约定一致），
+            // 虽然枚举注释写的是 drop rate —— 这里保持一致，不单独改语义。
+            if (favor >= SlimeFactionAssets.FAVOR_YIN)
+            {
+                player.DR += 5;
+                EquipmentSystem.Instance?.UnlockEquipment(
+                    EquipmentType.FavorEquipment, SlimeFactionAssets.EQUIP_YIN);
+            }
+            if (favor >= 20) player.atk += 10;
+            if (favor >= 30) player.speed += 2;
+            if (favor >= 40)
+                ApplySlimeBonus(cdMul: 0.8f);
+            if (favor >= SlimeFactionAssets.FAVOR_YANG)
+            {
+                player.def += 2;
+                EquipmentSystem.Instance?.UnlockEquipment(
+                    EquipmentType.FavorEquipment, SlimeFactionAssets.EQUIP_YANG);
+            }
+            if (favor >= 60)
+                ApplySlimeBonus(radiusBonus: 10f);
+            if (favor >= 70) player.EVA += 1;
+            if (favor >= 80)
+                ApplySlimeBonus(countBonus: 5);
+            if (favor >= 90) player.regen += 1;
+            if (favor >= SlimeFactionAssets.FAVOR_TAIJI)
+                EquipmentSystem.Instance?.UnlockEquipment(
+                    EquipmentType.FavorEquipment, SlimeFactionAssets.EQUIP_TAIJI);
+        }
+    }
+
+    /// <summary>
+    /// 对阴/阳史莱姆技能应用加成（冷却乘区、范围、射弹数量）。
+    /// 镜像 ApplyParasiteBonus / ApplyBloodlineBonus，服务于史莱姆社群 40/60/80 档奖励。
+    ///
+    /// 注意：这里会同时命中阴、阳两支（foreach 不break），因为规格要求二者共享成长。
+    /// 即使某一侧尚未学会，另一侧照样吃到加成；之后学到的那支会由
+    /// TaijiSlimeWatcher.SyncSharedStats 自动拉平到同一水平。
+    /// </summary>
+    private void ApplySlimeBonus(float cdMul = 1f, float radiusBonus = 0f, int countBonus = 0)
+    {
+        if (player == null || player.SkillList == null) return;
+        foreach (Transform t in player.SkillList)
+        {
+            if (t == null) continue;
+            SkillYinYangSlime s = t.GetComponent<SkillYinYangSlime>();
+            if (s == null) continue;
+            if (cdMul < 1f && cdMul > 0f)
+                s.CDtime = Mathf.Max(0.5f, s.CDtime * cdMul);
+            if (radiusBonus > 0f) s.attackRadius += radiusBonus;
+            if (countBonus > 0)   s.number += countBonus;
         }
     }
 

@@ -408,12 +408,12 @@ public class ArchiveManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 在 FavorEquipment 容器下按需补出狼人社群三件套图标（equipmentId 6/7/8）。
-    /// 场景历史上只挂了蘑菇 0/1/2 + 蝙蝠 3/4/5，狼人 6/7/8 需要在运行时克隆现有 FavorEquipment
-    /// 图标做模板补齐。
+    /// 在 FavorEquipment 容器下按需补出**狼人 6/7/8 与史莱姆 9/10/11** 六件图标。
+    /// 场景里历史上只挂了蘑菇 0/1/2 + 蝙蝠 3/4/5，后加的两个社群都需要运行时克隆补齐。
     /// 名字 / 描述 / howToGet / Sprite 由
-    /// <see cref="EquipmentIcon.ApplyForcedFavorEquipmentWolfOverrides"/> 在 Initialize 时自动注入。
-    /// 与 EnsureGachaSsrIconsExist / EnsureAchievementIcon8Exists 同套路。
+    /// <see cref="EquipmentIcon.ApplyForcedFavorEquipmentWolfOverrides"/> 与
+    /// <see cref="EquipmentIcon.ApplyForcedFavorEquipmentSlimeOverrides"/> 在 Initialize 时自动注入。
+    /// 与 EnsureGachaSsrIconsExist / EnsureAchievementIcon8Exists 同套路，幂等。
     /// </summary>
     private void EnsureFavorEquipmentWolfIconsExist()
     {
@@ -476,9 +476,16 @@ public class ArchiveManager : MonoBehaviour
         if (rightmostRt != null) { baseX = rightmostRt.anchoredPosition.x; baseY = rightmostRt.anchoredPosition.y; }
 
         int offsetIndex = 1;
+        // 狼人社群 6/7/8
         TryCloneFavorWolfIcon(template, parent, 6, existingIds, baseX + spacing * offsetIndex++, baseY);
         TryCloneFavorWolfIcon(template, parent, 7, existingIds, baseX + spacing * offsetIndex++, baseY);
         TryCloneFavorWolfIcon(template, parent, 8, existingIds, baseX + spacing * offsetIndex++, baseY);
+        // 史莱姆社群 9/10/11（阴史莱姆 / 阳史莱姆 / 太极两仪）
+        // 场景里同样没有这三个节点，必须一起克隆出来，否则存档界面「好感度装备」
+        // 永远只显示到狼人的 8 号，新加的三件在图鉴里根本看不到。
+        TryCloneFavorWolfIcon(template, parent, 9,  existingIds, baseX + spacing * offsetIndex++, baseY);
+        TryCloneFavorWolfIcon(template, parent, 10, existingIds, baseX + spacing * offsetIndex++, baseY);
+        TryCloneFavorWolfIcon(template, parent, 11, existingIds, baseX + spacing * offsetIndex++, baseY);
     }
 
     private static void TryCloneFavorWolfIcon(EquipmentIcon template, Transform parent,
@@ -487,7 +494,10 @@ public class ArchiveManager : MonoBehaviour
         if (existingIds.Contains(targetId)) return;
 
         GameObject clone = Instantiate(template.gameObject, parent);
-        clone.name = $"Favor_Wolf_{targetId} (auto)";
+        // 6~8 = 狼人，9~11= 史莱姆
+        clone.name = targetId <= 8
+            ? $"Favor_Wolf_{targetId} (auto)"
+            : $"Favor_Slime_{targetId} (auto)";
 
         // 修复：Instantiate 会完整复制模板的 RectTransform.anchoredPosition，
         // 导致克隆图标与模板图标完全重叠、互相遮挡点击区域。这里显式重新定位。
@@ -499,7 +509,8 @@ public class ArchiveManager : MonoBehaviour
 
         cloneIcon.equipmentType = EquipmentType.FavorEquipment;
         cloneIcon.equipmentId   = targetId;
-        // 名字/描述/howToGet/Sprite 由 EquipmentIcon.ApplyForcedFavorEquipmentWolfOverrides 注入，
+        // 名字/描述/howToGet/Sprite 由 EquipmentIcon 的
+        // ApplyForcedFavorEquipmentWolfOverrides / ...SlimeOverrides 注入，
         // 这里清空避免视觉上闪现模板内容（蘑菇/蝙蝠字样）
         cloneIcon.equipmentName = string.Empty;
         cloneIcon.description   = string.Empty;

@@ -101,6 +101,12 @@ public class Skillbase : MonoBehaviour
         // 亡者领域（进化形态，优先于孢子领域判断）
         else if (Skillname.Contains("亡者"))
             AudioManager.PlaySfx(AudioManager.SfxKey.TombCast);
+        // 史莱姆社群（阴/阳/太极史莱姆）：借用孢子的粘稠涌动音，
+        // 与"史莱姆"的黏液质感契合，且避免为新社群单独引入音源文件。
+        // 注意必须放在"孢子"判断之前——技能名里没有"孢子"二字，
+        // 但也不能落到最后被别的关键词误命中。
+        else if (Skillname.Contains("史莱姆"))
+            AudioManager.PlaySfx(AudioManager.SfxKey.SporeCast);
         // 自然 / 孢子
         else if (Skillname.Contains("孢子"))
             AudioManager.PlaySfx(AudioManager.SfxKey.SporeCast);

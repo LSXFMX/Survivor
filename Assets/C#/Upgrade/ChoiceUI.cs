@@ -328,6 +328,14 @@ public class ChoiceUI : MonoBehaviour
                         foreach (var upItem in entry.upgradeOptions)
                             if (!ShouldExcludeUpgrade(upItem))
                             {
+                                // 【2026-08】同一个升级卡对象可能被多个 entry 共同引用
+                                //   （史莱姆社群的「阴/阳史莱姆」共享升级卡就是这样：
+                                //    一套4 张卡同时挂在阴、阳两个 entry 上）。
+                                //   若不去重，玩家同时持有阴+阳时这 4 张卡会被塞进卡池两次，
+                                //   抽中概率凭空翻倍 —— 是个隐性的平衡 BUG。
+                                //   按引用去重即可，对只被单个 entry 引用的常规卡无任何影响。
+                                if (list.Contains(upItem)) continue;
+
                                 list.Add(upItem);
                                 nonLearnSkillCandidates.Add(upItem);
                                 upCount++;

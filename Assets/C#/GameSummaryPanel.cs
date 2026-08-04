@@ -149,14 +149,20 @@ public class GameSummaryPanel : MonoBehaviour
         //   一次 layout pass —— 旧版在 SetActive(true) 之前调 AutoScaleFontSizes，
         //   首次打开面板时 rect.size 可能读到 (0,0) 导致函数直接 return，
         //   字号/内边距完全没生效（表现为"第一次打开排版错乱，关掉再开就正常了"）。
-        panelRoot.transform.SetAsLastSibling();
-        panelRoot.SetActive(true);
-
+        //
+        // 【顺序至关重要】blocker 必须先置顶，panelRoot 后置顶。
+        //   blocker 是一张铺满全屏的半透明黑色 Image（带 raycast），作用是"挡住背后的
+        //   战斗 UI，不让玩家点到"。若反过来把 blocker 放在 panelRoot 之后，
+        //   它就盖在面板正上方—— 整个结算面板会被蒙上一层灰、且所有按钮点不动。
+        //   （这正是"页面无法点击 + 不知名遮罩"的原因。）
         if (blocker != null)
         {
             blocker.SetActive(true);
             blocker.transform.SetAsLastSibling();
         }
+
+        panelRoot.transform.SetAsLastSibling();
+        panelRoot.SetActive(true);
 
         // 强制立即完成一次布局计算，让下面读到的 rect 一定是最终尺寸
         Canvas.ForceUpdateCanvases();
@@ -910,9 +916,10 @@ public class GameSummaryPanel : MonoBehaviour
             new Vector2(0.5f, 0.5f), new Vector2(0f, rowReturnY),
             new Vector2(Mathf.Clamp(w * 0.26f, 130f, 220f), btnH));
 
-        // 返回按钮配色强调（绿），翻页按钮保持低饱和，形成层次
-        ApplyButtonTint(returnButton, new Color(0.20f, 0.55f, 0.30f, 1f));
-        ApplyButtonTint(prevButton,new Color(0.16f, 0.16f, 0.26f, 1f));
+        // 返回按钮配色强调（琥珀金，呼应面板的金色标题与边框），
+        // 翻页按钮保持低饱和深板岩色，形成层次
+        ApplyButtonTint(returnButton, new Color(0.62f, 0.46f, 0.16f, 1f));
+        ApplyButtonTint(prevButton,   new Color(0.16f, 0.16f, 0.26f, 1f));
         ApplyButtonTint(nextButton,   new Color(0.16f, 0.16f, 0.26f, 1f));
 
         // 页面容器下沿必须让开加高后的底栏，否则正文会被按钮压住
@@ -955,11 +962,24 @@ public class GameSummaryPanel : MonoBehaviour
         rt.anchoredPosition = anchoredPos;
     }
 
+    /// <summary>
+    /// 设置按钮底色。
+    ///
+    /// 【2026-08 修复】同时清掉按钮的 sprite。原因有两个：
+    ///   ① **绿幕背景**：按钮用的是 AI 生成的 UI 素材，四周残留未抠净的纯色底；
+    ///      再叠上 Image.color 的着色后，就变成玩家看到的"一块突兀的绿色方块"。
+    ///   ② **比例不对**：该sprite 没有 9-slice border，Image 默认 Simple 模式会把它
+    ///      直接拉伸到按钮尺寸（180×42），与源图长宽比不符 → 明显变形。
+    /// 改为纯色填充：外观干净统一、任意尺寸都不会失真，也不再依赖素材抠图质量。
+    /// </summary>
     private static void ApplyButtonTint(Button btn, Color c)
     {
         if (btn == null) return;
         var img = btn.GetComponent<Image>();
-        if (img != null) img.color = c;
+        if (img == null) return;
+        img.sprite = null;              // 去掉带绿边/ 会被拉伸的素材
+        img.type = Image.Type.Simple;
+        img.color = c;
     }
 
     /// <summary>

@@ -94,6 +94,14 @@ public class getnewskill : Upgradeoptionsbase
 
         GameObject newSkillObj = Instantiate(skill.gameObject, player.SkillList);
 
+        // 【2026-08 修复】若技能模板是"运行时构造的 inactive GameObject"（史莱姆社群的
+        //   阴/阳史莱姆就是这样，见 SlimeFactionRegistrar.BuildSkillTemplate），
+        //   Instantiate 出来的实例会继承 inactive 状态 → Start() 永不执行 →
+        //   技能对象存在但完全不工作（不召唤鱼、不发射、图标也不刷新）。
+        //   注意：这与传统 .prefab 资源不同——prefab 资源的 m_IsActive 通常为 true，
+        //   所以历史上从未暴露这个问题。这里统一补一次激活，对已有技能无任何行为变化。
+        if (!newSkillObj.activeSelf) newSkillObj.SetActive(true);
+
         // === 夏无专属：学习血族血统时立即应用加成（number→5, lifestealRatio→0.20）===
         // 无需等蝙蝠好感度 100 开局自带——只要夏无在任何时机通过三选一学到血族血统，
         // 就立即享受 UR 角色加成。ApplyXiaWuBloodlineBuff 内部会检查 CurrentSkinIndex。
@@ -109,6 +117,7 @@ public class getnewskill : Upgradeoptionsbase
         if (player.SkillListClone != null)
         {
             GameObject cloneObj = Instantiate(skill.gameObject, player.SkillListClone);
+            if (!cloneObj.activeSelf) cloneObj.SetActive(true); // 同上：inactive 模板需激活
             Skillbase cloneSb = cloneObj.GetComponent<Skillbase>();
             Skillbase ownerSb = newSkillObj.GetComponent<Skillbase>();
             if (cloneSb != null && ownerSb != null)

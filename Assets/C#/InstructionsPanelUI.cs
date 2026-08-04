@@ -31,15 +31,24 @@ public class InstructionsPanelUI : MonoBehaviour
 
     [Header("幻灯片（Resources 路径，留空=纯文字模式）")]
     /// <summary>
-    /// 图片幻灯片的 Resources 路径。
+    /// 图片幻灯片的 Resources 路径。默认留空 → 纯文字模式。
     ///
-    /// 【2026-08 修复】默认值原为 6 条 "InstructionsSlides/slide_0X_*" 路径，
-    ///   但这些图片资源从未存在于 Resources 目录 —— 于是：
-    ///     • LoadSlidesIfNeeded 每次都白跑 6 次 Resources.Load 全部返回 null；
-    ///     • 更严重的是 EnsureDefaultSlideTexts 里 `slidePaths.Length` 会被这6 条
-    ///       覆盖判断，历史上曾导致总页数被截断到 6 页。
-    ///   现在默认留空（纯文字模式）。若将来真做了插画，在 Inspector 里逐页填即可，
-    ///   Refresh 会自动对"有图的页显示图、无图的页回落文字"。
+    /// 【背景说明 · 2026-08】
+    ///   本字段的默认值原本是 6 条 "InstructionsSlides/slide_0X_*" 路径，
+    ///   对应的 6 张 PNG **确实存在**于 Resources/InstructionsSlides/
+    ///   （slide_01_move / 02_levelup / 03_gacha / 04_difficulty / 05_affinity / 06_events）。
+    ///
+    ///   之所以现在改成留空，不是因为图片缺失，而是两个实际问题：
+    ///     1. Refresh() 的规则是"某页有图就显示图、并隐藏该页文字"
+    ///        （slideText.SetActive(hasText && !hasSprite)），
+    ///        所以只要这 6 条路径在，前 6 页就永远显示图片、文字永不可见；
+    ///     2. 这 6 张图是按**旧版 6 个主题**渲染出来的静态位图，内容已过时
+    ///        （抽卡消耗金币、门挑战在主界面、装备四类…），而位图无法像文字那样改写。
+    ///        既然本次要求"移除所有过时内容"，就不能再让它们作为正文呈现。
+    ///
+    ///   现行方案：正文统一走 slideTexts（14 页，内容最新且可维护）。
+    ///   若将来重新绘制了与新文案匹配的插画，只需在 Inspector 里逐页填回路径即可 ——
+    ///   Refresh() 支持"有图的页显示图、无图的页回落文字"的混合模式，无需改代码。
     /// </summary>
     public string[] slidePaths = new string[0];
 
@@ -96,7 +105,7 @@ public class InstructionsPanelUI : MonoBehaviour
             + "<color=#80FFC0>核心目标</color>：在限时内生存，并击败关底首领。\n"
             + "<color=#80FFC0>核心循环</color>：击杀敌人 → 获取经验 → 升级强化 → 变强 → 击败首领。\n\n"
             + "你唯一需要手动做的事是 <color=#FF80C0>走位</color>，技能会自动释放。\n\n"
-            + "本教程共 <color=#FFD24A>14 页</color>，可用 <color=#FF80C0>← →</color> 按钮翻页。",
+            + "本教程共 <color=#FFD24A>15 页</color>，可用 <color=#FF80C0>← →</color> 按钮翻页。",
 
             // ── 1. 移动与自动战斗 ──
             "<size=34><color=#FFD24A>1. 移动与自动战斗</color></size>\n\n"
@@ -180,16 +189,34 @@ public class InstructionsPanelUI : MonoBehaviour
             // ── 8. 好感度与社群 ──
             "<size=34><color=#FF80C0>8. 好感度与社群</color></size>\n\n"
             + "游戏内有四个 <color=#FF80C0>社群</color>：蘑菇 / 蝙蝠 / 狼人 / 史莱姆。\n\n"
-            + "击败对应的 <color=#FFD24A>世界 Boss</color> 即可解锁社群并累积好感度。\n\n"
+            + "击败对应的 <color=#FFD24A>世界 Boss</color> 即可解锁社群并累积好感度。\n"
+            + "首次击败关底首领<color=#80FFC0>+10</color>，之后每次击败 <color=#80FFC0>+1</color>（上限 100）。\n\n"
             + "每个社群会：\n"
-            + "  • <color=#80FFC0>强化一个特定技能</color>，使其大幅变强\n"
-            + "  • 提供额外面板加成\n"
-            + "  • 在好感度 <color=#FFD24A>10 / 50 / 100</color> 三档各解锁一件装备\n\n"
+            + "  • <color=#80FFC0>解锁一个专属技能</color>，并随好感度不断强化它\n"
+            + "  • 提供额外面板加成（攻 / 防 / 速 / 闪避 / 经验/ 回血）\n"
+            + "  • 在好感度 <color=#FFD24A>10 / 50 / 100</color> 三档各解锁一件装备\n"
+            + "  • 好感度 <color=#FFD24A>100</color> 时赠予该社群的 <color=#FF80C0>宠物</color>\n\n"
             + "好感度 <color=#FF80C0>跨局永久保存</color>，是长线养成的核心。\n\n"
-            + "<color=#888>具体社群对应哪个技能，请在主菜单社群面板查看。</color>",
+            + "<color=#888>四社群专属技能：孢子领域 / 血族血统 / 命途:寄生 / 阴·阳史莱姆。</color>",
 
-            // ── 9. 世界 Boss 与营地 ──
-            "<size=34><color=#FFD24A>9. 世界 Boss 与营地</color></size>\n\n"
+            // ── 9. 太极史莱姆（史莱姆社群） ──
+            "<size=34><color=#9BE8FF>9. 太极史莱姆</color></size>\n\n"
+            + "史莱姆社群的专属技能，由<color=#C0C0FF>两个独立技能</color> 组成：\n\n"
+            + "<color=#B278FF>阴史莱姆</color>（好感 10）：召唤太极阴鱼，向四周齐射黑色能量灵弹。\n"
+            + "<color=#FFF5C8>阳史莱姆</color>（好感 50）：召唤太极阳鱼，齐射白色能量灵弹。\n"
+            + "  <color=#888>单发伤害低，但数量极多（初始每轮 6 发）。</color>\n\n"
+            + "<color=#9BE8FF>★ 同时持有两者时，自动合体为「太极史莱姆」</color>，\n"
+            + "两种攻击方式<color=#FFD24A>轮流</color>切换（合体与拆分都有演出）：\n"
+            + "  <color=#FFD24A>①太极印</color> — 从敌人头顶威压压制，连续落下多次；\n"
+            + "<color=#FF80C0>被压制的敌人无法移动</color>，是强力控场手段。\n"
+            + "  <color=#FFD24A>②阴阳齐射</color> — 拆分为双鱼，同时向四周倾泻黑白灵弹。\n\n"
+            + "<color=#80FFC0>升级卡共享</color>：写作「阴/阳史莱姆」，一张卡同时强化两支。\n"
+            + "可升级<color=#C0C0FF>伤害 / 冷却 / 数量 / 范围</color>；其中 <color=#FFD24A>数量</color>同时决定\n"
+            + "每轮射弹数与太极印次数，是最核心的成长项。\n\n"
+            + "<color=#888>好感 100「太极两仪」：开局直接自带太极史莱姆 + 太极图宠物。</color>",
+
+            // ── 10. 世界 Boss 与营地 ──
+            "<size=34><color=#FFD24A>10. 世界 Boss 与营地</color></size>\n\n"
             + "<color=#FF6060>世界 Boss</color>（N6 起解锁）：\n"
             + "  • 属性为同名关底 Boss 的 <color=#FF6060>两倍</color>，并自带每秒回血\n"
             + "  • 击败后解锁对应社群，好感度 +1\n"
@@ -200,8 +227,8 @@ public class InstructionsPanelUI : MonoBehaviour
             + "  • 累计攻占达标可解锁成就装备\n\n"
             + "<color=#888>无尽模式每 5 分钟随机刷出一只已解锁社群的 Boss。</color>",
 
-            // ── 10. 源木与奇遇 ──
-            "<size=34><color=#C0A060>10. 源木与奇遇</color></size>\n\n"
+            // ── 11. 源木与奇遇 ──
+            "<size=34><color=#C0A060>11. 源木与奇遇</color></size>\n\n"
             + "<color=#C0A060>源木</color>：局内货币，来自击杀敌人与已占领的营地。\n\n"
             + "<color=#FF80C0>奇遇事件</color>（N3 起开放）：\n"
             + "  • 消耗源木触发，随机给出若干效果供你选择其一\n"
@@ -211,8 +238,8 @@ public class InstructionsPanelUI : MonoBehaviour
             + "特定 SSR 可让可选项从二选一变为三选一。\n\n"
             + "<color=#888>无尽模式下每分钟会扣除 10% 源木，需持续补充。</color>",
 
-            // ── 11. 门挑战 ──
-            "<size=34><color=#FFD24A>11. 门挑战 (N5+)</color></size>\n\n"
+            // ── 12. 门挑战 ──
+            "<size=34><color=#FFD24A>12. 门挑战 (N5+)</color></size>\n\n"
             + "N5 及以上难度的战斗中会出现 <color=#FFD24A>门</color>，点击即可进入挑战。\n\n"
             + "共 <color=#FFD24A>13 层</color>，逐层递增，每层生成强化过的守门敌人。\n\n"
             + "每层通关奖励：\n"
@@ -221,8 +248,8 @@ public class InstructionsPanelUI : MonoBehaviour
             + "全部 13 层通关：额外获得 <color=#FFD24A>经验效率 +10</color>。\n\n"
             + "<color=#888>守门人自带回血，输出不足会陷入僵持，建议中后期再挑战。</color>",
 
-            // ── 12. 角色与冲刺 ──
-            "<size=34><color=#FFD24A>12. 角色与冲刺</color></size>\n\n"
+            // ── 13. 角色与冲刺 ──
+            "<size=34><color=#FFD24A>13. 角色与冲刺</color></size>\n\n"
             + "共 <color=#FFD24A>4</color> 位角色，在主菜单切换。默认角色始终可用，\n"
             + "其余 3 位通过 <color=#FF80C0>UR 抽卡</color> 解锁：\n\n"
             + "  • <color=#80FFC0>琪诺露</color> — 默认角色，均衡，享受难度攻击加成\n"
@@ -233,8 +260,8 @@ public class InstructionsPanelUI : MonoBehaviour
             + "向移动方向瞬移一段距离，有独立冷却，是核心保命手段。\n\n"
             + "<color=#888>可通过升级为冲刺附加无敌 / 穿怪效果。</color>",
 
-            // ── 13. 难度、结算与设置 ──
-            "<size=34><color=#FFD24A>13. 难度 · 结算 · 设置</color></size>\n\n"
+            // ── 14. 难度、结算与设置 ──
+            "<size=34><color=#FFD24A>14. 难度 · 结算 · 设置</color></size>\n\n"
             + "<color=#FFD24A>难度</color>：N1 ~ N13 + <color=#FF80C0>无尽模式</color>，通关当前解锁下一档。\n"
             + "  关键节点：<color=#80FFC0>N3</color> 奇遇 · <color=#80FFC0>N4</color> 蝙蝠 · <color=#80FFC0>N5</color> 门挑战\n"
             + "  <color=#80FFC0>N6</color> 世界 Boss · <color=#80FFC0>N7</color> 血攻翻倍 · <color=#80FFC0>N8</color> 社群挑战\n"

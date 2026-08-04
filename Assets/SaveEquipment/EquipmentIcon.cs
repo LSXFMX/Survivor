@@ -147,6 +147,7 @@ public class EquipmentIcon : MonoBehaviour
         // equipmentType=FavorEquipment / equipmentId=6~8，名字描述图标全部由此覆盖。
         ApplyForcedFavorEquipmentBaseOverrides();
         ApplyForcedFavorEquipmentWolfOverrides();
+        ApplyForcedFavorEquipmentSlimeOverrides();
 
         // 同时把抽卡 SSR 8 / 9（新增的「我与我与我」/「三清化一」）的文本兜底
         // 写在这里，避免场景里手工漏配。即使该图标根本没在场景里挂出来，UI 显示也不报错。
@@ -313,6 +314,61 @@ public class EquipmentIcon : MonoBehaviour
                 "开局自动获得【命途:寄生】，数量 +1。";
             howToGet = "狼人社群好感度达到 100";
             SetIconFromAssetPath("像素幸存者资源包/存档装备图标/好感度装备/008_new.png");
+        }
+    }
+
+    /// <summary>
+    /// 史莱姆社群好感度装备 9/10/11 的文本 + 图标兜底。
+    ///    9 阴史莱姆 : 好感度≥10  解锁学习「阴史莱姆」资格
+    ///   10 阳史莱姆 : 好感度≥50  解锁学习「阳史莱姆」资格
+    ///   11 太极两仪 : 好感度≥100 太极图宠物 + 开局自带阴+阳（即太极史莱姆）
+    ///
+    /// 图标走 Resources/Slime/（AI 生成素材），而不是
+    /// 「像素幸存者资源包/存档装备图标/好感度装备/」下的编号图——
+    /// 后者目前只做到 008，没有 009~011。SetIconFromAssetPath 会自动把
+    /// ".png" 去掉推导出 Resources 路径，因此传"Slime/xxx.png" 即可命中。
+    ///
+    /// skipBackgroundRemoval=false：这三张图是深色渐晕背景 + 高对比主体，
+    /// 走标准抠背景效果良好（不像亡者领域那种带真实背景的立绘会被误抠）。
+    /// </summary>
+    private void ApplyForcedFavorEquipmentSlimeOverrides()
+    {
+        if (equipmentType != EquipmentType.FavorEquipment) return;
+
+        if (equipmentId == SlimeFactionAssets.EQUIP_YIN)
+        {
+            equipmentName = "阴史莱姆";
+            description = "解锁技能【阴史莱姆】\n\n" +
+                "\"心的共鸣，会带来力量。\"\n" +
+                "在你身旁召唤太极中的阴鱼，\n" +
+                "每隔一段时间向周围敌人发射大量黑色能量灵弹；\n" +
+                "单发伤害不高，但数量极多。";
+            howToGet = "首次击败史莱姆巨龙（史莱姆社群好感度 +10）";
+            SetIconFromAssetPath("Slime/icon_yin_slime.png");
+        }
+        else if (equipmentId == SlimeFactionAssets.EQUIP_YANG)
+        {
+            equipmentName = "阳史莱姆";
+            description = "解锁技能【阳史莱姆】\n\n" +
+                "\"心的共鸣，会带来力量。\"\n" +
+                "在你身旁召唤太极中的阳鱼，\n" +
+                "每隔一段时间向周围敌人发射大量白色能量灵弹。\n\n" +
+                "与【阴史莱姆】同时在场时，二者将合体为「太极史莱姆」。";
+            howToGet = "史莱姆社群好感度累计 ≥ 50";
+            SetIconFromAssetPath("Slime/icon_yang_slime.png");
+        }
+        else if (equipmentId == SlimeFactionAssets.EQUIP_TAIJI)
+        {
+            equipmentName = "太极两仪";
+            description = "开局获得宠物「太极图」，并直接拥有太极史莱姆\n\n" +
+                "\"我只是一个路过的化学老师罢了。\"\n" +
+                "开局自动获得【阴史莱姆】与【阳史莱姆】，\n" +
+                "二者立即合体为「太极史莱姆」：\n" +
+                "  · 对最近敌人连续释放太极印，压制期间目标无法移动\n" +
+                "  · 随后拆分为阴阳双鱼，同时向四周齐射黑白灵弹\n" +
+                "  · 两种攻击轮流切换，合体与拆分皆有演出";
+            howToGet = "史莱姆社群好感度达到 100";
+            SetIconFromAssetPath("Slime/icon_taiji_liangyi.png");
         }
     }
 
