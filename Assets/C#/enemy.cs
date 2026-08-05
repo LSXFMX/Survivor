@@ -144,6 +144,8 @@ public class enemy : Attribute
         SlimeFactionAssets.ResetCaches();
         SkillYinYangSlime.ResetStaticCaches();
         SlimeFactionRegistrar.ResetStatics();
+        // Skillbase 的 enemylayer 缓存（火球术攻击范围判定用），同样会在场景重载后失效
+        Skillbase.ResetEnemyLayerCache();
     }
 
     private const string KEY_SPORE_MUTATION_ENABLED = "SporeMutationEnabled";

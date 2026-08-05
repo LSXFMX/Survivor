@@ -133,11 +133,13 @@ public class SkillYinYangSlime : Skillbase
         var sr = sprGo.AddComponent<SpriteRenderer>();
         sr.sprite = SlimeFactionAssets.TadpoleOf(isYin);
         sr.sortingOrder = 90;
-        // 蝌蚪目标世界尺寸 0.45 米：够醒目但不会几十发糊满屏幕。
+        // 蝌蚪目标世界尺寸 0.675 米（= 原 0.45 的 1.5 倍，按反馈放大以提升辨识度）。
         // 用绝对尺寸换算而非硬编码倍率，理由见 SlimeFactionAssets.FitSpriteToWorldSize。
-        SlimeFactionAssets.FitSpriteToWorldSize(sr, 0.45f);
+        SlimeFactionAssets.FitSpriteToWorldSize(sr, TadpoleWorldSize);
 
-        go.AddComponent<BulletTadpole>();
+        var tp = go.AddComponent<BulletTadpole>();
+        // 命中半径与贴图同比放大，保证"看到打中"与"实际扣血"一致
+        tp.hitRadius = TadpoleHitRadius;
 
         _bulletTemplate = go;
         bullet = go;
@@ -241,6 +243,19 @@ public class SkillYinYangSlime : Skillbase
 
     /// <summary>范围内没有敌人时的重试间隔（秒）。</summary>
     private const float RetryDelay = 0.12f;
+
+    /// <summary>
+    /// 蝌蚪射弹的世界尺寸（米）。0.675 = 初版 0.45 的 1.5 倍。
+    /// 命中半径 <see cref="TadpoleHitRadius"/> 会跟着一起放大，
+    /// 否则会出现"射弹明显穿过敌人身体却不掉血"的割裂感。
+    /// </summary>
+    private const float TadpoleWorldSize = 0.675f;
+
+    /// <summary>
+    /// 蝌蚪命中半径。随贴图同比放大（初版0.55 × 1.5 ≈ 0.82，
+    /// 这里取 0.78 略微收一点，避免命中范围看起来比贴图还大）。
+    /// </summary>
+    private const float TadpoleHitRadius = 0.78f;
 
     /// <summary>
     /// 搜敌结果最多保留的目标数。

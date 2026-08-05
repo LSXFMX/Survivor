@@ -33,6 +33,27 @@ public static class SlimeFactionAssets
     public const int FAVOR_YANG  = 50;
     public const int FAVOR_TAIJI = 100;
 
+    /// <summary>
+    /// 阴/阳史莱姆的**最小冷却**（秒）。
+    ///
+    /// 为什么需要硬下限：
+    ///   冷却来源有四处（升级卡 -0.3s ×5、好感度 40 档 ×0.8、奇遇、门挑战），
+    ///   叠满后理论上能压到 1s 以下甚至趋近 0。那会造成两个问题：
+    ///     ① 太极史莱姆的合体/分解演出根本来不及播完，画面变成不停聚散抽搐；
+    ///     ②齐射是协程逐发发射（number 满配16 发 × 2 条鱼），
+    ///        冷却比"一轮齐射本身的耗时"还短时会出现多轮齐射相互叠加，
+    ///        射弹数量指数级堆积 → 帧率骤降。
+    ///   1.5s 是实测下"演出仍清晰、射弹不堆积"的安全下限。
+    ///
+    /// 所有写 CDtime 的地方都必须经过这个下限（SlimeSharedUpgrade /
+    /// TaijiSlimeWatcher.SyncSharedStats / WorldBossManager.ApplySlimeBonus /
+    /// skillupgrade.SyncYinYangSlimePair）。
+    /// </summary>
+    public const float MIN_CDTIME = 1.5f;
+
+    /// <summary>把冷却值钳到不低于 <see cref="MIN_CDTIME"/>。</summary>
+    public static float ClampCD(float cd) => Mathf.Max(MIN_CDTIME, cd);
+
     // ── Resources 路径 ──
     private const string P_YIN_FISH= "Slime/yin_fish";
     private const string P_YANG_FISH  = "Slime/yang_fish";
@@ -74,16 +95,40 @@ public static class SlimeFactionAssets
         ? new Color(0.42f, 0.20f, 0.72f, 1f)   // 暗紫
         : new Color(1f,    0.93f, 0.70f, 1f);  // 暖白金
 
+    /// <summary>
+    /// 惰性加载 + 缓存。**保证永不抛异常**。
+    ///
+    /// 【2026-08修复：一张升级卡都刷不到】
+    ///   LoadSpriteFallback 内部要做 RenderTexture.Blit + GetPixels32 + BFS 泛洪抠图，
+    ///   在 1024×1024 上是数十万像素级操作，可能因纹理不可读 / 内存 /导入设置异常而抛。
+    ///   而调用方 SlimeFactionRegistrar.BuildUpgrade 是在**注册升级卡的过程中**取图标的，
+    ///   一旦这里抛出，异常会一路冒泡到 Register 的 try/catch被吞掉，
+    ///   结果是 RegisterOne 根本没机会执行 → ChoiceUI.skillEntries 里
+    ///   一个史莱姆 entry 都没有 → 玩家永远刷不到升级卡（但技能仍在，
+    ///   因为 ApplyEquip11 是在 Register 之后独立调用的，所以现象特别具有迷惑性）。
+    ///
+    ///   图标只是"锦上添花"，绝不该阻断卡池注册。这里就地兜住：
+    ///   失败就返回 null，卡片照样进池，只是没图标。
+    /// </summary>
     private static Sprite Get(ref Sprite slot, ref bool tried, string path)
     {
         if (slot != null) return slot;
         if (tried) return null;
         tried = true;
-        // 复用 BulletParasite 的加载器：它能兼容 TextureType=Default/Sprite 两种导入设置，
-        // 并把压缩纹理Blit 成 RGBA32 可读副本后抠背景，最后Sprite.Create。
-        slot = BulletParasite.LoadSpriteFallback(path, conservative: true);
-        if (slot == null)
-            Debug.LogWarning($"[SlimeFaction] 素材加载失败: Resources/{path}");
+        try
+        {
+            // 复用 BulletParasite 的加载器：它能兼容 TextureType=Default/Sprite 两种导入设置，
+            // 并把压缩纹理 Blit 成 RGBA32 可读副本后抠背景，最后 Sprite.Create。
+            slot = BulletParasite.LoadSpriteFallback(path, conservative: true);
+            if (slot == null)
+                Debug.LogWarning($"[SlimeFaction] 素材加载失败(返回 null): Resources/{path}");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[SlimeFaction] 素材加载异常，已忽略: Resources/{path} " +
+                             $"→ {ex.GetType().Name}: {ex.Message}");
+            slot = null;
+        }
         return slot;
     }
 

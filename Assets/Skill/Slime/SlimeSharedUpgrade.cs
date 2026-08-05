@@ -71,9 +71,9 @@ public class SlimeSharedUpgrade : Upgradeoptionsbase
         switch (skillAtr)
         {
             case skillAttribute.CDtime:
-                // 冷却下限 1.5s：低于此值合体/分解演出会来不及播完
-                // （TaijiSlimeController 的 AnimScale 已按 CD 压缩，但仍需一个硬下限）
-                s.CDtime = Mathf.Max(1.5f, s.CDtime + upgradenumber);
+                // 冷却硬下限：低于此值合体/分解演出来不及播完，且齐射协程会相互叠加
+                // 导致射弹堆积掉帧。详见 SlimeFactionAssets.MIN_CDTIME 注释。
+                s.CDtime = SlimeFactionAssets.ClampCD(s.CDtime + upgradenumber);
                 break;
             case skillAttribute.damage:
                 s.damage += (int)upgradenumber;
@@ -115,7 +115,7 @@ public class SlimeSharedUpgrade : Upgradeoptionsbase
         float ca = a.CDtime > 0.01f ? a.CDtime : float.MaxValue;
         float cb = b.CDtime > 0.01f ? b.CDtime : float.MaxValue;
         float cd = Mathf.Min(ca, cb);
-        if (cd < float.MaxValue) a.CDtime = b.CDtime = cd;
+        if (cd < float.MaxValue) a.CDtime = b.CDtime = SlimeFactionAssets.ClampCD(cd);
     }
 
     /// <summary>SSR9「三清化一」+ SSR6：把升级按 30% 同步到分身技能列表。</summary>
@@ -135,7 +135,7 @@ public class SlimeSharedUpgrade : Upgradeoptionsbase
 
             switch (skillAtr)
             {
-                case skillAttribute.CDtime: s.CDtime = Mathf.Max(1.5f, s.CDtime + upgradenumber); break;
+                case skillAttribute.CDtime: s.CDtime = SlimeFactionAssets.ClampCD(s.CDtime + upgradenumber); break;
                 case skillAttribute.damage: s.damage += Mathf.RoundToInt(scaled); break;
                 case skillAttribute.number: s.number = Mathf.Max(1, s.number + Mathf.RoundToInt(scaled)); break;
                 case skillAttribute.attackRadius: s.attackRadius += scaled; break;

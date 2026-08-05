@@ -467,7 +467,9 @@ public class WorldBossManager : MonoBehaviour
             SkillYinYangSlime s = t.GetComponent<SkillYinYangSlime>();
             if (s == null) continue;
             if (cdMul < 1f && cdMul > 0f)
-                s.CDtime = Mathf.Max(0.5f, s.CDtime * cdMul);
+                // 走统一的最小冷却钳制（原为 Mathf.Max(0.5f, ...)，会让冷却低到
+                // 太极演出播不完/ 齐射协程叠加掉帧）
+                s.CDtime = SlimeFactionAssets.ClampCD(s.CDtime * cdMul);
             if (radiusBonus > 0f) s.attackRadius += radiusBonus;
             if (countBonus > 0)   s.number += countBonus;
         }

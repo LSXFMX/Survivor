@@ -21,6 +21,11 @@ using UnityEngine;
 ///
 ///     注意 CDtime 用 Min（越小越强），其余用 Max。
 ///
+///   C. 卡池自愈：只要玩家身上已有阴/阳史莱姆，就必须能刷到对应升级卡。
+///      若 ChoiceUI 里没有可用 entry，说明 EquipmentInitializer.Start 那一次性时序
+///      出了意外（素材加载异常、ChoiceUI 未就绪、被误 Purge 等），这里补注册。
+///      把"一次性时序"兜成"最终一致"，避免整局都刷不到升级卡。
+///
 /// 本组件由 EquipmentInitializer 在开局挂到玩家身上，全局仅一个。
 /// </summary>
 public class TaijiSlimeWatcher : MonoBehaviour
@@ -31,6 +36,14 @@ public class TaijiSlimeWatcher : MonoBehaviour
     private Player _player;
     private TaijiSlimeController _controller;
     private float _timer;
+
+    // ── 卡池自愈状态 ──
+    /// <summary>已确认卡池健康（或已放弃），之后不再检查。</summary>
+    private bool _healChecked;
+    private float _healTimer;
+    private int _healAttempts;
+    private const float HealRetryInterval = 2f;
+    private const int MaxHealAttempts = 3;
 
     private void Start()
     {
@@ -55,6 +68,40 @@ public class TaijiSlimeWatcher : MonoBehaviour
             if (s == null) continue;
             if (s.isYin) { if (yin == null) yin = s; }
             else { if (yang == null) yang = s; }
+        }
+
+        // ── C. 卡池自愈 ──
+        // 触发条件用"史莱姆社群已解锁（好感度 ≥ 10）"，而不是"玩家已有技能"。
+        // 若用后者会死锁：注册失败时连**学习卡**也没有→ 玩家永远学不到技能
+        // → 条件永不成立 → 永远不自愈。
+        // 加节流，避免每 0.35s 反复尝试刷日志。
+        if (!_healChecked &&
+            SlimeFactionAssets.CurrentFavor() >= SlimeFactionAssets.FAVOR_YIN)
+        {
+            _healTimer -= checkInterval;
+            if (_healTimer <= 0f)
+            {
+                _healTimer = HealRetryInterval;
+                var cui = ChoiceUI.Instance ?? FindObjectOfType<ChoiceUI>(true);
+                if (cui != null)
+                {
+                    if (SlimeFactionRegistrar.HasUsableEntries(cui))
+                    {
+                        _healChecked = true;   // 已确认健康，之后不再检查
+                    }
+                    else
+                    {
+                        _healAttempts++;
+                        SlimeFactionRegistrar.EnsureRegistered(this);
+                        if (_healAttempts >= MaxHealAttempts)
+                        {
+                            _healChecked = true;
+                            Debug.LogError("[SlimeFaction] 卡池自愈重试已达上限，放弃。" +
+                                           "请检查 Console 中 [SlimeFaction] 的构建异常。");
+                        }
+                    }
+                }
+            }
         }
 
         // ── B. 共享升级：先拉平数值，再决定合体 ──
@@ -101,11 +148,13 @@ public class TaijiSlimeWatcher : MonoBehaviour
         float spd = Mathf.Max(a.speed, b.speed);
         float life = Mathf.Max(a.lifetime, b.lifetime);
         float radius = Mathf.Max(a.attackRadius, b.attackRadius);
-        //冷却：取更短的。注意排除 0/负值（未初始化的 prefab 可能是 0）
+        //冷却：取更短的。注意排除 0/负值（未初始化的 prefab 可能是 0），
+        // 并强制不低于 MIN_CDTIME —— 好感度/奇遇等来源也可能把冷却压过头。
         float cdA = a.CDtime > 0.01f ? a.CDtime : float.MaxValue;
         float cdB = b.CDtime > 0.01f ? b.CDtime : float.MaxValue;
         float cd = Mathf.Min(cdA, cdB);
         if (cd >= float.MaxValue) cd = 5f;
+        cd = SlimeFactionAssets.ClampCD(cd);
 
         a.damage = b.damage = dmg;
         a.number = b.number = num;

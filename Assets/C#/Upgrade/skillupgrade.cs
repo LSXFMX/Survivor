@@ -145,7 +145,7 @@ public class skillupgrade : Upgradeoptionsbase
         float cdA = yin.CDtime > 0.01f ? yin.CDtime : float.MaxValue;
         float cdB = yang.CDtime > 0.01f ? yang.CDtime : float.MaxValue;
         float cd = Mathf.Min(cdA, cdB);
-        if (cd < float.MaxValue) yin.CDtime = yang.CDtime = cd;
+        if (cd < float.MaxValue) yin.CDtime = yang.CDtime = SlimeFactionAssets.ClampCD(cd);
     }
 
     /// <summary>

@@ -77,6 +77,7 @@ public class SkinChanger : MonoBehaviour
         "<b><color=#FFE066>琪露诺</color></b>\n" +
         "<color=#FFD37A>难度倍率：攻击 / 防御 / 血量 / 经验 × (1 + 难度 × 0.1)</color>\n" +
         "<color=#7FFFB0>N1=1.1倍  N8=1.8倍  N13=2.3倍</color>\n" +
+        "<color=#7FFFB0>无尽模式：按已通关的最大难度结算倍率</color>\n" +
         "随难度提升同步变强——专注即纯粹的成长。",
 
         // skinId=1 南筱风

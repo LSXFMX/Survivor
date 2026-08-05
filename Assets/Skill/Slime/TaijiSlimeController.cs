@@ -67,19 +67,24 @@ public class TaijiSlimeController : MonoBehaviour
         {
             float cd = yinSkill != null ? yinSkill.CDtime : REFERENCE_CD;
             if (cd <= 0.01f) cd = REFERENCE_CD;
-            // 下限 0.35：CD 再短也保留可辨识的合体演出；上限 1.6 防止长 CD 时演出拖沓
-            return Mathf.Clamp(cd / REFERENCE_CD, 0.35f, 1.6f);
+            // 下限 0.55：形态转换动画现在只在切换时播一次（不再每次攻击都播），
+            // 因此不需要为了塞进冷却而把它压得太快—— 保留足够时长让演出看得清。
+            // 上限 1.6 防止长 CD 时演出拖沓。
+            return Mathf.Clamp(cd / REFERENCE_CD, 0.55f, 1.6f);
         }
     }
 
-    /// <summary>有效冷却：取两个技能中较短的一个（玩家把任一支升了 CD 都该更快）。</summary>
+    /// <summary>
+    /// 有效冷却：取两个技能中较短的一个（玩家把任一支升了 CD 都该更快），
+    /// 并强制不低于 <see cref="SlimeFactionAssets.MIN_CDTIME"/>。
+    /// </summary>
     private float EffectiveCD
     {
         get
         {
             float a = yinSkill != null ? yinSkill.CDtime : REFERENCE_CD;
             float b = yangSkill != null ? yangSkill.CDtime : REFERENCE_CD;
-            return Mathf.Max(0.4f, Mathf.Min(a, b));
+            return SlimeFactionAssets.ClampCD(Mathf.Min(a, b));
         }
     }
 
@@ -193,6 +198,21 @@ public class TaijiSlimeController : MonoBehaviour
     /// 玩家能同时看到"合体演出 + 印记压制 + 分解演出 + 双色弹幕"，
     /// 正好对应规格里"两种攻击方式轮流切换，拆分和重组有动画"。
     /// </summary>
+    /// <summary>
+    /// 主循环：**每种形态连续攻击若干次后**才切换，而不是一次一换。
+    ///
+    /// ┌ 合体演出 ──→ 太极印 ×N ─┐
+    /// └─ 双色齐射 ×N ←── 分解演出 ┘
+    ///
+    /// 【2026-08改动】旧版是"合体→印→分解→齐射"每轮全走一遍，
+    ///   等于每次攻击都夹着一段合体/分解动画。冷却降下来之后（可低至 1.5s）
+    ///   演出根本来不及看清，画面上就是太极不停地聚散抽搐。
+    ///
+    ///   现在改为：进入某形态时只播一次转换动画，然后在该形态下连续攻击
+    ///   <see cref="AttacksPerMode"/> 次，才切到另一形态。
+    ///   次数 = 目标时长 ÷ 冷却，因此"两次转换演出之间的实际间隔"恒定在
+    ///   约 <see cref="TargetModeSeconds"/> 秒，无论玩家把冷却压到多低都不会再抽搐。
+    /// </summary>
     private IEnumerator RunCycle()
     {
         // 接管：抑制两支技能各自开火
@@ -204,31 +224,101 @@ public class TaijiSlimeController : MonoBehaviour
         // 首次启动给一点前摇，避免和开局其它技能挤在同一帧
         yield return new WaitForSeconds(0.6f);
 
+        bool sealMode = true;   // true = 太极（印）形态，false = 阴阳（齐射）形态
+
         while (true)
         {
             if (yinSkill == null || yangSkill == null) yield break;
 
             float scale = AnimScale;
+            // 本轮次数在进入形态时**锁定**一次。若每次攻击都重算，
+            // 玩家中途升了冷却会让当前这轮次数忽然变化，节奏感被打乱。
+            int attacks = AttacksPerMode;
 
-            // ── 阶段 1：合体（阴阳旋进中心，太极浮现）──
-            yield return MergeAnim(mergeDuration * scale);
+            if (sealMode)
+            {
+                // ── 进入太极形态：播一次合体演出 ──
+                yield return MergeAnim(mergeDuration * scale);
 
-            // ── 阶段 2：太极印连击 ──
-            yield return AttackSeal();
+                for (int i = 0; i < attacks; i++)
+                {
+                    if (yinSkill == null || yangSkill == null) yield break;
 
-            // ── 阶段 3：分解（太极散开，阴阳归位）──
-            yield return SplitAnim(splitDuration * scale);
+                    yield return AttackSeal();
 
-            // ── 阶段 4：阴阳双色齐射──
-            AttackSplitVolley();
+                    // 最后一次攻击后不再等满冷却 —— 直接进入分解演出，
+                    // 因为演出本身就占时间，再等一轮会显得"卡住不动"
+                    if (i < attacks - 1)
+                        yield return new WaitForSeconds(SealModeGap(scale));
+                }
+                sealMode = false;
+            }
+            else
+            {
+                // ── 进入阴阳形态：播一次分解演出 ──
+                yield return SplitAnim(splitDuration * scale);
 
-            // ── 阶段 5：等待下一轮。扣掉演出已消耗的时间，
-            //    保证"一个完整周期 ≈ EffectiveCD"，不会因为动画变长而实际 DPS 下降。
-            float consumed = (mergeDuration + splitDuration) * scale
-                             + baseSealCount * sealInterval * scale + 0.35f;
-            float wait = Mathf.Max(0.25f, EffectiveCD - consumed);
-            yield return new WaitForSeconds(wait);
+                for (int i = 0; i < attacks; i++)
+                {
+                    if (yinSkill == null || yangSkill == null) yield break;
+
+                    AttackSplitVolley();
+
+                    if (i < attacks - 1)
+                        yield return new WaitForSeconds(EffectiveCD);
+                }
+                sealMode = true;
+            }
         }
+    }
+
+    /// <summary>
+    /// 同一形态内连续攻击的次数：由「目标形态持续时长 ÷ 冷却」反推，范围 2~10。
+    ///
+    /// 为什么用除法，而不是"冷却越短次数越多"的线性插值：
+    ///   线性插值下 形态持续时长 = 次数 × 冷却，两个因子都在变 → 时长剧烈波动。
+    ///   实测线性方案：CD 5.0s → 约 10s，CD 3.25s → 约 19.5s，CD 1.5s → 约 15s，
+    ///   玩家感受到的节奏忽长忽短，反而比一次一换更乱。
+    ///   改成 <c>次数 = 目标时长 ÷ 冷却</c> 后两者乘积恒等，
+    ///   "看到一次合体演出的间隔"稳定在约 <see cref="TargetModeSeconds"/> 秒。
+    ///
+    /// 实际取值（MIN_CDTIME = 1.5、初始 CD = 5）：
+    ///   CD 5.0s → 2 次 · CD 4.0s → 3 次 · CD 3.0s → 4 次
+    ///   CD 2.4s → 5 次 · CD 2.0s → 6 次 · CD 1.7s → 7 次 · CD 1.5s → 8 次
+    /// 上限 10 是为将来若再放宽冷却下限预留的余量。
+    /// </summary>
+    private int AttacksPerMode
+    {
+        get
+        {
+            float cd = EffectiveCD;
+            if (cd <= 0.01f) cd = REFERENCE_CD;
+            int n = Mathf.RoundToInt(TargetModeSeconds / cd);
+            return Mathf.Clamp(n, MinAttacksPerMode, MaxAttacksPerMode);
+        }
+    }
+
+    /// <summary>
+    /// 单个形态的目标持续时长（秒），也就是"两次形态转换演出之间的间隔"。
+    /// 12s 的依据：太短（&lt;6s）会退化成旧版那种不停聚散抽搐；
+    /// 太长（&gt;20s）玩家几乎看不到合体/分解演出，动画就白做了。
+    /// </summary>
+    private const float TargetModeSeconds = 12f;
+
+    private const int MinAttacksPerMode = 2;
+    private const int MaxAttacksPerMode = 10;
+
+    /// <summary>
+    /// 太极印形态下两次攻击之间的等待。
+    /// AttackSeal 本身要花 sealCount × sealInterval 秒，这里把它扣掉，
+    /// 保证"每次太极印连击的起始间隔 ≈ 冷却"，DPS 不会因为演出变长而缩水。
+    /// </summary>
+    private float SealModeGap(float scale)
+    {
+        int sealCount = baseSealCount + Mathf.Max(0, (EffectiveNumber - 1) / 2);
+        sealCount = Mathf.Clamp(sealCount, 1, 12);
+        float consumed = sealCount * sealInterval * scale;
+        return Mathf.Max(0.25f, EffectiveCD - consumed);
     }
 
     private IEnumerator MergeAnim(float dur)

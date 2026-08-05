@@ -86,24 +86,73 @@ public static class SlimeFactionRegistrar
                     sharedUpgrades: sharedUpgrades);
 
         Debug.Log($"[SlimeFaction] 注册完成。好感度={SlimeFactionAssets.CurrentFavor()}，" +
-                  $"skillEntries 总数={choiceUI.skillEntries.Count}");
+                  $"本次共享升级卡 {sharedUpgrades.Count}/4 张，" +
+                  $"skillEntries 总数={choiceUI.skillEntries.Count}，" +
+                  $"HasUsableEntries={HasUsableEntries(choiceUI)}");
+
+        if (sharedUpgrades.Count == 0)
+            Debug.LogError("[SlimeFaction] 共享升级卡全部构建失败！玩家将刷不到任何" +
+                           "「阴/阳史莱姆」升级卡，请检查上方的构建异常日志。");
+    }
+
+    /// <summary>
+    /// 自愈入口：若 ChoiceUI 里没有可用的史莱姆 entry，则重新注册一次。
+    ///
+    /// 存在意义：注册发生在 EquipmentInitializer.Start 这一个时间点，
+    /// 只要那一刻出现任何意外（素材加载异常、ChoiceUI 尚未就绪、
+    /// 多个 EquipmentInitializer 互相 Purge 等），玩家整局就再也刷不到升级卡，
+    /// 且现象极具迷惑性——技能明明在，卡池却空。
+    /// 由 TaijiSlimeWatcher 低频轮询调用，把"一次性时序"变成"最终一致"。
+    /// </summary>
+    public static void EnsureRegistered(MonoBehaviour host)
+    {
+        var choiceUI = ChoiceUI.Instance ?? Object.FindObjectOfType<ChoiceUI>(true);
+        if (choiceUI == null) return;
+        if (HasUsableEntries(choiceUI)) return;
+
+        Debug.LogWarning("[SlimeFaction] 检测到 ChoiceUI 中没有可用的阴/阳史莱姆升级卡 entry，" +
+                         "正在重新注册（自愈）……");
+        Register(host);
     }
 
     /// <summary>
     /// 构建共享升级卡（规格：升级内容有范围、伤害、冷却、数量）。
     /// 图标用阴阳合体的太极图，呼应"这是一套共享成长"的语义。
+    ///
+    /// 每张卡单独 try/catch：一张构建失败也不该拖垮其余三张与整个 entry 注册。
     /// </summary>
     private static List<GameObject> BuildSharedUpgrades()
     {
-        return new List<GameObject>
-        {
-            BuildUpgrade(Upgradeoptionsbase.skillAttribute.damage,        2f,   "伤害 +2"),
-            BuildUpgrade(Upgradeoptionsbase.skillAttribute.CDtime,       -0.3f, "冷却 -0.3s"),
-            BuildUpgrade(Upgradeoptionsbase.skillAttribute.number,        1f,   "数量 +1（射弹 / 太极印）"),
-            BuildUpgrade(Upgradeoptionsbase.skillAttribute.attackRadius,  3f,   "范围 +3"),
-        };
+        var list = new List<GameObject>(4);
+        TryAdd(list, Upgradeoptionsbase.skillAttribute.damage,       2f,   "伤害 +2");
+        TryAdd(list, Upgradeoptionsbase.skillAttribute.CDtime,      -0.3f, "冷却 -0.3s");
+        TryAdd(list, Upgradeoptionsbase.skillAttribute.number,1f,   "数量 +1（射弹 / 太极印）");
+        TryAdd(list, Upgradeoptionsbase.skillAttribute.attackRadius, 3f,   "范围 +3");
+        return list;
     }
 
+    private static void TryAdd(List<GameObject> list,
+                               Upgradeoptionsbase.skillAttribute attr, float value, string desc)
+    {
+        try
+        {
+            GameObject go = BuildUpgrade(attr, value, desc);
+            if (go != null) list.Add(go);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[SlimeFaction] 升级卡 {attr} 构建失败，已跳过：" +
+                           $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 清理上一局/上一次注册残留的**史莱姆** entry。
+    ///
+    /// 【2026-08 修正】原实现会把所有 <c>learnSkillPrefab == null</c> 的 entry 一律删掉，
+    /// 那是越权的—— 场景里其他系统的 entry 若恰好没配 learnSkillPrefab 会被误删。
+    /// 现在只删两类：① 整条为null 的空洞；② 确认属于阴/阳史莱姆的旧 entry。
+    /// </summary>
     private static void PurgeOldEntries(ChoiceUI choiceUI)
     {
         if (choiceUI.skillEntries == null) return;
@@ -111,7 +160,7 @@ public static class SlimeFactionRegistrar
         {
             var e = choiceUI.skillEntries[i];
             if (e == null) { choiceUI.skillEntries.RemoveAt(i); continue; }
-            if (e.learnSkillPrefab == null) { choiceUI.skillEntries.RemoveAt(i); continue; }
+            if (e.learnSkillPrefab == null) continue;   // 不是我们的，别动
 
             var lrn = e.learnSkillPrefab.GetComponent<getnewskill>();
             if (lrn != null && lrn.skill != null &&
@@ -121,6 +170,30 @@ public static class SlimeFactionRegistrar
                 choiceUI.skillEntries.RemoveAt(i);
             }
         }
+    }
+
+    /// <summary>
+    /// ChoiceUI 里当前是否已存在**可用的**史莱姆 entry
+    /// （至少一条阴/阳 entry，且带有非空的升级卡列表）。
+    /// 供 <see cref="TaijiSlimeWatcher"/> 做自愈检测。
+    /// </summary>
+    public static bool HasUsableEntries(ChoiceUI choiceUI)
+    {
+        if (choiceUI == null || choiceUI.skillEntries == null) return false;
+
+        foreach (var e in choiceUI.skillEntries)
+        {
+            if (e == null || e.learnSkillPrefab == null) continue;
+            var lrn = e.learnSkillPrefab.GetComponent<getnewskill>();
+            if (lrn == null || lrn.skill == null) continue;
+            if (lrn.skill.Skillname != SlimeFactionAssets.SKILL_YIN &&
+                lrn.skill.Skillname != SlimeFactionAssets.SKILL_YANG) continue;
+
+            if (e.upgradeOptions == null) continue;
+            foreach (var up in e.upgradeOptions)
+                if (up != null) return true;   // 找到一条有效的就够了
+        }
+        return false;
     }
 
     /// <summary>
@@ -216,9 +289,14 @@ public static class SlimeFactionRegistrar
         up.skill = _yinTemplate != null ? _yinTemplate.GetComponent<SkillYinYangSlime>() : null;
         up.skillAtr = attr;
         up.upgradenumber = value;
-        up.icon = SlimeFactionAssets.IconTaiji;
         up.upgradeGroup = GROUP_UP_PREFIX + attr; // 不含阴/阳 → 共享上限
         up.maxUpgrades = 5;
+
+        // 图标放到**最后**赋值，且不让它影响卡片本身的可用性。
+        // 这张图是首次加载（学习卡用的是 IconOf(isYin)，与此不同），
+        // 抠图过程较重；即使拿不到也只是"卡片没图标"，绝不能影响卡片进池。
+        up.icon = SlimeFactionAssets.IconTaiji;
+
         go.SetActive(true);
         return go;
     }
@@ -307,10 +385,20 @@ public static class SlimeFactionRegistrar
         pet.owner = player;
     }
 
-    /// <summary>确保玩家身上挂有合体看守者（全局唯一）。</summary>
+    /// <summary>
+    /// 确保玩家身上挂有合体看守者（全局唯一）。
+    /// 它同时承担卡池自愈，因此必须尽最大努力挂上—— 传入的 player 为空时
+    /// 退化为全场查找，避免因为 Inspector 漏配就彻底失去自愈能力。
+    /// </summary>
     public static void EnsureWatcher(Player player)
     {
-        if (player == null) return;
+        if (player == null) player = Object.FindObjectOfType<Player>();
+        if (player == null)
+        {
+            Debug.LogWarning("[SlimeFaction] 找不到 Player，TaijiSlimeWatcher 未挂载" +
+                             "（合体检测与卡池自愈将不可用）");
+            return;
+        }
         if (player.GetComponent<TaijiSlimeWatcher>() != null) return;
         player.gameObject.AddComponent<TaijiSlimeWatcher>();
     }

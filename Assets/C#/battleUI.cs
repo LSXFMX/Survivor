@@ -636,8 +636,8 @@ public class battleUI : MonoBehaviour
             startcount = true;
             _deathFallbackTimer = 0f;
             _deathFallbackTriggered = false;
-            if (timeui != null) timeui.text = "00:00";
-            return;
+            if (timeui != null) timeui.text = "00:00" + GetEndlessMultiplierSuffix();
+     return;
         }
 
         minute = DifficultyManager.Instance != null ? DifficultyManager.Instance.Current.minutes : 10;
@@ -680,12 +680,14 @@ public class battleUI : MonoBehaviour
         RefreshCharacterPanel();
 
         if (startcount && _endlessMode)
-        {
+{
             // 无尽模式：正计时，永不 timeover
             _endlessElapsed += Time.deltaTime;
             int m = (int)(_endlessElapsed / 60f);
             int s = (int)(_endlessElapsed % 60f);
-            if (timeui != null) timeui.text = (m < 10 ? "0" : "") + m + (s < 10 ? ":0" : ":") + s;
+            if (timeui != null)
+          timeui.text = (m < 10 ? "0" : "") + m + (s < 10 ? ":0" : ":") + s
+             + GetEndlessMultiplierSuffix();
 
             // 每 5 分钟一个阶段：刷社群Boss + 血量倍率 +5
             int stage = (int)(_endlessElapsed / 300f);
@@ -1016,8 +1018,44 @@ public class battleUI : MonoBehaviour
         }
     }
 
+    // ── 无尽模式：时间旁的难度倍率显示 ──
+    private float  _mulSuffixHp  = -1f;
+    private float  _mulSuffixAtk = -1f;
+    private string _mulSuffixCache = "";
+
+    /// <summary>
+    /// 无尽模式下拼在计时器后面的「难度倍率」后缀，形如 <c>  血×21 攻×3</c>。
+    ///
+    /// 显示的是**最终实际生效的倍率**，即 <c>难度配置 × 奇遇 × 无尽</c> 三者相乘
+    /// （与 enemy.ApplyDifficultyScaling 的公式完全一致），而不是只显示无尽那一项——
+    /// 玩家关心的是"现在的怪到底比基准强多少倍"，只显示无尽增量会低估实际强度。
+    ///
+    /// 结果做缓存：本方法每帧都会被调用，而倍率只在每 5 分钟的阶段跳变时变化，
+    /// 没必要每帧做字符串插值（那是稳定的每帧 GC）。
+    /// </summary>
+    private string GetEndlessMultiplierSuffix()
+    {
+     float baseHp  = DifficultyManager.Instance != null
+  ? DifficultyManager.Instance.Current.hpMultiplier  : 1f;
+        float baseAtk = DifficultyManager.Instance != null
+            ? DifficultyManager.Instance.Current.atkMultiplier : 1f;
+
+   float hp  = baseHp  * enemy.adventureHpMultiplier  * enemy.endlessHpMultiplier;
+        float atk = baseAtk * enemy.adventureAtkMultiplier * enemy.endlessAtkMultiplier;
+
+ if (!Mathf.Approximately(hp, _mulSuffixHp) || !Mathf.Approximately(atk, _mulSuffixAtk))
+        {
+    _mulSuffixHp  = hp;
+   _mulSuffixAtk = atk;
+       // size=60% 让倍率明显从属于时间，不抢主视觉；血红 / 攻金与项目既有配色一致
+            _mulSuffixCache =
+       $"  <size=60%><color=#FF7A7A>血×{hp:0.#}</color> <color=#FFC24A>攻×{atk:0.#}</color></size>";
+     }
+        return _mulSuffixCache;
+    }
+
     /// <summary>无尽模式：每 5 分钟触发一次——血量倍率随机 +5~10，攻击倍率随机 +0/1（累积制，作用于之后新生成的怪）。</summary>
-    private void OnEndlessStage(int stage)
+private void OnEndlessStage(int stage)
     {
         int hpAdd  = Random.Range(5, 11);   // [5, 10] 闭区间
         int atkAdd = Random.Range(0, 2);    // 0 或 1
@@ -1025,11 +1063,15 @@ public class battleUI : MonoBehaviour
         enemy.endlessAtkMultiplier += atkAdd;
         string atkStr = atkAdd > 0 ? $"，攻击倍率 ×{enemy.endlessAtkMultiplier:0}" : "";
         ToastManager.Show($"<color=#FF6060>无尽 第{stage}波：血量倍率 +{hpAdd}（×{enemy.endlessHpMultiplier:0}）{atkStr}</color>");
-        SpawnRandomCommunityBoss();
+        // 第 1 波（第一次五分钟）不刷史莱姆 Boss —— 史莱姆社群是最后解锁的
+        //（N11 才进入刷怪池、N12 才有世界 Boss），第一波就给玩家上史莱姆，
+        // 会让尚未解锁该社群的玩家面对一个"还没见过就突然出现"的 Boss。
+        // 第 2 波起恢复正常随机，不误伤后续波次。
+        SpawnRandomCommunityBoss(excludeSlime: stage <= 1);
     }
 
     /// <summary>无尽模式：随机生成一个"已解锁"的社群 Boss（蘑菇/蝙蝠/狼人/史莱姆）。</summary>
-    private void SpawnRandomCommunityBoss()
+    private void SpawnRandomCommunityBoss(bool excludeSlime = false)
     {
         // 候选：从 WorldBossManager 取真正的世界Boss预制体（而非关底 Boss）
         var candidates = new System.Collections.Generic.List<GameObject>();
@@ -1038,8 +1080,10 @@ public class battleUI : MonoBehaviour
         {
             foreach (var entry in wbMgr.worldBossEntries)
             {
-                if (entry.bossPrefab != null)
-                    candidates.Add(entry.bossPrefab);
+                if (entry.bossPrefab == null) continue;
+                // 用 faction 字段精确定位史莱姆（而不是靠预制体名contains，改名就失效）
+                if (excludeSlime && entry.faction == FactionType.Slime) continue;
+                candidates.Add(entry.bossPrefab);
             }
         }
         // 回退：如果 WorldBossManager 未就绪，用场景中分配的世界Boss预制体
@@ -1049,7 +1093,8 @@ public class battleUI : MonoBehaviour
             if (bossPrefab != null) candidates.Add(bossPrefab);
             if (batBossPrefab != null && (crm == null || crm.GetClearCount("N7") > 0)) candidates.Add(batBossPrefab);
             if (wolfBossPrefab != null && (crm == null || crm.GetClearCount("N9") > 0)) candidates.Add(wolfBossPrefab);
-            if (slimeBossPrefab != null && (crm == null || crm.GetClearCount("N11") > 0)) candidates.Add(slimeBossPrefab);
+            if (!excludeSlime && slimeBossPrefab != null && (crm == null || crm.GetClearCount("N11") > 0))
+                candidates.Add(slimeBossPrefab);
         }
         if (candidates.Count == 0) return;
 

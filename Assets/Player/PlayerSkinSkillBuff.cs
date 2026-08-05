@@ -292,14 +292,40 @@ public class PlayerSkinSkillBuff : MonoBehaviour
     {
         if (player == null) return;
         var dm = DifficultyManager.Instance;
-        if (dm == null || dm.IsEndless) return;
-        int n = dm.CurrentIndex + 1;
+        if (dm == null) return;
+
+        // 【2026-08-05】无尽模式下 N 取"已通关的最大难度"：
+        //   旧版 `if (dm.IsEndless) return;` 让琪露诺在无尽模式完全没加成（本命被动失效）。
+        //   现在无尽模式 N = 已通关的最大难度（N1=1…N13=13），×1.0~×2.3；
+        //   不随无尽时长继续增长（防止数值无限膨胀），是对玩家进度的兑现。
+        //   非无尽模式维持原逻辑（N = 当前难度编号）。
+        int n = dm.IsEndless
+            ? MaxClearedDifficultyNumber()
+            : dm.CurrentIndex + 1;
         float mult = 1f + n * 0.1f;
         player.atk       *= mult;
         player.def       *= mult;
         player.healthmax  = Mathf.RoundToInt(player.healthmax * mult);
         player.health     = player.healthmax;
         player.DR        *= mult;
+    }
+
+    /// <summary>
+    /// 已通关的最大难度编号（N1=1 … N13=13），从通关记录倒查。
+    ///
+    /// 键名必须与 <see cref="ClearRecordManager.RecordClear"/> 写入的一致
+    /// （<c>ClearCount_N{n}</c>，见 ClearRecordManager.KEY_PREFIX）。
+    /// 注意：无尽本身也会走 RecordClear（label = "无尽"），但该键名不是"N 开头"，
+    /// 不会被本方法统计到 —— 因此"通关过无尽"不会让 N 变成 14 之类，行为正确。
+    /// </summary>
+    private static int MaxClearedDifficultyNumber()
+    {
+        for (int n = 13; n >= 1; n--)
+        {
+            if (PlayerPrefs.GetInt("ClearCount_N" + n, 0) > 0)
+                return n;
+        }
+        return 0;   // 从未通关任何难度 → ×1.0（无加成）
     }
 
     /// <summary>

@@ -20,7 +20,105 @@ public class Skillbase : MonoBehaviour
     public float angel;//旋转角度
     public bool isfaceenemy;//是否朝向最近敌人
     public Sprite icon; 
-    void FixedUpdate()
+
+    // ============================================================
+    //  攻击范围（2026-08 新增）
+    // ------------------------------------------------------------
+    //  语义：范围内没有存活敌人时**不释放技能、也不消耗冷却**。
+    //
+    //  为什么做在 Skillbase 而不是新建一个 SkillFireball 子类：
+    //    火球术在项目里没有专属脚本类，它直接挂的就是 Skillbase
+    //    （参见 ChoiceUI.IsFireballSizeOrSpeedUpgrade 的注释：靠 Skillname 识别）。
+    //    要改成子类就得动场景/预制体上的组件类型，风险远大于收益。
+    //    因此把「攻击范围」做成基类的通用能力，默认 0 = 不限制，
+    //    对现有所有技能（冰锥/暗齿轮/…）零行为变化。
+    //
+//  为什么字段名叫 castRange 而不是 attackRadius：
+    //    风箭 / 孢子领域 / 血族血统 / 命途:寄生 / 地狱火 / 阴阳史莱姆 这 6 个子类
+    //    **各自都已声明了 public float attackRadius**。若基类再加一个同名字段，
+    // 会在这 6 个类里造成字段隐藏（CS0108）：子类代码读的是自己的，
+    //    基类逻辑读的是基类的，两个值互不相干；Unity Inspector 还会出现重名字段、
+    //    序列化归属含混。改名可以彻底避开这一整类问题，且不必改动任何子类。
+    // ============================================================
+
+    [Header("攻击范围（0 = 不限制）")]
+    [Tooltip("范围内没有敌人时不释放技能。0 表示不做限制（全图索敌）。\n" +
+      "注意：已自带 attackRadius 的技能（风箭/孢子/血族/寄生/地狱火/阴阳史莱姆）走各自的字段，与此无关。")]
+    public float castRange = 0f;
+
+    /// <summary>火球术的技能名（与 getnewskill_Hellfire.FireballSkillName 保持一致）。</summary>
+    public const string FireballSkillName = "火球术";
+
+    /// <summary>
+    /// 火球术的默认攻击范围。与地狱火 <see cref="SkillHellfire.attackRadius"/> 取值相同（40），
+    /// 使"火球术 → 地狱火"这条进化路线的索敌范围保持连续，玩家不会在进化前后感到突变。
+    /// </summary>
+    public const float FireballDefaultAttackRadius = 40f;
+
+    /// <summary>
+    /// 实际生效的施法范围。
+    /// Inspector 显式配了 <see cref="castRange"/> 就用它；没配（0）时，火球术回退到
+    /// <see cref="FireballDefaultAttackRadius"/>，其余技能保持 0（不限制）。
+    /// 这样无需改动任何场景/预制体即可让火球术获得范围限制。
+    /// </summary>
+    protected virtual float EffectiveCastRange
+    {
+    get
+  {
+   if (castRange > 0f) return castRange;
+         if (Skillname == FireballSkillName) return FireballDefaultAttackRadius;
+            return 0f;
+        }
+    }
+
+private static Transform s_enemyLayerCacheSB;
+
+    /// <summary>
+    /// 施法范围内是否存在可打击的敌人。范围为 0（不限制）时恒为 true。
+    ///
+  /// 排除项与风箭/地狱火的索敌口径一致：死亡、亡者领域友军、已占领营地。
+    /// 性能上先算平方距离再 GetComponent，避免在几百敌人时每次施法都做上百次
+    /// GetComponent（该方法在无目标时会被反复调用）。
+    /// </summary>
+    protected bool HasEnemyInCastRange()
+    {
+        float r = EffectiveCastRange;
+     if (r <= 0f) return true;   // 不限制
+        if (player == null) return true;       // 拿不到玩家就不拦，避免技能被误禁
+
+        if (s_enemyLayerCacheSB == null)
+            s_enemyLayerCacheSB = GameObject.Find("enemylayer")?.transform;
+        Transform layer = s_enemyLayerCacheSB;
+        if (layer == null) return true;        // 场景还没就绪，同样不拦
+
+        Vector3 center = player.transform.position;
+        float rSq = r * r;
+        int cnt = layer.childCount;
+
+        for (int i = 0; i < cnt; i++)
+        {
+            Transform t = layer.GetChild(i);
+ if (t == null) continue;
+
+            Vector3 d = t.position - center; d.y = 0f;
+      if (d.sqrMagnitude > rSq) continue;
+
+       enemy en = t.GetComponent<enemy>();
+    if (en == null) continue;
+     if (en.health <= 0 || en.rolestate == enemy.state.dead) continue;
+            if (en._mindControlledFlag) continue;          // 亡者领域友军
+            Camp camp = en as Camp;
+       if (camp != null && camp.IsCaptured) continue; // 已占领的友方营地
+
+          return true;
+        }
+   return false;
+    }
+
+    /// <summary>场景重载时清空 enemylayer 静态缓存（由 enemy.ResetSceneCaches 统一调用）。</summary>
+    public static void ResetEnemyLayerCache() { s_enemyLayerCacheSB = null; }
+
+  void FixedUpdate()
     {
         CDkey += Time.fixedDeltaTime;
         if (CDkey > CDtime )
@@ -31,20 +129,33 @@ public class Skillbase : MonoBehaviour
 
     public virtual IEnumerator Useskill()//使用技能
     {
+        // 攻击范围判定（火球术等配置了 castRange 的技能）：
+        // 范围内没有敌人时**不释放、也不消耗冷却**，而是把 CDkey 回退一点点做重试节流。
+   // 直接 return 且保持 CDkey 满值会导致 Player 每帧都来调一次本方法
+        // （每次都要全场搜敌），敌人多时是可观的无谓开销。
+        if (!HasEnemyInCastRange())
+        {
+            CDkey = Mathf.Max(0f, CDtime - RangeRetryDelay);
+   yield break;
+        }
+
         CDkey = 0;
         // 发射音效：火球/冰类播放专属音，其他技能默认不播放
         PlayCastSfx();
         for ( int i = 0; i < number; i++ )
         { 
-            GameObject newbullet = Instantiate( bullet ,player.transform.position,Quaternion.Euler(new Vector3(0,0,angel)));//创建子弹
-            Bulletbase n =newbullet.GetComponent<Bulletbase>();
+   GameObject newbullet = Instantiate( bullet ,player.transform.position,Quaternion.Euler(new Vector3(0,0,angel)));//创建子弹
+       Bulletbase n =newbullet.GetComponent<Bulletbase>();
             n.fatherskill = this;
             n.GetFather();
             n.getrole();
             n.cango = true;
             yield return new WaitForSeconds(interval);
-        }
+     }
     }
+
+    /// <summary>范围内无敌人时的重试间隔（秒）。</summary>
+    protected const float RangeRetryDelay = 0.12f;
 
     /// <summary>子弹命中时调用的命中音效；按技能名派发，子类可 override 自定义。</summary>
     public virtual void PlayHitSfx()

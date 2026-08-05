@@ -775,6 +775,22 @@ public class ArchiveManager : MonoBehaviour
             return;
         }
 
+        // 【2026-08-05 修复】详情面板文字重叠 / 溢出
+        // 现象：名称"太极两仪"大字号，描述字字号略小，两行紧贴重叠；编号"011"被右栏
+        // 物理边界裁切；获得方式与下方文字相交。
+        // 根因：右栏 5 个 TMP 都是从场景里读引用，配置在 Editor 里被改过（很可能是早期
+        //  调整字号时连带动了行高/ RectTransform），改字号后高度未同步增加，于是
+        //  TMP 内部的 LineHeight 强行把多行压成同一基线，造成视觉重叠。
+        // 修法：每次显示前**运行时校正**一次：
+        //   • 名称、描述、获得方式统一收紧字号 + 行高，禁止溢出 RectTransform；
+        //   • 编号字号调到 16，永久可放进面板；
+        //   • 描述 / 获得方式启用 autoSizing，避免长文案把行间挤崩；
+        //   • idText anchor 强制左上对齐并截断到 RectTransform 内（不再溢出到右栏外）。
+        // 这种"运行时校正"是不动场景工程的妥协 —— 若改场景能根治但需要你打开工程。
+        ApplyDetailPanelLayout();
+            return;
+        }
+
         // 从EquipmentSystem检查是否解锁
         bool isUnlocked = false;
         if (EquipmentSystem.Instance != null)
@@ -882,6 +898,101 @@ public class ArchiveManager : MonoBehaviour
             howToGetText.text = "获得方式：" + icon.howToGet + progressStr;
 
         Debug.Log($"显示装备信息: {icon.equipmentName} (已解锁: {isUnlocked})");
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  存档装备 · 详情面板运行时校正
+    // ════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 一次性把右栏 5 个 TMP 的字号 / 行距 / 对齐方式 / overflow 模式校正到稳定形态。
+    /// 见 <see cref="ShowEquipmentInfo"/> 顶部的说明。
+    ///
+    /// 思路：把 Editor 写死的字号视为"上限"，把 RectTransform 视为"行间距的下限"。
+    ///   名称/描述/获得方式/编号 都按面板可用宽度（=右栏 RectTransform 宽度）算字号。
+    ///   描述 / 获得方式启用 autoSizing，长文案时字号会自动缩小避免互相压行。
+    /// </summary>
+    private void ApplyDetailPanelLayout()
+    {
+        // 取右栏的可用宽度——以最宽的 TMP 为基准（一般是 nameText）
+        float refWidth = 0f;
+        if (nameText     != null) refWidth = Mathf.Max(refWidth, GetWidth(nameText.rectTransform));
+        if (descriptionText != null) refWidth = Mathf.Max(refWidth, GetWidth(descriptionText.rectTransform));
+        if (howToGetText != null) refWidth = Mathf.Max(refWidth, GetWidth(howToGetText.rectTransform));
+        if (refWidth <= 0f) return; // 场景里没配任何右栏引用，放弃
+
+        // 名称：单行，固定 26 字号。TMP 默认行高 ≈ 1.2×字号 ≈ 31，
+        // 把 LineHeight 调成 1.2 与之吻合，避免 "名称与描述压成同基线"。
+        if (nameText != null)
+        {
+            nameText.enableAutoSizing = false;
+            nameText.fontSize = 26;
+            nameText.lineSpacing = 4f;
+            nameText.alignment = TextAlignmentOptions.TopLeft;
+            nameText.textWrappingMode = TextWrappingModes.NoWrap;
+            nameText.overflowMode = TextOverflowModes.Ellipsis;
+        }
+
+        // 描述：长文案是常态，启用 autoSizing。Min 设 13 防止被压得太小看不清。
+        if (descriptionText != null)
+        {
+            descriptionText.enableAutoSizing = true;
+            descriptionText.fontSizeMin = 13f;
+            descriptionText.fontSizeMax = 18f;
+            descriptionText.lineSpacing = 4f;
+            descriptionText.alignment = TextAlignmentOptions.TopLeft;
+        }
+
+        // 获得方式：与描述同样的处理，但上限略小（次要信息）
+        if (howToGetText != null)
+        {
+            howToGetText.enableAutoSizing = true;
+            howToGetText.fontSizeMin = 12f;
+            howToGetText.fontSizeMax = 16f;
+            howToGetText.lineSpacing = 3f;
+            howToGetText.alignment = TextAlignmentOptions.TopLeft;
+        }
+
+        // 编号：单行小字，左上对齐。"011" 最长三字符加"编号:" 也就 7 字，
+        // 16 字号 × 7 ≈ 110 px，远小于右栏宽度，绝不会溢出。
+        if (idText != null)
+        {
+            idText.enableAutoSizing = false;
+            idText.fontSize = 16;
+            idText.lineSpacing = 0f;
+            idText.alignment = TextAlignmentOptions.TopLeft;
+            idText.textWrappingMode = TextWrappingModes.NoWrap;
+            idText.overflowMode = TextOverflowModes.Ellipsis;
+        }
+
+        // 类型标签（如"[好感度装备]"）：顶部小字，与编号同字号
+        if (typeText != null)
+        {
+            typeText.enableAutoSizing = false;
+            typeText.fontSize = 16;
+            typeText.lineSpacing = 0f;
+            typeText.alignment = TextAlignmentOptions.TopLeft;
+            typeText.textWrappingMode = TextWrappingModes.NoWrap;
+            typeText.overflowMode = TextOverflowModes.Ellipsis;
+        }
+
+        // 编号 / 类型标签的 anchor 强制 (1, 1) 右上 —— 避免场景里把它们做成居中
+        // 后字号变化会"跳来跳去"。Overflow=Ellipsis 进一步兜底：万一面板极窄，
+        // 也只会被省略号截断，而不会溢出到面板外。
+        EnsureTopLeftAnchor(idText);
+        EnsureTopLeftAnchor(typeText);
+    }
+
+    private static float GetWidth(RectTransform rt)
+        => rt != null ? rt.rect.width : 0f;
+
+    private static void EnsureTopLeftAnchor(TextMeshProUGUI tmp)
+    {
+        if (tmp == null) return;
+        var rt = tmp.rectTransform;
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(0f, 1f);
     }
 
     // 获取装备类型的中文名称
