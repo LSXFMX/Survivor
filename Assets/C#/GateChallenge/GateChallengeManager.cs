@@ -107,6 +107,20 @@ public class GateChallengeManager : MonoBehaviour
     public int CurrentFloor => _currentFloor;
 
     /// <summary>
+    /// 无尽模式存档恢复：恢复当前层数与难度倍率。
+    /// 挑战中的敌人不会跨局保留，恢复后玩家从该层重新开始（_inChallenge=false）。
+    /// </summary>
+    public void RestoreFromSave(int floor, int difficultyMultiplier)
+    {
+        _currentFloor = Mathf.Clamp(floor, 1, MAX_FLOOR);
+        DifficultyMultiplier = Mathf.Max(1, difficultyMultiplier);
+        _inChallenge = false;
+        _spawnedEnemies.Clear();
+        if (challengePanel != null) challengePanel.SetActive(false);
+        ResetButton();
+    }
+
+    /// <summary>
     /// 奇遇·愚弄专用：把进度重置到第 1 层，同时把难度倍率 ×2。
     /// 已在挑战中也允许重置（先取消当前挑战，再重置进度与倍率）。
     /// 这样玩家可以反复用愚弄+重新挑战来叠加倍率，搭配技能上限奖励快速堆 build。

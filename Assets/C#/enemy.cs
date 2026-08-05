@@ -7,8 +7,12 @@ public class enemy : Attribute
 {
     public static float adventureHpMultiplier = 1.0f;
     public static float adventureAtkMultiplier = 1.0f;
-    /// <summary>无尽模式：随时间叠加的额外血量倍率（每 5 分钟 +5，从 1 起）。仅新生成的怪生效。</summary>
-    public static float endlessHpMultiplier = 1.0f;
+    /// <summary>
+    /// 无尽模式：随时间叠加的额外血量倍率（每 5 分钟 +15，从 0 起，**加法叠加**）。
+    /// 最终血量 = 基础血量 × (cfg.hpMultiplier + endlessHpMultiplier) × adventureHpMultiplier。
+    /// 即血量倍率呈线性增长：25 → 40 → 55 → 70…… 仅新生成的怪生效。
+    /// </summary>
+    public static float endlessHpMultiplier = 0f;
     public static float endlessAtkMultiplier = 1.0f;
 
     public GameObject atknumber;
@@ -30,7 +34,7 @@ public class enemy : Attribute
         _cachedPlayerLayer = null;
         adventureHpMultiplier = 1.0f;
         adventureAtkMultiplier = 1.0f;
-        endlessHpMultiplier  = 1.0f;
+        endlessHpMultiplier  = 0f;
         endlessAtkMultiplier = 1.0f;
     }
 
@@ -43,7 +47,8 @@ public class enemy : Attribute
     // 根因（两条叠加）：
     //   ① static 倍率跨局残留。
     //      endlessHpMultiplier / endlessAtkMultiplier 是 static，但**只在无尽模式的
-    //      battleUI.starttime() 里被重置为 1**；非无尽模式（N1~N13）完全不重置。
+    //      battleUI.starttime() 里被重置**（endlessHpMultiplier 归 0、endlessAtkMultiplier 归 1）；
+    //      非无尽模式（N1~N13）完全不重置。
     //      而本项目「返回主菜单」走的是 SceneManager.LoadScene 重载同场景，
     //      C# static 字段在 LoadScene 时**不会**归零（只有 domain reload 才会，
     //      而运行中/打包后都不会 reload）。
@@ -99,8 +104,11 @@ public class enemy : Attribute
 
         if (applyHp)
         {
+            // 无尽血量倍率是"加法叠加"：cfg.hpMultiplier(如 25) + endlessHpMultiplier(每波 +15)。
+            // 倍率线性增长（25→40→55），不会像以前的乘法那样指数爆炸。
+            float totalHp = cfg.hpMultiplier + endlessHpMultiplier;
             healthmax = Mathf.Max(1, Mathf.RoundToInt(
-                _baseHealthmax * cfg.hpMultiplier * adventureHpMultiplier * endlessHpMultiplier));
+                _baseHealthmax * totalHp * adventureHpMultiplier));
             health = healthmax;
         }
         if (applyAtk)

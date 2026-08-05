@@ -36,6 +36,12 @@ public class WolfBoss : enemy
     public float wolfWalkSpeed  = 5f;
     public float wolfRunSpeed   = 22f;
 
+    [Header("接触")]
+    [Tooltip("一阶段（人形）追击时与玩家保持的最小水平距离下限。实际值会取 " +
+             "max(本值, Boss碰撞半径+玩家碰撞半径+0.35) —— 必须大于双方碰撞半径之和，" +
+             "否则碰撞体仍然重叠、PhysX 会继续把玩家顶飞。狼形态不受此限制（技能需要贴身）。")]
+    public float contactKeepDistance = 2.5f;
+
     [Header("技能 CD / 参数")]
     public float quakeInterval  = 5f;   // 人形震地 CD（也用于狼形震地）
     public float quakeRadius    = 6f;   // 震地范围
@@ -274,11 +280,75 @@ public class WolfBoss : enemy
         }
     }
 
+    /// <summary>
+    /// 追击：朝目标移动。
+    ///
+    /// 【2026-08 修复 v2】上一版让**两个形态**都保持 contactKeepDistance，反而带来两个问题：
+    ///   ① keep=2.5 比 Boss 自身碰撞盒半径还小（humanScale=4，实体碰撞半径约 2），
+    ///      停下时碰撞体依然与玩家重叠，PhysX 每帧强行分离 → 照样把玩家顶飞，
+    ///      "最小距离"看起来完全没生效；
+    ///   ② 狼形态的扑击处决/ 冲刺漂移都需要贴身，被距离保持干扰后抓取判定容易落空，
+    ///      表现就是"抓取技能没有限制玩家移动"。
+    ///
+    /// 现在的做法：
+    ///   · **只有一阶段（人形）保持距离**，且距离由双方碰撞盒实际半径推算
+    ///     （Boss 半径 + 玩家半径 + 余量），保证碰撞体真正分离、不再产生顶推；
+    ///   · 狼形态完全恢复原始贴身追击，技能演出不受任何影响。
+    /// </summary>
     private void MoveToward(Vector3 target, float spd, float dt)
     {
         Vector3 d = target - transform.position; d.y = 0;
-        if (d.sqrMagnitude < 0.01f) return;
-        transform.position += d.normalized * spd * dt;
+        if (d.sqrMagnitude < 0.0001f) return;
+
+        // 狼形态：贴身追击（技能需要），不做任何距离保持
+        if (phase != Phase.Human)
+        {
+            transform.position += d.normalized * spd * dt;
+            return;
+        }
+
+        float keep = ResolveHumanKeepDistance();
+        float dist = d.magnitude;
+        if (dist <= keep) return;      // 已到位：停下，不再挤压玩家
+
+        // 不要一步跨过保持距离（否则会在边界来回抖动）
+        float step = Mathf.Min(spd * dt, dist - keep);
+        transform.position += d.normalized * step;
+    }
+
+    private float _cachedKeep = -1f;
+
+    /// <summary>
+    /// 人形态的保持距离 = Boss 碰撞半径 + 玩家碰撞半径 + 余量。
+    /// 必须按真实碰撞盒算：写死一个小于碰撞半径的值等于没做限制。
+    /// 结果缓存，避免每帧取 bounds。
+    /// </summary>
+    private float ResolveHumanKeepDistance()
+    {
+        if (_cachedKeep > 0f) return _cachedKeep;
+
+        float bossR = 1.5f;
+        var col = _bodyCol != null ? _bodyCol : GetComponent<Collider>();
+        if (col != null)
+        {
+            var e = col.bounds.extents;
+            bossR = Mathf.Max(e.x, e.z);
+        }
+
+        float playerR = 0.5f;
+        if (role != null)
+        {
+            var pc = role.GetComponent<Collider>();
+            if (pc != null)
+            {
+                var pe = pc.bounds.extents;
+                playerR = Mathf.Max(pe.x, pe.z);
+            }
+        }
+
+        // contactKeepDistance 作为下限，保证 Inspector 调大仍然有效
+        _cachedKeep = Mathf.Max(contactKeepDistance, bossR + playerR + 0.35f);
+        return _cachedKeep;
     }
 
     // ── 能量狼爪震地（人形/狼形通用） ──
@@ -728,12 +798,12 @@ public class WolfBoss : enemy
         Destroy(fx, 0.5f);
     }
 
-    // 接触伤害：变身/死亡时不造成；与其他敌人互不碰撞（不被挤走）；加冷却防多碰撞体重复
+    // 接触伤害：变身/死亡时不造成；与其他敌人互不碰撞（不被挤走）；加 1s 冷却防多碰撞体重复
     protected override void OnCollisionEnter(Collision collision)
     {
         if (collision.gameObject.CompareTag("enemy")) return; // 不与敌人互推
         if (phase == Phase.Transforming || phase == Phase.Dead) return;
-        if (Time.time - dmgCooldown < 0.3f) return;
+        if (Time.time - dmgCooldown < 1f) return;   // 【2026-08】接触伤害冷却 1s
         dmgCooldown = Time.time;
         base.OnCollisionEnter(collision);
     }

@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -45,6 +46,9 @@ public class title : MonoBehaviour
 
         // 测试按钮：一键把所有副本时间设为 1 分钟
         EnsureOneMinuteButton();
+
+        // 无尽模式「继续无尽」按钮（有存档时显示，右上角）
+        EnsureEndlessContinueButton();
     }
 
     private void EnsureSkinChangerMounted()
@@ -252,6 +256,100 @@ public class title : MonoBehaviour
     public void exitgame()
     {
         Application.Quit();
+    }
+
+    // ───────────────────────── 无尽模式「继续无尽」按钮 ─────────────────────────
+    //   主菜单右上角动态创建。存在无尽存档时显示，点击后直接以无尽难度进入战斗
+    //   并标记 ResumePending，battleUI.OnEnable 里会延迟恢复整局状态。
+    private GameObject _endlessContinueBtnGo;
+  private Text _endlessContinueLabel;
+
+    private void EnsureEndlessContinueButton()
+    {
+        bool hasSave = EndlessSaveManager.HasSave();
+
+ if (_endlessContinueBtnGo != null)
+ {
+         _endlessContinueBtnGo.SetActive(hasSave);
+       if (hasSave) RefreshEndlessContinueLabel();   // 存档时间可能变了
+    return;
+        }
+
+        Canvas hostCanvas = FindMainMenuCanvas();
+        if (hostCanvas == null) return;
+
+        var btnGo = new GameObject("__EndlessContinueButton",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        btnGo.transform.SetParent(hostCanvas.transform, false);
+        var rt = btnGo.GetComponent<RectTransform>();
+        // 锚定右上角，距离边缘 20px，尺寸 240×60
+        rt.anchorMin = new Vector2(1f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot     = new Vector2(1f, 1f);
+        rt.anchoredPosition = new Vector2(-20f, -20f);
+        rt.sizeDelta = new Vector2(240f, 60f);
+
+        var img = btnGo.GetComponent<Image>();
+        img.color = new Color(0.15f, 0.30f, 0.16f, 0.92f); // 深绿
+
+        var btn = btnGo.GetComponent<Button>();
+        var colors = btn.colors;
+        colors.normalColor      = new Color(1f, 1f, 1f, 1f);
+        colors.highlightedColor = new Color(0.85f, 1f, 0.85f, 1f);
+        colors.pressedColor     = new Color(0.6f, 0.9f, 0.6f, 1f);
+        btn.colors = colors;
+
+        // 【乱码修复】主菜单场景里没有配好中文的 TMP 文本可供复用，
+  // 用 TextMeshProUGUI 会回退到 LiberationSans（不含 CJK）→ 中文全变 □□□□。
+     // 这里改用和「测试模式 / 内测福利 / 副本时间」一致的内置 Text +
+        // LegacyRuntime.ttf（Unity 内置字体自带完整中文），必然不乱码。
+        var labelGo = new GameObject("Label",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+        labelGo.transform.SetParent(btnGo.transform, false);
+        var lrt = labelGo.GetComponent<RectTransform>();
+   lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+  _endlessContinueLabel = labelGo.GetComponent<Text>();
+   _endlessContinueLabel.alignment = TextAnchor.MiddleCenter;
+        _endlessContinueLabel.fontSize  = 20;
+   _endlessContinueLabel.color     = Color.white;
+        Font cnFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        if (cnFont == null) cnFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        if (cnFont != null) _endlessContinueLabel.font = cnFont;
+
+        btn.onClick.AddListener(OnEndlessContinueClicked);
+        _endlessContinueBtnGo = btnGo;
+        _endlessContinueBtnGo.SetActive(hasSave);
+        RefreshEndlessContinueLabel();
+    }
+
+    /// <summary>刷新「继续无尽」按钮文字（带存档时间）。</summary>
+    private void RefreshEndlessContinueLabel()
+    {
+        if (_endlessContinueLabel == null) return;
+        var data = EndlessSaveManager.HasSave() ? EndlessSaveManager.Load() : null;
+        _endlessContinueLabel.text = data != null
+            ? $"继续无尽\n({data.savedAt})"
+            : "继续无尽";
+    }
+
+    private void OnEndlessContinueClicked()
+    {
+        AudioManager.PlaySfx(AudioManager.SfxKey.Click);
+        if (!EndlessSaveManager.HasSave())
+        {
+            ToastManager.Show("没有可继续的无尽存档");
+            return;
+        }
+        // 设置难度为无尽（最后一个）
+        if (DifficultyManager.Instance != null)
+        {
+            DifficultyManager.Instance.SetDifficulty(DifficultyManager.Instance.EndlessIndex);
+        }
+        EndlessSaveManager.ResumePending = true;
+        // 关闭难度选择面板（如果有打开）
+        if (difficultySelectUI != null) difficultySelectUI.SetActive(false);
+        click_start();
     }
 
     // ───────────────────────── 测试模式按钮（god-mode）─────────────────────────

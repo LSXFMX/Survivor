@@ -38,8 +38,9 @@ public class TaijiSlimeController : MonoBehaviour
     public float taijiWorldSize = 1.5f;
     [Tooltip("太极本体的自转速度（度/秒）。")]
     public float taijiSpinSpeed = 150f;
-    [Tooltip("太极本体悬浮高度。")]
-    public float taijiHeight = 1.15f;
+    [Tooltip("太极本体悬浮高度。1.15 时正好压在角色头/脸上（chibi 2.5 头身，头部占比大），" +
+             "上调到 1.9 让它悬在头顶上方，不再遮挡角色面部。")]
+    public float taijiHeight = 1.9f;
 
     [Header("太极印")]
     [Tooltip("单轮太极印的基础释放次数（规格为 3 次）。")]

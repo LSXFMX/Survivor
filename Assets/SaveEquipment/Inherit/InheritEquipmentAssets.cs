@@ -1,4 +1,7 @@
-﻿using UnityEngine;
+﻿using System.Collections;
+using System.IO;
+using TMPro;
+using UnityEngine;
 
 /// <summary>
 /// 继承装备的素材加载与**程序化稀有度边框**。
@@ -72,13 +75,25 @@ public static class InheritEquipmentAssets
     /// 素材加载。与史莱姆社群同样的教训：**绝不能抛异常**。
     /// LoadSpriteFallback 内部要做Blit + GetPixels32 + BFS 泛洪，
     /// 一旦抛出会冒泡到调用方（这里是 UI 构建流程），导致整个面板建不出来。
+    ///
+    /// 【性能】那套"Blit → GetPixels32 → BFS 泛洪抠背景"对19 张 AI 图跑一遍
+    /// 要 4~5 秒，全都堆在玩家首次点开装备页面的那一刻，体感就是卡死。
+    /// 因此这里加了一层**磁盘缓存**：抠好的结果编码成 PNG 存到
+    /// Application.persistentDataPath，二次加载直接 LoadImage（快 1~2 个数量级）。
+    /// 配合 <see cref="InheritEquipmentPrewarmer"/> 在游戏启动后分帧预热，
+    /// 玩家点开面板时素材早已就绪。
     /// </summary>
     private static Sprite SafeLoad(string path)
     {
+        //① 磁盘缓存命中→ 跳过泛洪抠图
+        Sprite cached = TryLoadFromDiskCache(path);
+        if (cached != null) return cached;
+
         try
         {
             var sp = BulletParasite.LoadSpriteFallback(path, conservative: true);
             if (sp == null) Debug.LogWarning($"[Inherit] 素材加载失败: Resources/{path}");
+            else TrySaveToDiskCache(path, sp);   // ② 首次抠好后写缓存
             return sp;
         }
         catch (System.Exception ex)
@@ -87,6 +102,152 @@ public static class InheritEquipmentAssets
                              $"{ex.GetType().Name}: {ex.Message}");
             return null;
         }
+    }
+
+    // ═══════════════════════抠图结果磁盘缓存 ═══════════════════════
+    // 缓存版本号：抠图算法或素材更新时+1，旧缓存自然失效（不必手动清理）
+    //   v2：修正 t3_necklace（奇点项链）—— 原文件误存成了人形轮廓图
+    private const string CACHE_VER = "v2";
+
+    private static string CacheDir =>
+        Path.Combine(Application.persistentDataPath, "InheritIconCache");
+
+    private static string CacheFile(string resPath) =>
+        Path.Combine(CacheDir, $"{CACHE_VER}_{resPath.Replace('/', '_')}.png");
+
+    private static Sprite TryLoadFromDiskCache(string resPath)
+    {
+        try
+        {
+            string file = CacheFile(resPath);
+            if (!File.Exists(file)) return null;
+
+            byte[] bytes = File.ReadAllBytes(file);
+            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Point,      // 像素风：禁止插值
+                wrapMode   = TextureWrapMode.Clamp,
+            };
+            if (!tex.LoadImage(bytes)) return null;
+
+            // 参数与 LoadSpriteFallback 保持一致（全图 / 中心 pivot / 100 PPU），
+            // 否则世界内掉落展示（SpriteRenderer）的尺寸会和之前不同。
+            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                 new Vector2(0.5f, 0.5f), 100f);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[Inherit] 读取素材缓存失败（忽略）: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static void TrySaveToDiskCache(string resPath, Sprite sp)
+    {
+        try
+        {
+            if (sp == null || sp.texture == null) return;
+            // 只缓存"全图 sprite"，避免图集裁切导致重建后 UV 不对
+            if (Mathf.RoundToInt(sp.rect.width)  != sp.texture.width ||
+                Mathf.RoundToInt(sp.rect.height) != sp.texture.height) return;
+
+            Directory.CreateDirectory(CacheDir);
+            byte[] png = sp.texture.EncodeToPNG();     // texture 不可读时会抛，已被 catch
+            if (png != null && png.Length > 0)
+                File.WriteAllBytes(CacheFile(resPath), png);
+        }
+        catch (System.Exception ex)
+        {
+            // 写缓存失败不影响功能，只是下次仍要重新抠图
+            Debug.LogWarning($"[Inherit] 写入素材缓存失败（忽略）: {ex.Message}");
+        }
+    }
+
+    // ═══════════════════════ 中文字体（全模块共用）═══════════════════════
+
+    private static TMP_FontAsset _cnFont;
+
+    /// <summary>
+    /// 解析一个**含中文字形**的 TMP 字体，给所有运行时创建的 TMP 文本用。
+    ///
+    /// 【为什么必须显式指定】heiti SDF 不在 Resources 目录（实际位于
+    /// Assets/像素幸存者资源包/字体/），`Resources.Load` 必然返回 null；
+    /// 而TMP 默认字体是 LiberationSans（**不含 CJK**），
+    /// 不设置就会让所有中文变成 □□□□（局内掉落展示的乱码就是这么来的）。
+    ///
+    /// 四级回退：
+    ///   ① ToastManager.Instance.font（场景 Inspector 已拖好，最可靠）
+    ///   ② 场景里任意一个 TMP_Text（含 inactive）的 font
+    ///   ③ 已加载进内存的 TMP_FontAsset 中名字带 "hei" 的
+    ///   ④ 内存里任意一个 TMP_FontAsset
+    /// 字体是项目资源、不随场景失效，所以这个缓存**不在 ResetCaches 里清**。
+    /// </summary>
+    public static TMP_FontAsset ChineseFont()
+    {
+        if (_cnFont != null) return _cnFont;
+
+        if (ToastManager.Instance != null && ToastManager.Instance.font != null)
+        {
+            _cnFont = ToastManager.Instance.font;
+            return _cnFont;
+        }
+
+        var texts = Object.FindObjectsOfType<TMP_Text>(true);
+        foreach (var t in texts)
+            if (t != null && t.font != null) { _cnFont = t.font; return _cnFont; }
+
+        var allFonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
+        foreach (var f in allFonts)
+            if (f != null && f.name != null && f.name.Contains("hei"))
+            { _cnFont = f; return _cnFont; }
+        foreach (var f in allFonts)
+            if (f != null) { _cnFont = f; return _cnFont; }
+
+        _cnFont = Resources.Load<TMP_FontAsset>("heiti SDF");
+        return _cnFont;
+    }
+
+    /// <summary>
+    /// 一次性预热全部素材（18 张图标 + 轮廓 + 6 个边框）。    ///
+    /// 【为什么不分帧】分帧（每帧一张）虽然把卡顿摊薄了，但玩家在主菜单只停留
+    /// 两三秒就点进装备界面，预热还没跑完 → 照样卡。所以改成**游戏启动时一次做完**：
+    /// 首次启动集中花 4~5 秒（发生在主菜单，玩家还在看标题），
+    /// 之后由磁盘缓存兜底，二次启动几乎瞬间完成，任何时候点开装备界面都零等待。
+    /// </summary>
+    public static void PrewarmAll()
+    {
+        for (int r = 0; r < InheritEquipmentDefs.RARITY_COUNT; r++)
+            Border((InheritRarity)r);
+
+        // 图标：3 套美术分组 × 6 槽位（tier = rarity/2，所以传 tier*2）
+        for (int tier = 0; tier < 3; tier++)
+       for (int s = 0; s < InheritEquipmentDefs.SLOT_COUNT; s++)
+            Icon((InheritSlot)s, (InheritRarity)(tier * 2));
+
+        Silhouette();
+    }
+
+  /// <summary>分帧版预热（保留给需要避免单帧长卡顿的场合，例如场景切换后的重建）。</summary>
+  public static IEnumerator PrewarmRoutine()
+    {
+        // 边框是程序化生成，很快，先做完
+ for (int r = 0; r < InheritEquipmentDefs.RARITY_COUNT; r++)
+        {
+       Border((InheritRarity)r);
+   yield return null;
+        }
+
+  for (int tier = 0; tier < 3; tier++)
+        {
+            for (int s = 0; s < InheritEquipmentDefs.SLOT_COUNT; s++)
+            {
+          Icon((InheritSlot)s, (InheritRarity)(tier * 2));
+     yield return null;
+            }
+ }
+
+        Silhouette();
+        yield return null;
     }
 
     // ═══════════════════════ 程序化稀有度边框 ═══════════════════════

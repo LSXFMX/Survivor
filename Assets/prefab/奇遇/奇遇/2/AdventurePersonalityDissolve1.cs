@@ -51,6 +51,12 @@ public class AdventurePersonalityDissolve : AdventureOptionBase
     /// <summary>新一局开始时由 AdventureEventManager 调用，把计数清零。</summary>
     public static void ResetRunCounter() => _executedThisRun = 0;
 
+    /// <summary>无尽模式存档：导出已触发次数。</summary>
+    public static int GetRunCounterForSave() => _executedThisRun;
+
+    /// <summary>无尽模式存档：恢复已触发次数。</summary>
+    public static void SetRunCounterForSave(int v) => _executedThisRun = Mathf.Max(0, v);
+
     /// <summary>
     /// 是否仍然可在本局出现：
     ///   - 未解锁 SSR8：本局最多触发 1 次（与基类 oneShot 等效）；

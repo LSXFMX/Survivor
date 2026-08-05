@@ -21,6 +21,16 @@ public class AdventureNuwaFailed : AdventureOptionBase
         _nuwaRunStartTime  = Time.time;
     }
 
+    /// <summary>无尽模式存档：导出已选次数。</summary>
+    public static int GetSelectedCountForSave() => _nuwaSelectedCount;
+
+    /// <summary>无尽模式存档：恢复已选次数（同时重置运行计时起点，避免时间回溯造成次数暴涨）。</summary>
+    public static void SetSelectedCountForSave(int v)
+    {
+        _nuwaSelectedCount = Mathf.Max(0, v);
+        _nuwaRunStartTime  = Time.time;
+    }
+
     public override bool IsAvailableInCurrentDifficulty()
     {
         // 普通模式：沿用基类 oneShot 去重（单局只能选一次）

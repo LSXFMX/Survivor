@@ -155,8 +155,63 @@ public class ArchiveManager : MonoBehaviour
                     "AttachInheritEquipmentUI");
         }
 
+        // 【2026-08 修复"所有装备都挤在第一排"】
+        //   4 个图标容器都挂着 HorizontalLayoutGroup —— 它只会把子物体沿水平轴一字排开，
+        //   **永远不会换行**。装备数量少的时候看不出来，后来通关/抽卡/好感度装备各扩到
+        //   10 个以上，就全部溢出到面板右边（甚至跑出黑框外）。
+        //   这里把它们替换成 GridLayoutGroup（按容器宽度算列数、自动换行）。
+        //   继承装备容器不参与 —— 它是整块自绘面板，见 InheritEquipmentUI。
+        SafeRun(() => ApplyGridLayout(clearEquipmentContainer), "GridLayout-Clear");
+        SafeRun(() => ApplyGridLayout(achievementEquipmentContainer), "GridLayout-Achievement");
+        SafeRun(() => ApplyGridLayout(favorEquipmentContainer), "GridLayout-Favor");
+        SafeRun(() => ApplyGridLayout(gachaEquipmentContainer), "GridLayout-Gacha");
+
         // 初始时全部隐藏
         HideAllContainers();
+    }
+
+    /// <summary>
+    /// 把一个装备图标容器的横排布局换成自动换行的网格布局。
+    /// 单元格尺寸取容器内现有图标的实际大小（场景里配好的 ≈99），列数按容器宽度推导。
+    /// </summary>
+    private static void ApplyGridLayout(GameObject container)
+    {
+        if (container == null) return;
+        var rt = container.transform as RectTransform;
+        if (rt == null) return;
+
+        // 关掉横排/竖排布局组
+        foreach (var g in container.GetComponents<HorizontalOrVerticalLayoutGroup>())
+            if (g != null) g.enabled = false;
+
+        // 单元格边长：优先沿用现有图标的尺寸，保证观感不变
+        float cell = 99f;
+        var firstIcon = container.GetComponentInChildren<EquipmentIcon>(true);
+        if (firstIcon != null)
+        {
+            var irt = firstIcon.transform as RectTransform;
+            if (irt != null && irt.rect.width > 10f) cell = irt.rect.width;
+        }
+
+        const float space = 12f;
+        const int pad = 24;
+
+        float w = rt.rect.width > 10f ? rt.rect.width : 1030f;
+        int cols = Mathf.Max(1, Mathf.FloorToInt((w - pad * 2f + space) / (cell + space)));
+
+        var grid = container.GetComponent<GridLayoutGroup>();
+        if (grid == null) grid = container.AddComponent<GridLayoutGroup>();
+        grid.enabled = true;
+        grid.padding = new RectOffset(pad, pad, pad, pad);
+        grid.cellSize = new Vector2(cell, cell);
+        grid.spacing = new Vector2(space, space);
+        grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
+        grid.startAxis = GridLayoutGroup.Axis.Horizontal;
+        grid.childAlignment = TextAnchor.UpperLeft;
+        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        grid.constraintCount = cols;
+
+        Debug.Log($"[Archive] {container.name} 改用网格布局：{cols} 列 / 格子 {cell:0}");
     }
 
     /// <summary>
@@ -755,28 +810,90 @@ public class ArchiveManager : MonoBehaviour
 
     /// <summary>右侧 5 个 TMP 的缓存，避免每次遍历找引用。</summary>
     private TextMeshProUGUI[] _rightInfoTexts;
+    /// <summary>右侧信息板的根节点（含蓝色底框/装饰），解析一次后缓存。</summary>
+    private GameObject _detailPanelRoot;
+    private bool _detailPanelRootResolved;
 
     /// <summary>
-    /// 继承装备 tab 切换：<c>true</c> = 隐藏右侧「请选择装备」信息板（继承装备自绘详情区在容器内），
-    /// <c>false</c> = 恢复显示。
-    /// 之所以需要，是因为存档界面的继承装备容器和右侧信息板**位置不重叠但语义冲突**：
-    /// 玩家点继承装备 tab 时，右边「[请选择装备] 点击左侧装备查看详情」这种通用空状态提示
-    /// 应当让位给继承装备自带的详情区。
+    /// 继承装备 tab 切换：<c>true</c> = 隐藏右侧「请选择装备」信息板，
+    /// <c>false</c> = 切回其它装备类型时恢复显示。
+    ///
+    /// 继承装备有自己的详情区（画在容器内部），右边那块通用的
+    /// 「[请选择装备] 点击左侧装备查看详情 / 获得方式」是多余的。
+    /// 只隐藏文字不够 —— 蓝色底框和装饰还留在屏幕上（玩家反馈"无用的装备描述栏"），
+    /// 所以这里优先隐藏**整块面板根节点**，解析失败才退回逐个隐藏文本。
     /// </summary>
     public void SetInheritEquipmentMode(bool active)
     {
+    var root = ResolveDetailPanelRoot();
+        if (root != null)
+      {
+  root.SetActive(!active);
+       return;
+ }
+
+        // 回退方案：至少把文字藏掉
         if (_rightInfoTexts == null)
         {
-            _rightInfoTexts = new TextMeshProUGUI[]
-            {
-                typeText, nameText, descriptionText, howToGetText, idText
+      _rightInfoTexts = new TextMeshProUGUI[]
+          {
+    typeText, nameText, descriptionText, howToGetText, idText
             };
         }
         foreach (var t in _rightInfoTexts)
-        {
+{
             if (t == null) continue;
-            t.gameObject.SetActive(!active);
+     t.gameObject.SetActive(!active);
+      }
+    }
+
+    /// <summary>
+    /// 推导右侧信息板的根节点：从 nameText 逐层往上，找到第一个"包含全部信息文本"的祖先。
+    /// 同时做安全校验 —— 一旦这个祖先把装备容器 / Canvas 也包进来了，
+    /// 说明已经上到整个界面的公共父级，此时宁可放弃（否则会把整个存档界面隐藏掉）。
+    /// </summary>
+    private GameObject ResolveDetailPanelRoot()
+    {
+        if (_detailPanelRootResolved) return _detailPanelRoot;
+        _detailPanelRootResolved = true;
+
+  var texts = new List<Transform>();
+        if (typeText != null) texts.Add(typeText.transform);
+     if (nameText != null)        texts.Add(nameText.transform);
+        if (descriptionText != null) texts.Add(descriptionText.transform);
+        if (howToGetText != null)    texts.Add(howToGetText.transform);
+      if (idText != null)          texts.Add(idText.transform);
+ if (texts.Count == 0) return null;
+
+ Transform cur = texts[0].parent;
+        int guard = 0;
+        while (cur != null && guard++ < 8)
+        {
+   bool containsAll = true;
+      foreach (var t in texts)
+                if (!t.IsChildOf(cur)) { containsAll = false; break; }
+
+ if (containsAll)
+ {
+            bool tooBig = cur.GetComponent<Canvas>() != null;
+  if (!tooBig && inheritEquipmentContainer != null)
+        tooBig = inheritEquipmentContainer.transform.IsChildOf(cur);
+       if (!tooBig && favorEquipmentContainer != null)
+       tooBig = favorEquipmentContainer.transform.IsChildOf(cur);
+
+        if (!tooBig)
+    {
+                  _detailPanelRoot = cur.gameObject;
+  Debug.Log($"[Archive] 右侧信息板根节点 = {cur.name}");
+        return _detailPanelRoot;
         }
+         break;  // 再往上只会更大，没必要继续
+    }
+ cur = cur.parent;
+}
+
+      Debug.LogWarning("[Archive] 未能推导右侧信息板根节点，退回逐个隐藏文本");
+        return null;
     }
 
     // 清空所有显示
@@ -956,37 +1073,41 @@ public class ArchiveManager : MonoBehaviour
         if (howToGetText != null) refWidth = Mathf.Max(refWidth, GetWidth(howToGetText.rectTransform));
         if (refWidth <= 0f) return; // 场景里没配任何右栏引用，放弃
 
-        // 名称：单行，固定 26 字号。TMP 默认行高 ≈ 1.2×字号 ≈ 31，
+   // 名称：单行，固定 26 字号。TMP 默认行高 ≈ 1.2×字号 ≈ 31，
         // 把 LineHeight 调成 1.2 与之吻合，避免 "名称与描述压成同基线"。
+     // 【2026-08】改为居中：标题居中比贴左更像"卡片标题"，也和居中的描述/获得方式统一。
         if (nameText != null)
-        {
+    {
             nameText.enableAutoSizing = false;
             nameText.fontSize = 26;
-            nameText.lineSpacing = 4f;
-            nameText.alignment = TextAlignmentOptions.TopLeft;
-            nameText.enableWordWrapping = false;
+nameText.lineSpacing = 4f;
+          nameText.alignment = TextAlignmentOptions.Top; // 顶部居中
+    nameText.enableWordWrapping = false;
             nameText.overflowMode = TextOverflowModes.Ellipsis;
         }
 
         // 描述：长文案是常态，启用 autoSizing。Min 设 13 防止被压得太小看不清。
+        // 【2026-08】字号整体上调（14~20），并改为顶部居中。
         if (descriptionText != null)
         {
-            descriptionText.enableAutoSizing = true;
-            descriptionText.fontSizeMin = 13f;
-            descriptionText.fontSizeMax = 18f;
-            descriptionText.lineSpacing = 4f;
-            descriptionText.alignment = TextAlignmentOptions.TopLeft;
+ descriptionText.enableAutoSizing = true;
+        descriptionText.fontSizeMin = 14f;
+      descriptionText.fontSizeMax = 20f;
+        descriptionText.lineSpacing = 6f;
+  descriptionText.alignment = TextAlignmentOptions.Top;
         }
 
-        // 获得方式：与描述同样的处理，但上限略小（次要信息）
+        // 获得方式：【2026-08 按需求调整】字号明显加大（原 12~16 → 18~24）并**居中**。
+        // 这行是玩家最常看的"怎么拿到"，之前挤在面板底部又小又贴左，很难注意到。
         if (howToGetText != null)
-        {
+   {
             howToGetText.enableAutoSizing = true;
-            howToGetText.fontSizeMin = 12f;
-            howToGetText.fontSizeMax = 16f;
-            howToGetText.lineSpacing = 3f;
-            howToGetText.alignment = TextAlignmentOptions.TopLeft;
-        }
+            howToGetText.fontSizeMin = 18f;
+   howToGetText.fontSizeMax = 24f;
+  howToGetText.lineSpacing = 6f;
+   howToGetText.alignment = TextAlignmentOptions.Center;   // 水平+垂直居中
+         howToGetText.enableWordWrapping = true;
+     }
 
         // 编号：单行小字，左上对齐。"011" 最长三字符加"编号:" 也就 7 字，
         // 16 字号 × 7 ≈ 110 px，远小于右栏宽度，绝不会溢出。

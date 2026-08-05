@@ -23,36 +23,44 @@ using UnityEngine;
 ///
 /// 【2】难度力量值 DifficultyPower（把"关卡难度曲线"折进随机区间）
 ///       非无尽：power = 难度编号 n（N1→1 … N13→13）
-///       无尽  ：power = 13 + 无尽阶段数 × 1.5（每 5 分钟一阶段，无上限）
+///       无尽  ：power = 敌人总血量倍率 × 0.5（下限 13，**无上限**）
+///                → ×25(开局) = 13、×125 = 62、×525 = 262、×2000 = 1000 …
 ///     这样做的理由：
 ///       • 策划案第 4 条要求"稀有度与主词条由当局难度加成决定，无尽更好且无限制"；
-///       • 直接用敌人血量倍率（N7 已经 ×20）会让曲线爆炸，
-///         而难度编号是线性且玩家可感知的，更适合做装备强度轴。
+///       • 直接挂在玩家能看见的那个「敌人血量：×25.0」上，
+///         "怪越硬 → 掉的装备越强"因果直观，且玩家选了更快的无尽难度速度
+///         （每波 +15/+50/+100）时装备强度会自动跟着加速，不用额外调参。
 ///
-/// 【3】主词条 = 基础区间 × 稀有度系数 × 难度系数
+/// 【3】主词条 = 基础区间 × 稀有度系数 × 成长曲线（**全部无硬上限，可无限刷**）
 ///       稀有度系数 RARITY_MUL = [1.0, 1.6, 2.5, 4.0, 6.5, 10.0]（约每档×1.6，六档共 ×10）
-///       难度系数   diffScale  = 1 + 0.12 × (power − 1)
-///                  → N1 ×1.0、N13 ×2.44、无尽第 10 阶段 ×4.24（持续增长）
+///       成长曲线   StatScale(stat, power)：按属性分三档，见该方法注释
+///         · 攻击/防御/血量：1 + 0.12·power^0.85（近线性，无顶）
+///         · 暴伤          ：1 + 0.35·ln(power) （纯乘区，对数增长）
+///         · 暴击/闪避     ：1 + 0.15·ln(power) （有 100% 语义天花板，最缓）
 ///
-///     基础区间（原子级@N1）与推导出的奇点级 @N13 上限：
-///       ┌────────┬──────────────┬───────────────┬──────────────────────┐
-///       │ 主词条│ 原子@N1      │ 奇点@N13      │ 对照既有装备          │
-///       ├────────┼──────────────┼───────────────┼──────────────────────┤
-///       │ 攻击   │ 0.30 ~ 0.60  │ 7.3 ~ 14.6    │ 单件最强 +30→ 未超  │
-///       │ 防御   │ 0.40 ~ 0.90  │ 9.8 ~ 22.0    │ 单件最强 +10 → 略超  │
-///       │ 血量   │ 15 ~ 40      │ 366 ~ 976     │ 单件最强 +300 → 略超 │
-///       │ 暴伤   │ 2.0 ~ 4.0│ 48.8 ~ 97.6│ 单件最强 +20 → 超│
-///       └────────┴──────────────┴───────────────┴──────────────────────┘
-///     "略超/超"是**有意为之**：继承装备是终局玩法，必须比一次性解锁的装备更有吸引力，
-///     且需要玩家刷到奇点 + 高难度才能拿到上限值（概率极低），属于长线追求目标。
-///     攻击力刻意压到不超过既有上限，因为它是 ×10% 伤害的乘区，超了会直接破坏平衡。
+///     奇点级（×10 稀有度系数）取区间上限时的实际数值：
+///┌────────┬──────────┬───────────┬───────────┬────────────┐
+///       │ 主词条│ power 13 │ power 62  │ power 262 │ power 1000 │
+///       │        │ (血×25)  │ (血×125)  │ (血×525)  │ (血×2000)  │
+///       ├────────┼──────────┼───────────┼───────────┼────────────┤
+///       │ 攻击   │  +12.4   │   +30.1   │   +87.8   │   +262     │
+///       │ 防御   │  +11.3   │   +27.6   │   +80.5   │   +240     │
+///       │ 血量   │  +515    │   +1253   │   +3658   │   +10900   │
+///       │ 暴伤   │  +47%    │   +61%    │   +74%    │   +86%     │
+///       │ 暴击   │  +28%    │   +32%    │   +37%    │   +41%     │
+///       │ 闪避   │  +9.7%   │   +11.3%  │   +12.8%  │   +14.3%   │
+///       └────────┴──────────┴───────────┴───────────┴────────────┘
+///     对照同一时刻的敌人血量：×25 → ×125 → ×525 → ×2000（线性）。
+///     攻击用 power^0.85 略慢于线性，配合暴击/暴伤的对数增益，
+///     以及玩家自身的技能升级 / 奇遇 / 其它装备（这些都是独立乘区），
+///     总战力大致跟得上难度，越往后越依赖"刷到更好的装备"——
+///     既满足"无限刷无尽换更强装备"，又不会某一件装备就直接开挂。
 ///
-/// 【4】暴击 / 闪避是**硬上限**属性，不吃难度系数
-///     策划案第 7 条明确："暴击最高 20%~30%，闪避最高约 10%"。
-///     这两项若跟着难度无限涨会直接失控（暴击 >100% 无意义、闪避 100% 则无敌），
-///     因此：
-///       暴击：基础 2.0~3.0，×稀有度系数10 → 奇点恰好 20~30，**不乘难度系数**
-///       闪避：基础 0.5~1.0，×稀有度系数10 → 奇点恰好  5~10，**不乘难度系数**
+/// 【4】为什么不设硬上限
+///     早期版本把暴击/闪避/暴伤做成"不吃难度系数"的硬上限属性，
+///     结果无尽刷再久这三项也一动不动，与"无限成长"的目标冲突。
+///     现在改为**全部无顶、按边际收益分层用不同增长速度**：
+///     乘区越强的属性涨得越慢（对数），加算数值涨得快（幂 0.85）。
 ///
 /// 【5】稀有度权重分布（难度越高越容易出高稀有度）
 ///     以"目标档位"为中心做离散高斯：
@@ -68,7 +76,7 @@ using UnityEngine;
 ///       攻击力 1~3 / 暴击 1~3 / 暴伤 1~5 / 防御力 1~5 / 闪避 1~2
 ///     只缩放条数而不缩放数值，好处是"高稀有度的价值主要体现在主词条与词条数量"，
 ///     副词条保持可预期，便于玩家判断重铸收益。
-///     同一件装备内副词条**不重复**（避免出现两条攻击力挤掉其他属性的退化情况）。
+///     同一件装备内副词条**允许重复**（只有五种属性，但可重复 roll 出两条暴击率等）。
 ///
 /// 【7】小数精度
 ///     除血量外全部 Round到 2 位小数（策划案第 7 条"攻击力可以是 1.45"）。
@@ -84,9 +92,6 @@ public static class InheritEquipmentGenerator
     /// <summary>各稀有度的副词条条数（策划案：奇点可5 条）。</summary>
     private static readonly int[] SUB_COUNT = { 1, 2, 3, 4, 4, 5 };
 
-    /// <summary>难度系数的每级增量。</summary>
-    private const float DIFF_SCALE_PER_POWER = 0.12f;
-
     /// <summary>稀有度高斯分布的标准差。越大越平均，越小越集中在目标档。</summary>
     private const float RARITY_SIGMA = 1.15f;
 
@@ -96,17 +101,74 @@ public static class InheritEquipmentGenerator
     private static (float min, float max) MainBaseRange(InheritStat s) => s switch
     {
         InheritStat.Attack   => (0.30f, 0.60f),   // 最强乘区，压得最保守
-        InheritStat.Defense  => (0.40f, 0.90f),
-        InheritStat.Health   => (15f,   40f),
-        InheritStat.CritDmg  => (2.0f,  4.0f),
-        InheritStat.CritRate => (2.0f,  3.0f),    // ×10 → 奇点 20~30（硬上限）
-        InheritStat.Evade    => (0.5f,  1.0f),    // ×10 → 奇点  5~10（硬上限）
+        InheritStat.Defense  => (0.25f, 0.55f),   // 防御是减法减伤，高了直接免伤
+        InheritStat.Health   => (10f,   25f),
+        // 下面三项是百分比乘区，走对数曲线。基础区间按"奇点级起步值"反推：
+        //   暴伤 2.5×10×1.898 ≈ 47%、暴击 2.0×10×1.385 ≈ 28%、闪避 0.7×10×1.385 ≈ 10%
+        //与策划案第 7 条"暴击 20~30%、闪避约 10%"对齐，再往上靠刷无尽慢慢涨。
+        InheritStat.CritDmg  => (1.2f,  2.5f),
+        InheritStat.CritRate => (1.2f,  2.0f),
+        InheritStat.Evade    => (0.35f, 0.70f),
         _                    => (1f,    2f),
     };
 
-    /// <summary>暴击 / 闪避不吃难度系数（硬上限属性）。</summary>
-    private static bool IsCappedStat(InheritStat s) =>
-        s == InheritStat.CritRate || s == InheritStat.Evade;
+    // ═══════════════ 成长曲线：三档，**全部无硬上限，可无限成长** ═══════════════
+    //
+    // 设计目标（玩家明确要求）：「无限刷无尽模式来获得更好的装备」
+    //   → 任何属性都不设封顶，power 越高数值越高，永远有追求空间。
+    //
+    // 但不同属性对战力的**边际收益差别极大**，用同一条曲线必然出事
+    // （上一版暴伤跟着线性涨到 +523%，一件项链让伤害翻好几倍）。
+    // 所以按"这属性乘区有多强"分成三档，用不同增长速度：
+    //
+    // ┌──────────────┬──────────────────────┬────────────────────────────────┐
+    // │ 属性         │ 曲线                 │ 为什么                         │
+    // ├──────────────┼──────────────────────┼────────────────────────────────┤
+    // │ 攻击/防御/血量│ 1 + 0.12·power^0.85 │ 加算数值，边际收益递减，        │
+    // │              │ （近线性，无顶）     │ 可以放开涨才追得上线性血量       │
+    // │ 暴伤         │ 1 + 0.35·ln(power)   │ 纯乘区，线性涨必失控，对数增长│
+    // │ 暴击/闪避│ 1 + 0.15·ln(power)   │ 有100% 语义天花板，涨得最慢     │
+    // └──────────────┴──────────────────────┴────────────────────────────────┘
+    //
+    // 实际数值（奇点级、稀有度系数 ×10、取区间上限；已按公式核算）：
+    //   power        13(血×25)  62(血×125)  262(血×525)  1000(血×2000)
+    //   成长系数 num    2.06       5.01        14.63        43.6
+    //   成长系数 cd     1.90       2.44        2.95         3.42
+    //   成长系数 pct    1.39       1.62        1.84         2.04
+    //   ──────────────────────────────────────────────────────────────
+    //   攻击          +12.4      +30.1       +87.8        +262
+    //   防御          +11.3      +27.6       +80.5        +240
+    //   血量          +515       +1253       +3658        +10900
+    //   暴伤          +47%       +61%        +74%+86%
+    //   暴击          +28%       +32%        +37%         +41%
+    //   闪避          +9.7%      +11.3%      +12.8%       +14.3%
+    //
+    // 对照：敌人血量在同一时刻是 ×25 → ×125 → ×525 → ×2000（线性）。
+    // 攻击的 power^0.85 略慢于线性，配合暴击/暴伤的对数增益与玩家自身的
+    // 技能升级/奇遇/其它装备（这些是独立乘区），总战力大致能跟上难度、
+    // 且越往后越需要靠"刷到更好的装备"来续命 —— 既有无限成长，也保留挑战。
+    private const float NUM_COEF = 0.12f;   // 数值类系数
+    private const float NUM_EXP  = 0.85f;   // 数值类幂次（<1 = 边际递减，但无顶）
+    private const float CD_COEF  = 0.35f;   // 暴伤（对数）
+    private const float PCT_COEF = 0.15f;   // 暴击 / 闪避（对数，最缓）
+
+    /// <summary>
+    /// 按属性类别取成长系数（作用在稀有度系数之上）。**无任何硬上限。**
+    /// </summary>
+    public static float StatScale(InheritStat s, float power)
+    {
+        if (power <= 1f) return 1f;
+        switch (s)
+        {
+            case InheritStat.CritRate:
+            case InheritStat.Evade:
+                return 1f + PCT_COEF * Mathf.Log(power);
+            case InheritStat.CritDmg:
+                return 1f + CD_COEF * Mathf.Log(power);
+            default:   // Attack / Defense / Health
+                return 1f + NUM_COEF * Mathf.Pow(power, NUM_EXP);
+        }
+    }
 
     // ───────────────────────── 副词条区间 ─────────────────────────
     // 策划案第 8 条原文：攻击力1~3，暴击1~3，暴伤1~5，防御力1~5，闪避1~2
@@ -131,31 +193,58 @@ public static class InheritEquipmentGenerator
 
     /// <summary>
     /// 当前这一局的「难度力量值」。
-    /// 非无尽 = 难度编号（N1→1 … N13→13）；无尽 = 13 + 阶段数 × 1.5（无上限）。
+    /// 非无尽 = 难度编号（N1→1 … N13→13）。
+    ///
+    /// 无尽 = **直接挂在敌人总血量倍率上**（难度面板上那个「敌人血量：×25.0」的实时值）：
+    ///   power = 总血量倍率 × POWER_PER_HP_MULT
+    ///   ×25（开局）→ 12.5 → 钳到 13（与 N13 齐平）
+    ///   ×100     → 50
+    ///   ×500       → 250
+    /// 这样"敌人变多硬 → 掉的装备就变多强"完全同步，且玩家选了更快的难度速度
+    /// （每波 +50/+100）时，装备强度自然跟着一起加速，不需要额外调参。
     /// </summary>
+ private const float POWER_PER_HP_MULT = 0.5f;
+
     public static float CurrentPower()
     {
-        var dm = DifficultyManager.Instance;
+var dm = DifficultyManager.Instance;
         if (dm == null) return 1f;
 
         if (dm.IsEndless)
-            return 13f + EndlessStage() * 1.5f;
+      {
+      float totalHp = EndlessRuntime.TotalHpMultiplier();
+   // 下限 13：无尽本身就是 N13 之后的内容，装备强度不该低于 N13
+            return Mathf.Max(13f, totalHp * POWER_PER_HP_MULT);
+  }
 
         return dm.CurrentIndex + 1;
     }
 
-    /// <summary>当前无尽阶段数（每 5 分钟 +1）。非无尽返回 0。</summary>
+    /// <summary>当前无尽波次（每 5 分钟 +1）。非无尽返回 0。</summary>
     public static int EndlessStage()
     {
-        // 无尽阶段直接由累积的血量倍率反推：每阶段 +5~10，取中位 7.5
-        // （battleUI 没有对外暴露 stage，用倍率反推足够精确地驱动稀有度权重）
-        float extra = enemy.endlessHpMultiplier - 1f;
-        if (extra <= 0f) return 0;
-        return Mathf.Max(0, Mathf.RoundToInt(extra / 7.5f));
+ // 【2026-08】改为读 EndlessRuntime.Stage（battleUI 直接写入）。
+        // 以前是用 endlessHpMultiplier / 15 反推的，但每波增量现在可由玩家选择
+        //（标准 15 / 加速 50 / 狂暴 100），反推必然算错。
+        var dm = DifficultyManager.Instance;
+      if (dm == null || !dm.IsEndless) return 0;
+        return Mathf.Max(0, EndlessRuntime.Stage);
     }
 
-    /// <summary>难度系数（只作用于非硬上限属性）。</summary>
-    public static float DiffScale(float power) => 1f + DIFF_SCALE_PER_POWER * (power - 1f);
+    /// <summary>
+    /// 单次世界 Boss 掉落的**件数**：无尽模式随敌人血量倍率递增。
+    /// 每 ×125 血量倍率 +1 件，上限 5 件
+    /// （留个上限只是为了别一次刷爆 120 格仓库，不是强度上限）。
+    /// 非无尽恒 1 件。
+    /// </summary>
+    public static int DropCount()
+    {
+        var dm = DifficultyManager.Instance;
+        if (dm == null || !dm.IsEndless) return 1;
+
+        float totalHp = EndlessRuntime.TotalHpMultiplier();
+        return Mathf.Clamp(1 + Mathf.FloorToInt(totalHp / 125f), 1, 5);
+    }
 
     /// <summary>
     /// 世界 Boss 掉落继承装备的概率。
@@ -226,7 +315,7 @@ public static class InheritEquipmentGenerator
         };
 
         item.mainValue = RollMainValue(item.mainStat, rarity, power);
-        item.subStats  = RollSubStats(rarity, item.mainStat);
+        item.subStats  = RollSubStats(rarity, power);
         return item;
     }
 
@@ -234,10 +323,8 @@ public static class InheritEquipmentGenerator
     public static float RollMainValue(InheritStat stat, InheritRarity rarity, float power)
     {
         var (lo, hi) = MainBaseRange(stat);
-        float mul = RARITY_MUL[(int)rarity];
-
-        // 暴击 / 闪避是硬上限属性，不乘难度系数
-        if (!IsCappedStat(stat)) mul *= DiffScale(power);
+        // 稀有度系数 × 该属性对应的成长曲线（无硬上限，见 StatScale）
+        float mul = RARITY_MUL[(int)rarity] * StatScale(stat, power);
 
         float v = Random.Range(lo, hi) * mul;
         return Quantize(stat, v);
@@ -246,34 +333,32 @@ public static class InheritEquipmentGenerator
     /// <summary>
     /// 掷副词条。条数由稀有度决定。
     ///
-    /// 【2026-08 修正】副词条**不允许与主词条重复**：
-    ///   副词条池 SUB_POOL 里有暴击/暴伤，而手镯的主词条就是暴击——
-    ///   以前会出现「主词条暴击 + 副词条暴击」的观感重复（玩家反馈
-    ///   "一件装备有两个暴击率"）。现在生成时把主词条从池里剔除，
-    ///   副词条之间再用不放回抽签保证彼此也不重复。
-    ///   若剔除后可用属性数少于条数上限，条数自动钳到可用数
-    ///   （例：手镯主词条=暴击，副词条只剩 4 种 → 奇点最多 4 条而非 5 条）。
+    /// 【副词条允许重复】
+    ///   副词条只有五种属性（SUB_POOL：暴击/暴伤/攻击/防御/闪避），
+    ///   但每条独立从池中随机抽取、**允许出现相同属性**——
+    ///   比如同件装备可以 roll 出两条暴击率副词条（玩家明确要求的设定）。
+    ///   条数上限由稀有度决定（SUB_COUNT），与属性种类无关。
+    ///
+    /// 【2026-08 副词条也随难度成长】
+    ///   之前副词条是**固定区间**、完全不吃 power，于是无尽刷到血量 ×2000 时
+    ///   奇点装备的 5 条副词条依然只有 +1%~3%，形同摆设，
+    ///   与"无限刷无尽换更强装备"的目标背道而驰。
+    ///   现在同样套用 StatScale，但只取其<see cref="SUB_SCALE_SHARE"/>（60%）的增益：
+    ///   主词条依然是装备的核心，副词条作为补充跟着涨、不抢主词条的戏。
     /// </summary>
-    public static List<InheritSubStat> RollSubStats(InheritRarity rarity, InheritStat mainStat = InheritStat.Attack)
+    private const float SUB_SCALE_SHARE = 0.60f;
+
+    public static List<InheritSubStat> RollSubStats(InheritRarity rarity, float power = 1f)
     {
-        // 副词条池剔除主词条 → 主/副词条永不同属性
-        var pool = new List<InheritStat>(SUB_POOL);
-        pool.Remove(mainStat);
-
-        // 不放回抽签（Fisher-Yates 洗牌 + 取前 count）→ 副词条彼此不重复
-        for (int i = pool.Count - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-            (pool[i], pool[j]) = (pool[j], pool[i]);
-        }
-
-        int count = Mathf.Min(SUB_COUNT[(int)rarity], pool.Count);
+        int count = SUB_COUNT[(int)rarity];
         var result = new List<InheritSubStat>(count);
         for (int i = 0; i < count; i++)
         {
-            InheritStat s = pool[i];
+            InheritStat s = SUB_POOL[Random.Range(0, SUB_POOL.Length)];
             var (lo, hi) = SubRange(s);
-            result.Add(new InheritSubStat(s, Quantize(s, Random.Range(lo, hi))));
+            // 只吃 60% 的成长曲线：1 + (scale − 1) × 0.6
+            float scale = 1f + (StatScale(s, power) - 1f) * SUB_SCALE_SHARE;
+            result.Add(new InheritSubStat(s, Quantize(s, Random.Range(lo, hi) * scale)));
         }
         return result;
     }
@@ -303,8 +388,7 @@ public static class InheritEquipmentGenerator
         if (item == null) return 0;
 
         var (lo, hi) = MainBaseRange(item.mainStat);
-        float mul = RARITY_MUL[(int)item.rarity];
-        if (!IsCappedStat(item.mainStat)) mul *= DiffScale(item.dropPower);
+        float mul = RARITY_MUL[(int)item.rarity] * StatScale(item.mainStat, item.dropPower);
 
         float rangeLo = lo * mul, rangeHi = hi * mul;
         float quality = rangeHi > rangeLo
@@ -336,7 +420,9 @@ public static class InheritEquipmentGenerator
     public static void ApplyReforge(InheritItem item)
     {
         if (item == null) return;
-        item.subStats = RollSubStats(item.rarity, item.mainStat);
+        // 用装备**掉落时**的 power 重掷：重铸是改词条，不该顺便把装备"升级"到当前难度，
+        // 否则玩家会拿低难度装备反复重铸来白嫖高难度数值。
+        item.subStats = RollSubStats(item.rarity, item.dropPower);
         item.reforgeCount++;
     }
 }

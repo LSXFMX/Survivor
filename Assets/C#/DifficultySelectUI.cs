@@ -37,7 +37,7 @@ public class DifficultySelectUI : MonoBehaviour
         "新增N11通关装备",                // N11
         "新增N12通关装备",                // N12
         "终极难度·新增N13通关装备",        // N13
-        "正向记录时间·每5分钟随机生成已解锁社群Boss·每5分钟怪物血量倍率+5·攻击固定×5·每分钟扣除10%源木·每分钟+5装备积分·通关N8解锁", // 无尽
+        "正向记录时间·每5分钟随机生成已解锁社群Boss·可选难度速度(每5分钟血量倍率+15/+50/+100)·攻击固定×5·每分钟扣除10%源木·每分钟+5装备积分·继承装备品质随血量倍率递增·通关N8解锁", // 无尽
     };
 
     // OverlayLayer 化的运行时占位
@@ -251,15 +251,191 @@ public class DifficultySelectUI : MonoBehaviour
 
     private void OnSelectDifficulty(int index)
     {
+        // 无尽模式：先让玩家选「难度速度」（每5 分钟血量倍率+15 / +50 / +100），
+        // 选完再真正开局。其它难度保持原行为。
+        if (DifficultyManager.Instance != null && index == DifficultyManager.Instance.EndlessIndex)
+        {
+            ShowEndlessSpeedPanel(index);
+            return;
+        }
+        StartWithDifficulty(index);
+    }
+
+    private void StartWithDifficulty(int index)
+    {
         DifficultyManager.Instance?.SetDifficulty(index);
         if (tooltipPanel != null) tooltipPanel.SetActive(false);
+        HideEndlessSpeedPanel();
         gameObject.SetActive(false);
         titleScript?.click_start();
+    }
+
+    // ══════════════════════ 无尽难度速度选择（运行时构建）══════════════════════
+    //   面板挂在 UIOverlayLayer 上，三个档位按钮 + 取消。
+    //   不动场景（SampleScene 25MB YAML），与项目里其它运行时 UI 一致。
+
+    private GameObject _endlessSpeedPanel;
+
+    private void ShowEndlessSpeedPanel(int endlessIndex)
+    {
+        if (tooltipPanel != null) tooltipPanel.SetActive(false);
+
+        if (_endlessSpeedPanel != null)
+        {
+            _endlessSpeedPanel.SetActive(true);
+            _endlessSpeedPanel.transform.SetAsLastSibling();
+            return;
+        }
+
+        Transform overlay = UIOverlayLayer.Get();
+        Transform host = overlay != null ? overlay : transform.parent;
+        if (host == null) return;
+
+        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+
+        // ── 根面板（居中，含半透明底板）──
+        _endlessSpeedPanel = new GameObject("EndlessSpeedPanel", typeof(RectTransform));
+        _endlessSpeedPanel.transform.SetParent(host, false);
+        var prt = (RectTransform)_endlessSpeedPanel.transform;
+        prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0.5f);
+        prt.pivot = new Vector2(0.5f, 0.5f);
+        prt.sizeDelta = new Vector2(560f, 420f);
+        prt.anchoredPosition = Vector2.zero;
+
+        var bg = _endlessSpeedPanel.AddComponent<Image>();
+        bg.color = new Color(0.06f, 0.07f, 0.12f, 0.97f);
+
+        // ── 标题 ──
+        CreateLabel(_endlessSpeedPanel.transform, font, "选择无尽难度",
+            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -12f),
+            new Vector2(0f, 54f), 30, new Color(1f, 0.85f, 0.4f));
+
+        // ── 说明 ──
+        CreateLabel(_endlessSpeedPanel.transform, font,
+            "每 5 分钟敌人血量倍率的提升幅度\n倍率越高，继承装备的品质与掉落数量也越高",
+            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -68f),
+            new Vector2(0f, 56f), 17, new Color(0.8f, 0.85f, 0.95f));
+
+        // ── 三个档位按钮 ──
+        float baseHp = DifficultyManager.Instance != null
+            ? DifficultyManager.Instance.Current.hpMultiplier : 25f;
+        var descs = new string[]
+        {
+            $"每波血量倍率 +{EndlessRuntime.StepOf(EndlessSpeedMode.Standard):0}" +
+                $"（×{baseHp:0} → ×{baseHp + EndlessRuntime.StepOf(EndlessSpeedMode.Standard):0} → …）",
+            $"每波血量倍率 +{EndlessRuntime.StepOf(EndlessSpeedMode.Fast):0}" +
+                $"（×{baseHp:0} → ×{baseHp + EndlessRuntime.StepOf(EndlessSpeedMode.Fast):0} → …）",
+            $"每波血量倍率 +{EndlessRuntime.StepOf(EndlessSpeedMode.Frenzy):0}" +
+                $"（×{baseHp:0} → ×{baseHp + EndlessRuntime.StepOf(EndlessSpeedMode.Frenzy):0} → …）",
+        };
+        var tints = new Color[]
+        {
+            new Color(0.16f, 0.30f, 0.20f),  // 标准 绿
+            new Color(0.32f, 0.26f, 0.12f),  // 加速黄
+            new Color(0.34f, 0.14f, 0.16f),  // 狂暴 红
+        };
+
+        for (int i = 0; i < EndlessRuntime.ModeCount; i++)
+        {
+            var mode = (EndlessSpeedMode)i;
+            float top = -140f - i * 78f;
+
+            var btnGo = new GameObject($"Speed_{mode}",
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+            btnGo.transform.SetParent(_endlessSpeedPanel.transform, false);
+            var brt = (RectTransform)btnGo.transform;
+            brt.anchorMin = new Vector2(0f, 1f);
+            brt.anchorMax = new Vector2(1f, 1f);
+            brt.pivot = new Vector2(0.5f, 1f);
+            brt.offsetMin = new Vector2(24f, 0f);
+            brt.offsetMax = new Vector2(-24f, 0f);
+            brt.sizeDelta = new Vector2(brt.sizeDelta.x, 66f);
+            brt.anchoredPosition = new Vector2(0f, top);
+
+            btnGo.GetComponent<Image>().color = tints[i];
+
+            CreateLabel(btnGo.transform, font,
+                $"{EndlessRuntime.NameOf(mode)}\n<size=14>{descs[i]}</size>",
+                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, 22, Color.white);
+
+            int captured = endlessIndex;
+            var capturedMode = mode;
+            btnGo.GetComponent<Button>().onClick.AddListener(() =>
+            {
+                AudioManager.PlaySfx(AudioManager.SfxKey.Click);
+                EndlessRuntime.SpeedMode = capturedMode;
+                EndlessRuntime.ResetRun();
+                ToastManager.Show($"<color=#FFD24A>无尽难度：{EndlessRuntime.NameOf(capturedMode)}" +
+                    $"（每波血量 +{EndlessRuntime.StepOf(capturedMode):0}）</color>");
+                StartWithDifficulty(captured);
+            });
+        }
+
+        // ── 取消 ──
+        var cancelGo = new GameObject("Cancel",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        cancelGo.transform.SetParent(_endlessSpeedPanel.transform, false);
+        var crt = (RectTransform)cancelGo.transform;
+        crt.anchorMin = new Vector2(0.5f, 0f);
+        crt.anchorMax = new Vector2(0.5f, 0f);
+        crt.pivot = new Vector2(0.5f, 0f);
+        crt.sizeDelta = new Vector2(180f, 48f);
+        crt.anchoredPosition = new Vector2(0f, 16f);
+        cancelGo.GetComponent<Image>().color = new Color(0.2f, 0.2f, 0.24f);
+        CreateLabel(cancelGo.transform, font, "取消",
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, 20, Color.white);
+        cancelGo.GetComponent<Button>().onClick.AddListener(() =>
+        {
+            AudioManager.PlaySfx(AudioManager.SfxKey.Click);
+            HideEndlessSpeedPanel();
+        });
+
+        _endlessSpeedPanel.transform.SetAsLastSibling();
+    }
+
+    private void HideEndlessSpeedPanel()
+    {
+        if (_endlessSpeedPanel != null) _endlessSpeedPanel.SetActive(false);
+    }
+
+    /// <summary>建一个铺在指定 anchor 区域内的 Text（内置字体，中文不会乱码）。</summary>
+    private static Text CreateLabel(Transform parent, Font font, string text,
+        Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPos, Vector2 sizeDelta,
+        int fontSize, Color color)
+    {
+        var go = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+        go.transform.SetParent(parent, false);
+        var rt = (RectTransform)go.transform;
+        rt.anchorMin = anchorMin;
+        rt.anchorMax = anchorMax;
+        if (anchorMin.y == 1f && anchorMax.y == 1f) rt.pivot = new Vector2(0.5f, 1f);
+        rt.offsetMin = new Vector2(12f, rt.offsetMin.y);
+        rt.offsetMax = new Vector2(-12f, rt.offsetMax.y);
+        if (sizeDelta != Vector2.zero) rt.sizeDelta = new Vector2(rt.sizeDelta.x, sizeDelta.y);
+        if (anchoredPos != Vector2.zero) rt.anchoredPosition = anchoredPos;
+        if (anchorMin == Vector2.zero && anchorMax == Vector2.one)
+        {
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+
+        var t = go.GetComponent<Text>();
+        t.text = text;
+        t.font = font;
+        t.fontSize = fontSize;
+        t.color = color;
+        t.alignment = TextAnchor.MiddleCenter;
+        t.horizontalOverflow = HorizontalWrapMode.Wrap;
+        t.verticalOverflow = VerticalWrapMode.Overflow;
+        t.raycastTarget = false;
+        return t;
     }
 
     void OnDisable()
     {
         if (tooltipPanel != null) tooltipPanel.SetActive(false);
+        HideEndlessSpeedPanel();
         // 关掉动态加的 backdrop，避免它在面板隐藏后仍然挡着屏幕
         if (_runtimeBackdrop != null) _runtimeBackdrop.SetActive(false);
     }

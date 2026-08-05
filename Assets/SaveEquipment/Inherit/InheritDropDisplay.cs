@@ -78,6 +78,10 @@ public class InheritDropDisplay : MonoBehaviour
         _label.fontSize = 3.2f;
         _label.alignment = TextAlignmentOptions.Center;
         _label.sortingOrder = 202;
+        // 【乱码修复】TMP 默认字体 LiberationSans 不含中文，必须显式指定含CJK 的字体，
+        // 否则"奇点/项链/攻击力"这些字全变□□□□。
+        var cnFont = InheritEquipmentAssets.ChineseFont();
+        if (cnFont != null) _label.font = cnFont;
         // 45° 俯视：文字与相机对齐，避免趴在地上看不清
         labelGo.transform.rotation = Quaternion.Euler(45f, 0f, 0f);
 

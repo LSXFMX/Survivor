@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 public class EquipmentIcon : MonoBehaviour
@@ -56,6 +57,37 @@ public class EquipmentIcon : MonoBehaviour
     {
         if (iconImage == null) iconImage = FindChildImage();
         ApplyForcedAchievementOverrides();
+    }
+
+    /// <summary>
+    /// 【启动预热】把场景里所有装备图标（含 inactive）的 Sprite 提前抠好放进缓存。
+    ///
+    /// 玩家反馈"点开存档界面卡四五秒、切换栏位也卡"，根因是 40+ 个 1024×1024 图标
+    /// 的抠背景全部发生在界面打开的那一瞬间。<see cref="SetIconFromAssetPath"/> 已经
+    /// 加了缓存，这里再把时机**提前到游戏启动**（由 InheritEquipmentPrewarmer 调用），
+    /// 于是玩家真正点开界面时全部命中缓存，零等待。
+    ///
+    /// 返回预热的图标数量。整个过程 try/catch 包裹，任何一张失败都不影响其余。
+    /// </summary>
+    public static int PrewarmAllIconsInScene()
+    {
+        int n = 0;
+        var icons = Object.FindObjectsOfType<EquipmentIcon>(true);
+        foreach (var ic in icons)
+        {
+            if (ic == null) continue;
+            try
+            {
+                if (ic.iconImage == null) ic.iconImage = ic.FindChildImage();
+                ic.ApplyForcedAchievementOverrides();   // 内部会走 SetIconFromAssetPath → 填充缓存
+                n++;
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[EquipmentIcon] 预热 {ic.name} 失败（忽略）：{ex.Message}");
+            }
+        }
+        return n;
     }
 
     /// <summary>
@@ -720,9 +752,83 @@ public class EquipmentIcon : MonoBehaviour
         }
     }
 
+    // ══════════════════════ 图标 Sprite 缓存 ══════════════════════
+    //
+    // 【2026-08 性能修复】SetIconFromAssetPath 原来每次调用都要走一整套
+    //   RuntimeAssetLoader.LoadTexture → CreateWritableCopy(Blit+ReadPixels)
+    //   → MakeTextureTransparent(GetPixels32 + BFS 泛洪 + 洞填充) → Sprite.Create，
+    // 而存档界面有 40+ 个装备图标，每张 1024×1024。
+    // 于是"点开存档界面"和"每次切换装备栏位"都会把这套重活全部重跑一遍
+    // —— 这就是玩家反馈的卡四五秒的真正来源（继承装备那19 张只是其中一部分）。
+    //
+    // 两层缓存：
+    //   ① 进程内静态字典：同一路径只抠一次。切换栏位、反复开关界面全部零成本。
+    //      Sprite 绑定的是 new Texture2D（非场景资源），不随场景卸载失效，可安全长驻。
+    //   ② 磁盘缓存：抠好的 PNG 落到 persistentDataPath，**第二次启动开始**
+    //      连泛洪都不用跑，首次打开界面也不卡。
+    private static readonly Dictionary<string, Sprite> s_iconSpriteCache =
+        new Dictionary<string, Sprite>();
+
+    private const string ICON_CACHE_VER = "v1";
+
+    private static string IconCacheDir =>
+        System.IO.Path.Combine(Application.persistentDataPath, "EquipIconCache");
+
+    private static string IconCacheFile(string key) =>
+        System.IO.Path.Combine(IconCacheDir,
+            $"{ICON_CACHE_VER}_{key.Replace('/', '_').Replace('\\', '_').Replace('#', '_')}.png");
+
+    private static Sprite TryLoadIconFromDisk(string key)
+    {
+        try
+        {
+            string file = IconCacheFile(key);
+            if (!System.IO.File.Exists(file)) return null;
+
+            byte[] bytes = System.IO.File.ReadAllBytes(file);
+            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!tex.LoadImage(bytes)) return null;
+            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                 new Vector2(0.5f, 0.5f), 100f);
+        }
+        catch { return null; }
+    }
+
+    private static void TrySaveIconToDisk(string key, Texture2D tex)
+    {
+        try
+        {
+            if (tex == null) return;
+            System.IO.Directory.CreateDirectory(IconCacheDir);
+            byte[] png = tex.EncodeToPNG();
+            if (png != null && png.Length > 0)
+                System.IO.File.WriteAllBytes(IconCacheFile(key), png);
+        }
+        catch { /* 写缓存失败不影响功能，只是下次仍要重抠 */ }
+    }
+
     private void SetIconFromAssetPath(string relativeToAssets, bool skipBackgroundRemoval = false)
     {
         if (iconImage == null) return;
+
+        // 抠图与否会产出不同结果，所以要分开缓存
+        string cacheKey = relativeToAssets + (skipBackgroundRemoval ? "#raw" : "#cut");
+
+        // ① 进程内缓存
+        if (s_iconSpriteCache.TryGetValue(cacheKey, out var hit) && hit != null)
+        {
+            ApplyIconSprite(hit);
+            return;
+        }
+
+        // ② 磁盘缓存
+        Sprite disk = TryLoadIconFromDisk(cacheKey);
+        if (disk != null)
+        {
+            s_iconSpriteCache[cacheKey] = disk;
+            ApplyIconSprite(disk);
+            return;
+        }
 
         // 从 editorAssetsRelativePath 自动推导 resourcesRelativePath（去掉 .png / .jpeg 扩展名）
         // 这样 RuntimeAssetLoader 第 2 层 Resources.Load 能命中，不再仅依赖第 3 层编辑器文件读取
@@ -765,10 +871,19 @@ public class EquipmentIcon : MonoBehaviour
         }
 
         Sprite forcedSprite = Sprite.Create(writable, new Rect(0, 0, writable.width, writable.height), new Vector2(0.5f, 0.5f), 100f);
+        s_iconSpriteCache[cacheKey] = forcedSprite;
+        TrySaveIconToDisk(cacheKey, writable);
+        ApplyIconSprite(forcedSprite);
+    }
+
+    /// <summary>把已经准备好的 Sprite 应用到 Image（缓存命中与新建两条路径共用）。</summary>
+    private void ApplyIconSprite(Sprite sp)
+    {
+        if (iconImage == null || sp == null) return;
         iconImage.enabled = true;
         iconImage.material = null;
-        iconImage.sprite = forcedSprite;
-        iconImage.overrideSprite = forcedSprite;
+        iconImage.sprite = sp;
+        iconImage.overrideSprite = sp;
         iconImage.type = Image.Type.Simple;
         iconImage.preserveAspect = true;
     }

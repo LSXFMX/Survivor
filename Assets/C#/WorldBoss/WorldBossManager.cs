@@ -37,6 +37,26 @@ public class WorldBossManager : MonoBehaviour
     /// <summary>本局已击败的世界Boss数量（按社群去重）</summary>
     public int DefeatedCountThisRun => _defeatedFactions.Count;
 
+    /// <summary>无尽模式存档：导出已击败社群列表。</summary>
+    public List<string> GetDefeatedFactionsForSave()
+    {
+        var list = new List<string>();
+        foreach (var f in _defeatedFactions) list.Add(f.ToString());
+        return list;
+    }
+
+    /// <summary>无尽模式存档：恢复已击败社群（用于通关源奖励倍率等）。</summary>
+    public void RestoreDefeatedFactions(List<string> factions)
+    {
+        if (factions == null) return;
+        _defeatedFactions.Clear();
+        foreach (var s in factions)
+        {
+            if (System.Enum.TryParse<FactionType>(s, out var f))
+                _defeatedFactions.Add(f);
+        }
+    }
+
     void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }

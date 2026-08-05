@@ -126,21 +126,8 @@ public class InheritEquipmentManager : MonoBehaviour
     {
         _data.items.RemoveAll(i => i == null || string.IsNullOrEmpty(i.uid));
 
-        // 【2026-08】清洗旧存档：同一件装备内副词条不允许重复、
-        // 副词条也不允许与主词条同属性（旧版本可能 roll 出过"暴击主词条+暴击副词条"）。
-        // 只删重复项，不重掷数值，避免把玩家已刷到的装备强度改掉。
-        foreach (var it in _data.items)
-        {
-            if (it == null || it.subStats == null || it.subStats.Count == 0) continue;
-            var seen = new HashSet<InheritStat> { it.mainStat };
-            for (int i = it.subStats.Count - 1; i >= 0; i--)
-            {
-                var sub = it.subStats[i];
-                if (sub == null) { it.subStats.RemoveAt(i); continue; }
-                if (seen.Contains(sub.stat)) it.subStats.RemoveAt(i);
-                else seen.Add(sub.stat);
-            }
-        }
+        // 注：副词条允许重复（只有五种属性但可重复 roll，如两条暴击率），
+        // 因此这里不做去重清洗。
 
         for (int s = 0; s < InheritEquipmentDefs.SLOT_COUNT; s++)
         {

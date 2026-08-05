@@ -29,17 +29,28 @@ public static class InheritEquipmentHooks
             return;
         }
 
-        InheritItem item = InheritEquipmentGenerator.Generate();
-        if (item == null) return;
+        // 掉落件数：无尽模式随敌人血量倍率递增（×125 起 2 件、×250 起 3 件）
+        int count = InheritEquipmentGenerator.DropCount();
+        for (int i = 0; i < count; i++)
+ {
+   InheritItem item = InheritEquipmentGenerator.Generate();
+     if (item == null) continue;
 
-        // 先播展示：即使随后被自动分解，玩家也该看到"掉了什么"
-        InheritDropDisplay.Show(item, worldPos);
+        // 多件时错开一点位置，避免展示动画完全重叠
+            Vector3 showPos = count > 1
+        ? worldPos + new Vector3((i - (count - 1) * 0.5f) * 1.6f, 0f, 0f)
+                : worldPos;
 
-        bool kept = mgr.Acquire(item);
-        Debug.Log($"[Inherit] 掉落 {item.DisplayName}" +
-        $"（主词条 {InheritEquipmentDefs.FormatStatLine(item.mainStat, item.mainValue)}，" +
-        $"副词条 {item.subStats?.Count ?? 0} 条，" +
-        $"{(kept ? "已入库" : "已自动分解")}）");
+          // 先播展示：即使随后被自动分解，玩家也该看到"掉了什么"
+    InheritDropDisplay.Show(item, showPos);
+
+         bool kept = mgr.Acquire(item);
+            Debug.Log($"[Inherit] 掉落 {item.DisplayName}（{i + 1}/{count}）" +
+   $"（力量值 {item.dropPower:0.#}，" +
+    $"主词条 {InheritEquipmentDefs.FormatStatLine(item.mainStat, item.mainValue)}，" +
+    $"副词条 {item.subStats?.Count ?? 0} 条，" +
+         $"{(kept ? "已入库" : "已自动分解")}）");
+        }
     }
 
     /// <summary>

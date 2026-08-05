@@ -297,7 +297,8 @@ public class InheritEquipmentUI : MonoBehaviour
 
         var bg = NewImage("BG", panel);
         Stretch(bg.rectTransform);
-        bg.color = new Color(0.05f, 0.06f, 0.10f, 0.45f);
+        // 【2026-08】原来是近乎纯黑（0.05/0.06/0.10），暗色装备图标几乎看不见。整体提亮。
+        bg.color = new Color(0.13f, 0.15f, 0.22f, 0.55f);
         bg.raycastTarget = false;
 
         // 人形轮廓底图（居中，稍微压暗以免抢过装备图标）
@@ -358,7 +359,8 @@ public class InheritEquipmentUI : MonoBehaviour
     {
         cell.bg = NewImage("BG", rt);
         Stretch(cell.bg.rectTransform);
-        cell.bg.color = new Color(0.08f, 0.09f, 0.15f, 0.85f);
+        // 提亮格子底色：暗红/暗紫的装备图标在近黑底上完全看不清（玩家反馈）
+        cell.bg.color = new Color(0.20f, 0.22f, 0.31f, 0.92f);
 
         cell.icon = NewImage("Icon", rt);
         var ir = cell.icon.rectTransform;
@@ -412,7 +414,7 @@ public class InheritEquipmentUI : MonoBehaviour
         _warehouseViewport.offsetMin = Vector2.zero;
         _warehouseViewport.offsetMax = new Vector2(0f, -titleH - 2f);
         var vpImg = _warehouseViewport.gameObject.AddComponent<Image>();
-        vpImg.color = new Color(0.05f, 0.06f, 0.10f, 0.55f);
+        vpImg.color = new Color(0.11f, 0.13f, 0.19f, 0.60f);
         _warehouseViewport.gameObject.AddComponent<Mask>().showMaskGraphic = true;
 
         _warehouseContent = NewRect("Content", _warehouseViewport);
@@ -584,7 +586,7 @@ public class InheritEquipmentUI : MonoBehaviour
         cell.go = rt.gameObject;
 
         BuildCellVisual(cell, rt, _fs * 0.62f);
-        cell.bg.color = new Color(0.10f, 0.11f, 0.18f, 0.90f);
+        cell.bg.color = new Color(0.23f, 0.25f, 0.34f, 0.95f);
         return cell;
     }
 
@@ -812,55 +814,10 @@ public class InheritEquipmentUI : MonoBehaviour
     }
 
     /// <summary>
-    /// 解析中文字体。
-    /// 【重要】heiti SDF **不在 Resources 目录**（实际位于
-    /// Assets/像素幸存者资源包/字体/heiti SDF.asset），
-    /// 所以 Resources.Load 必然返回 null —— 直接那么写会让整个面板中文全变□。
-    /// 这里沿用 ReviveManager.ResolveChineseFont 的三级回退，并多覆盖几种
-    /// 玩家实际"装好后什么都没配"的情况：
-    ///   ① ToastManager.Instance.font（场景 Inspector 里已拖好）
-    ///   ② 场景里任意一个 TextMeshProUGUI（用 FindObjectsOfType 拿 inactive）的 font
-    ///   ③ Resources.FindObjectsOfTypeAll 拿已加载到内存的字体资产
-    ///     （heiti SDF 是 131 MB 的大字体，进入存档界面时基本一定已被资源系统加载）
-    ///   ④ Resources.Load 兜底（仅当有人把字体挪进 Resources 才会命中）
-    /// 结果静态缓存，避免每建一个文本都全场扫一遍。
+    /// 解析中文字体 —— 统一走<see cref="InheritEquipmentAssets.ChineseFont"/>，
+    /// 与局内掉落展示（InheritDropDisplay）共用同一份缓存，避免两处各写一套回退逻辑。
     /// </summary>
-    private static TMP_FontAsset _cnFont;
-
-    private static TMP_FontAsset ResolveChineseFont()
-    {
-        if (_cnFont != null) return _cnFont;
-
-        if (ToastManager.Instance != null && ToastManager.Instance.font != null)
-        {
-            _cnFont = ToastManager.Instance.font;
-            return _cnFont;
-        }
-
-        var all = FindObjectsOfType<TextMeshProUGUI>(true);
-        foreach (var t in all)
-            if (t != null && t.font != null) { _cnFont = t.font; return _cnFont; }
-
-        // 兜底：已加载到内存的字体资产（heiti SDF 体积巨大，进入存档场景后
-        // 一般已经被任何一处 TMP 引用、放进 AssetBundle → Resources 内存里）
-        var allFonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
-        foreach (var f in allFonts)
-        {
-            if (f != null && f.name != null && f.name.Contains("hei"))
-            {
-                _cnFont = f;
-                return _cnFont;
-            }
-        }
-        // 再退一步：随便拿一个能用的字体
-        foreach (var f in allFonts)
-        {
-            if (f != null) { _cnFont = f; return _cnFont; }
-        }
-
-        _cnFont = Resources.Load<TMP_FontAsset>("heiti SDF");
-        return _cnFont;
-    }
+    private static TMP_FontAsset ResolveChineseFont() => InheritEquipmentAssets.ChineseFont();
 
     private static Button NewButton(string name, Transform parent,
     out TextMeshProUGUI label, string text)

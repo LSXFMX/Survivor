@@ -117,6 +117,21 @@ public class battleUI : MonoBehaviour
     private int _charAppliedSkin = -2; // -2 = 从未刷新过；-1 = 头像加载失败
     private int _charCachedMaxTotal = -1; // 玩家属性升级总上限（首次访问 ChoiceUI 后缓存）
 
+    void OnEnable()
+    {
+        // 【无尽模式存档恢复】「继续无尽」进入战斗时，等场景所有 Awake/Start
+        // （装备初始化、技能卡注册、世界Boss生成等）完成后延迟恢复本局状态。
+        if (EndlessSaveManager.ResumePending)
+            StartCoroutine(DelayedRestoreEndlessRun());
+    }
+
+    private IEnumerator DelayedRestoreEndlessRun()
+    {
+        yield return new WaitForSecondsRealtime(0.2f); // 等 EquipmentInitializer.Start 等完成
+        yield return null;                            // 再稳一帧
+        EndlessSaveManager.RestoreIntoScene();
+    }
+
     void Start()
     {
         // 对局开始：清空上一局的追踪数据（修复历史Boss/装备跨局残留bug）
@@ -311,12 +326,21 @@ public class battleUI : MonoBehaviour
     /// <summary>SSR 启动资金：开局等级+3，并连续 3 次升级三选一（与 levelup 相同 ChoiceUI）</summary>
     private void ApplyStartupFundEquipmentIfUnlocked()
     {
-        if (EquipmentSystem.Instance == null || player == null) return;
+     if (EquipmentSystem.Instance == null || player == null) return;
         if (!EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, 2)) return;
 
+        // 【2026-08 修复】「继续无尽」读档开局时必须跳过：
+        //   存档里的 level 已经包含了当初的 +3，技能也已按存档重建，
+        //   再执行一次会导致每次读档都白送 3 级 + 3 次三选一（越读越强）。
+        if (EndlessSaveManager.ResumePending)
+ {
+    Debug.Log("[EndlessSave] 继续无尽开局：跳过 SSR 启动资金（等级+3 与 3 次三选一）");
+       return;
+}
+
         player.level += 3;
-        _pendingGachaStartupChoices = 3;
-        Time.timeScale = 0f;
+ _pendingGachaStartupChoices = 3;
+ Time.timeScale = 0f;
         choiceUI.SetActive(true);
         ToastManager.Show("[抽卡·SSR] 启动资金：等级+3，开局3次升级三选一");
     }
@@ -638,11 +662,12 @@ public class battleUI : MonoBehaviour
         _endlessMode = DifficultyManager.Instance != null && DifficultyManager.Instance.IsEndless;
         if (_endlessMode)
         {
-            enemy.endlessHpMultiplier  = 1.0f;
+            enemy.endlessHpMultiplier  = 0f;
             enemy.endlessAtkMultiplier = 1.0f;
             _endlessElapsed = 0f;
             _endlessStageCount = 0;
             _endlessPointsMinute = 0;
+            EndlessRuntime.ResetRun();   // 波次归零（读档时随后会被 RestoreEndlessState覆盖）
             minute = 0; second = 0;
             timer = 0;
             startcount = true;
@@ -695,15 +720,8 @@ public class battleUI : MonoBehaviour
         if (startcount && _endlessMode)
         {
             // 无尽模式：正计时，永不 timeover。
-            // 【2026-08 修复】计时必须用"真实时间"而非 Time.deltaTime：
-            //   Time.deltaTime 会随倍速（timeScale=2/3）放大，导致阶段判定
-            //   （每 300 秒涨一波血）被加速好几倍，endlessHpMultiplier 从
-            //   ×40 的加法叠加（每 5 分钟 +5~10）被快进成几分钟就涨一波，
-            //   几十分钟就暴涨到 ×500，玩家反馈"血量叠加太夸张"。
-            //   改用 unscaledDeltaTime + 排除暂停（timeScale==0）：
-            //   倍速只加速战斗/刷怪节奏，不再加速无尽波次与血量倍率累积。
-            if (Time.timeScale > 0f)
-                _endlessElapsed += Time.unscaledDeltaTime;
+            // 计时用 Time.deltaTime（随倍速加速），不用现实时间。
+            _endlessElapsed += Time.deltaTime;
             int m = (int)(_endlessElapsed / 60f);
             int s = (int)(_endlessElapsed % 60f);
             if (timeui != null)
@@ -949,6 +967,13 @@ public class battleUI : MonoBehaviour
             yield return new WaitForSecondsRealtime(slowMoDuration);
             Time.timeScale = 0f;
             AudioManager.StopAll();
+
+            // 无尽模式死亡 → 本局结束，清除存档（避免反复从失败点读档）。
+            if (IsInEndlessMode() && EndlessSaveManager.HasSave())
+            {
+                EndlessSaveManager.Clear();
+                Debug.Log("[EndlessSave] 无尽模式死亡，已清除本局存档");
+            }
         }
 
         // 结算会话数据
@@ -1070,7 +1095,9 @@ public class battleUI : MonoBehaviour
         float baseAtk = DifficultyManager.Instance != null
             ? DifficultyManager.Instance.Current.atkMultiplier : 1f;
 
-        float hp  = baseHp  * enemy.adventureHpMultiplier  * enemy.endlessHpMultiplier;
+        // 无尽血量是加法叠加：基础倍率(cfg.hpMultiplier) + 每波累加(endlessHpMultiplier)。
+        // 与 enemy.ApplyDifficultyScaling 保持一致，显示"血×N"为最终生效倍率。
+        float hp  = (baseHp + enemy.endlessHpMultiplier) * enemy.adventureHpMultiplier;
         float atk = baseAtk * enemy.adventureAtkMultiplier * enemy.endlessAtkMultiplier;
 
         if (Mathf.Approximately(hp, _mulSuffixHp) && Mathf.Approximately(atk, _mulSuffixAtk))
@@ -1148,15 +1175,143 @@ public class battleUI : MonoBehaviour
         return tmp;
     }
 
-    /// <summary>无尽模式：每 5 分钟触发一次——血量倍率随机 +5~10，攻击倍率随机 +0/1（累积制，作用于之后新生成的怪）。</summary>
+    /// <summary>无尽模式当前最终血量倍率（基础 + 每波累加，与 enemy.ApplyDifficultyScaling 一致）。</summary>
+    private float GetEndlessTotalHp()
+    {
+        float baseHp = DifficultyManager.Instance != null
+            ? DifficultyManager.Instance.Current.hpMultiplier : 1f;
+        return (baseHp + enemy.endlessHpMultiplier) * enemy.adventureHpMultiplier;
+    }
+
+    // ══════════════════════ 无尽模式「保存本局」按钮 ══════════════════════
+
+    private GameObject _endlessSaveBtnGo;
+
+    /// <summary>在暂停菜单里动态创建「保存本局」按钮（幂等）。</summary>
+    private void EnsureEndlessSaveButton()
+    {
+        if (_endlessSaveBtnGo != null)
+        {
+            _endlessSaveBtnGo.SetActive(true);
+            return;
+        }
+        if (menu == null) return;
+        var parentRt = menu.GetComponent<RectTransform>();
+        if (parentRt == null) return;
+
+        var btnGo = new GameObject("__EndlessSaveButton",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
+        btnGo.transform.SetParent(menu, false);
+        var rt = btnGo.GetComponent<RectTransform>();
+        // 锚定面板底部居中，向下留 10px
+        rt.anchorMin = new Vector2(0.5f, 0f);
+        rt.anchorMax = new Vector2(0.5f, 0f);
+        rt.pivot     = new Vector2(0.5f, 0f);
+        rt.anchoredPosition = new Vector2(0f, 10f);
+        rt.sizeDelta = new Vector2(240f, 56f);
+
+        var img = btnGo.GetComponent<UnityEngine.UI.Image>();
+        img.color = new Color(0.15f, 0.30f, 0.16f, 0.95f);
+        var btn = btnGo.GetComponent<UnityEngine.UI.Button>();
+        var colors = btn.colors;
+        colors.normalColor      = new Color(1f, 1f, 1f, 1f);
+        colors.highlightedColor = new Color(0.85f, 1f, 0.85f, 1f);
+        colors.pressedColor     = new Color(0.6f, 0.9f, 0.6f, 1f);
+        btn.colors = colors;
+
+        // Label
+        var labelGo = new GameObject("Label",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(TMPro.TextMeshProUGUI));
+        labelGo.transform.SetParent(btnGo.transform, false);
+        var lrt = labelGo.GetComponent<RectTransform>();
+        lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+        var label = labelGo.GetComponent<TMPro.TextMeshProUGUI>();
+        label.text = "保存本局";
+        label.alignment = TextAlignmentOptions.Center;
+        label.fontSize  = 24;
+        label.color     = Color.white;
+        var f = ResolveEndlessSaveFont();
+        if (f != null) label.font = f;
+
+        btn.onClick.AddListener(OnEndlessSaveClicked);
+        _endlessSaveBtnGo = btnGo;
+    }
+
+    private void HideEndlessSaveButton()
+    {
+        if (_endlessSaveBtnGo != null) _endlessSaveBtnGo.SetActive(false);
+    }
+
+    private void OnEndlessSaveClicked()
+    {
+        AudioManager.PlaySfx(AudioManager.SfxKey.Click);
+        EndlessSaveManager.Save();
+        ToastManager.Show("<color=#80FF80>本局已保存！返回主菜单后可从「继续无尽」恢复</color>");
+    }
+
+    /// <summary>中文字体解析（与 InheritEquipmentUI 同策略）。</summary>
+    private static TMPro.TMP_FontAsset _endlessSaveFont;
+    private static TMPro.TMP_FontAsset ResolveEndlessSaveFont()
+    {
+        if (_endlessSaveFont != null) return _endlessSaveFont;
+        if (ToastManager.Instance != null && ToastManager.Instance.font != null)
+        {
+            _endlessSaveFont = ToastManager.Instance.font;
+            return _endlessSaveFont;
+        }
+        var all = FindObjectsOfType<TMPro.TextMeshProUGUI>(true);
+        foreach (var t in all)
+            if (t != null && t.font != null) { _endlessSaveFont = t.font; return _endlessSaveFont; }
+        var allFonts = Resources.FindObjectsOfTypeAll<TMPro.TMP_FontAsset>();
+        foreach (var fnt in allFonts)
+            if (fnt != null && fnt.name != null && fnt.name.Contains("hei"))
+            { _endlessSaveFont = fnt; return _endlessSaveFont; }
+        foreach (var fnt in allFonts)
+            if (fnt != null) { _endlessSaveFont = fnt; return _endlessSaveFont; }
+        _endlessSaveFont = Resources.Load<TMPro.TMP_FontAsset>("heiti SDF");
+        return _endlessSaveFont;
+    }
+
+    // ══════════════════════ 无尽模式存档接口 ══════════════════════
+    // 仅供 EndlessSaveManager 保存/恢复本局时调用，不在其它地方使用。
+
+    public float GetEndlessElapsedForSave() => _endlessElapsed;
+    public int   GetEndlessStageCountForSave() => _endlessStageCount;
+    public int   GetEndlessPointsMinuteForSave() => _endlessPointsMinute;
+
+    public void RestoreEndlessState(float elapsed, int stageCount, int pointsMinute)
+    {
+        _endlessElapsed     = elapsed;
+        _endlessStageCount  = stageCount;
+        _endlessPointsMinute = pointsMinute;
+        EndlessRuntime.Stage = stageCount;   // 波次同步给继承装备强度计算
+        minute = (int)(_endlessElapsed / 60f);
+        second = (int)(_endlessElapsed % 60f);
+        timer  = _endlessElapsed;
+        if (timeui != null)
+            timeui.text = $"{(int)(_endlessElapsed / 60f):00}:{(int)(_endlessElapsed % 60f):00}";
+        // 恢复后重新校准无尽倍率显示
+        RefreshEndlessMultiplierText();
+    }
+
+    /// <summary>
+    /// 无尽模式：每 5 分钟触发一次。
+    /// 血量倍率**加法叠加** +15（作用于之后新生成的怪）：25 → 40 → 55 → 70……
+    /// 攻击倍率仍随机 +0/1（乘法累积，语义不变）。
+    /// </summary>
 private void OnEndlessStage(int stage)
     {
-        int hpAdd  = Random.Range(5, 11);   // [5, 10] 闭区间
+        // 每波血量倍率增量由玩家选择的「无尽难度速度」决定：
+      //   标准 +15 / 加速 +50 / 狂暴 +100（见 EndlessRuntime.HpStepPerStage）
+        float hpAdd = EndlessRuntime.HpStepPerStage;
         int atkAdd = Random.Range(0, 2);    // 0 或 1
-        enemy.endlessHpMultiplier  += hpAdd;
-        enemy.endlessAtkMultiplier += atkAdd;
-        string atkStr = atkAdd > 0 ? $"，攻击倍率 ×{enemy.endlessAtkMultiplier:0}" : "";
-        ToastManager.Show($"<color=#FF6060>无尽 第{stage}波：血量倍率 +{hpAdd}（×{enemy.endlessHpMultiplier:0}）{atkStr}</color>");
+      enemy.endlessHpMultiplier  += hpAdd;
+   enemy.endlessAtkMultiplier += atkAdd;
+        EndlessRuntime.Stage = stage;       // 波次写入，供继承装备强度/稀有度使用
+     string atkStr = atkAdd > 0 ? $"，攻击倍率 ×{enemy.endlessAtkMultiplier:0}" : "";
+        ToastManager.Show($"<color=#FF6060>无尽 第{stage}波（{EndlessRuntime.SpeedModeName}）：" +
+  $"血量倍率 +{hpAdd:0}（当前 血×{GetEndlessTotalHp():0.#}）{atkStr}</color>");
         // 第 1 波（第一次五分钟）不刷史莱姆 Boss —— 史莱姆社群是最后解锁的
         //（N11 才进入刷怪池、N12 才有世界 Boss），第一波就给玩家上史莱姆，
         // 会让尚未解锁该社群的玩家面对一个"还没见过就突然出现"的 Boss。
@@ -1167,8 +1322,11 @@ private void OnEndlessStage(int stage)
     /// <summary>无尽模式：随机生成一个"已解锁"的社群 Boss（蘑菇/蝙蝠/狼人/史莱姆）。</summary>
     private void SpawnRandomCommunityBoss(bool excludeSlime = false)
     {
-        // 候选：从 WorldBossManager 取真正的世界Boss预制体（而非关底 Boss）
-        var candidates = new System.Collections.Generic.List<GameObject>();
+        // 候选必须带上 faction：生成后要注入给 WorldBoss* 组件，
+        // 否则 Boss 死亡时 worldBossManager 为 null，
+        // WorldBossManager.OnWorldBossDefeated 不会被调用 →
+        // 继承装备掉落判定被整段跳过（无尽模式打世界Boss不掉装备的根因）。
+        var candidates = new System.Collections.Generic.List<CommunityBossCandidate>();
         var wbMgr = WorldBossManager.Instance;
         if (wbMgr != null && wbMgr.worldBossEntries != null)
         {
@@ -1177,22 +1335,25 @@ private void OnEndlessStage(int stage)
                 if (entry.bossPrefab == null) continue;
                 // 用 faction 字段精确定位史莱姆（而不是靠预制体名contains，改名就失效）
                 if (excludeSlime && entry.faction == FactionType.Slime) continue;
-                candidates.Add(entry.bossPrefab);
+                candidates.Add(new CommunityBossCandidate(entry.bossPrefab, entry.faction));
             }
         }
         // 回退：如果 WorldBossManager 未就绪，用场景中分配的世界Boss预制体
         if (candidates.Count == 0)
         {
             var crm = ClearRecordManager.Instance;
-            if (bossPrefab != null) candidates.Add(bossPrefab);
-            if (batBossPrefab != null && (crm == null || crm.GetClearCount("N7") > 0)) candidates.Add(batBossPrefab);
-            if (wolfBossPrefab != null && (crm == null || crm.GetClearCount("N9") > 0)) candidates.Add(wolfBossPrefab);
+            if (bossPrefab != null) candidates.Add(new CommunityBossCandidate(bossPrefab, FactionType.Mushroom));
+            if (batBossPrefab != null && (crm == null || crm.GetClearCount("N7") > 0))
+                candidates.Add(new CommunityBossCandidate(batBossPrefab, FactionType.Bat));
+            if (wolfBossPrefab != null && (crm == null || crm.GetClearCount("N9") > 0))
+                candidates.Add(new CommunityBossCandidate(wolfBossPrefab, FactionType.Wolf));
             if (!excludeSlime && slimeBossPrefab != null && (crm == null || crm.GetClearCount("N11") > 0))
-                candidates.Add(slimeBossPrefab);
+                candidates.Add(new CommunityBossCandidate(slimeBossPrefab, FactionType.Slime));
         }
         if (candidates.Count == 0) return;
 
-        GameObject prefab = candidates[Random.Range(0, candidates.Count)];
+        var picked = candidates[Random.Range(0, candidates.Count)];
+        GameObject prefab = picked.prefab;
         Vector3 pos = GetBossSpawnPos(0, 1);
         GameObject obj = Instantiate(prefab, pos, Quaternion.Euler(45, 0, 0), enemylayer != null ? enemylayer : null);
 
@@ -1201,20 +1362,67 @@ private void OnEndlessStage(int stage)
         if (bossEnemy != null)
         {
             BossHealthBarUI.Register(bossEnemy);
-            // 按类型接 battleUI 引用（部分 Boss 的 FixedUpdate 需要 battleUI.player 或回调）
+
+            // 按类型接battleUI 引用（部分 Boss 的 FixedUpdate 需要 battleUI.player 或回调）
+            // 同时注入 faction + worldBossManager —— 这是继承装备掉落的必要条件。
+            bool isWorldBoss = false;
             var wbBase = obj.GetComponent<WorldBossBase>();
-            if (wbBase != null) wbBase.battleUI = this;
+            if (wbBase != null)
+            {
+                wbBase.battleUI = this;
+                wbBase.faction = picked.faction;
+                wbBase.worldBossManager = wbMgr;
+                isWorldBoss = true;
+            }
             var wbSlime = obj.GetComponent<WorldBossSlime>();
-            if (wbSlime != null) wbSlime.battleUI = this;
+            if (wbSlime != null)
+            {
+                wbSlime.battleUI = this;
+                wbSlime.faction = picked.faction;
+                wbSlime.worldBossManager = wbMgr;
+                isWorldBoss = true;
+            }
             var wbWolf = obj.GetComponent<WorldBossWolf>();
-            if (wbWolf != null) wbWolf.battleUI = this;
+            if (wbWolf != null)
+            {
+                wbWolf.battleUI = this;
+                wbWolf.faction = picked.faction;
+                wbWolf.worldBossManager = wbMgr;
+                isWorldBoss = true;
+            }
             var wbBat = obj.GetComponent<WorldBossBat>();
-            if (wbBat != null) wbBat.battleUI = this;
+            if (wbBat != null)
+            {
+                wbBat.battleUI = this;
+                wbBat.faction = picked.faction;
+                wbBat.worldBossManager = wbMgr;
+                isWorldBoss = true;
+            }
             var wbMush = obj.GetComponent<WorldBossMushroomMan>();
-            if (wbMush != null) wbMush.battleUI = this;
+            if (wbMush != null)
+            {
+                wbMush.battleUI = this;
+                wbMush.faction = picked.faction;
+                wbMush.worldBossManager = wbMgr;
+                isWorldBoss = true;
+            }
+
+            // 兜底：回退分支用的是关底 Boss 预制体（没有 WorldBoss* 组件），
+            // 不会走 OnWorldBossDefeated，这里挂 watcher 保证仍能掉继承装备。
+            // 若 wbMgr 为 null，即使是世界Boss组件也拿不到 manager → 同样需要兜底。
+            if (!isWorldBoss || wbMgr == null)
+                obj.AddComponent<EndlessBossDropWatcher>();
         }
 
         ToastManager.Show("<color=#FFD24A>无尽：一个世界Boss出现了！</color>");
+    }
+
+    /// <summary>无尽模式社群 Boss 候选：预制体 + 所属社群。</summary>
+    private struct CommunityBossCandidate
+    {
+        public readonly GameObject  prefab;
+        public readonly FactionType faction;
+        public CommunityBossCandidate(GameObject p, FactionType f) { prefab = p; faction = f; }
     }
 
     private void SpawnBoss()
@@ -1336,6 +1544,9 @@ private void OnEndlessStage(int stage)
             AdventureEventManager.Instance.adventureUI.IsShowing) return;
 
         menu.gameObject.SetActive(true);
+        // 无尽模式：在暂停菜单里动态补一个「保存本局」按钮
+        if (IsInEndlessMode()) EnsureEndlessSaveButton();
+        else HideEndlessSaveButton();
         // 进入暂停菜单时收起子面板
         if (settingsPanel != null)     settingsPanel.SetActive(false);
         if (instructionsPanel != null) instructionsPanel.SetActive(false);

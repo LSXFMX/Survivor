@@ -194,8 +194,13 @@ public class AudioManager : MonoBehaviour
         { SfxKey.HellfireCast, 0.70f },
         // 火球：原有音效，多弹连发时限流
         { SfxKey.FireballCast, 0.20f },
-        { SfxKey.FireballHit,  0.10f },
-        { SfxKey.IceHit,       0.10f },
+        // 火球/地狱火命中：真正的"每次施法只响一次"由 Skillbase.PlayHitSfx 的
+        // 施法轮次节流保证；这里 0.35s 只是兜底（防止某些技能没走 PlayCastSfx 时刷屏）。
+        // 之前是 0.10s，地狱火多枚三叉戟 AoE 命中会让这一声几乎不间断地响。
+        { SfxKey.FireballHit,  0.35f },
+        { SfxKey.IceHit,       0.30f },
+        // 通用命中音：一群小怪被同一发穿透弹/AoE 同时打到时会一帧调好几次 → 0.15s 稀释
+        { SfxKey.Hit,          0.15f },
 
         // ── Boss 技能 ──
         { SfxKey.BossSlash,    0.30f },

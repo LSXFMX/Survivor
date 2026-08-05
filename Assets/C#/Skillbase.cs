@@ -157,10 +157,36 @@ private static Transform s_enemyLayerCacheSB;
     /// <summary>范围内无敌人时的重试间隔（秒）。</summary>
     protected const float RangeRetryDelay = 0.12f;
 
-    /// <summary>子弹命中时调用的命中音效；按技能名派发，子类可 override 自定义。</summary>
+    // ── 命中音"每轮施法只响一次"的节流状态 ──
+    /// <summary>施法轮次序号：每调用一次 PlayCastSfx（= 释放一次技能）自增。</summary>
+    private int _castSerial;
+    /// <summary>上一次播命中音所属的施法轮次。</summary>
+    private int _hitSfxSerial = -1;
+    private float _lastHitSfxTime = -99f;
+    /// <summary>同一轮施法内命中音的兜底冷却：持续型 AoE 超过这个时长可以再响一次。</summary>
+    private const float HitSfxSameCastCooldown = 0.5f;
+
+    /// <summary>
+    /// 子弹命中时调用的命中音效；按技能名派发，子类可 override 自定义。
+    ///
+    /// 【2026-08修复】命中音与"命中数量"彻底解绑：
+    ///   Bulletbase 是**每颗子弹命中每个敌人**都调一次本方法。地狱火（多枚三叉戟
+    ///   连续落地 + 每枚 AoE 多目标）和火球（多弹 + 穿透）会在一帧里调用几十次，
+    ///   而 FireballHit 的限流只有 0.10s，于是命中音几乎不间断地响 —— 就是玩家
+    ///   反馈的"不知道是地狱火还是火球术的音效会一直放"。
+    ///   现在改为**一次施法只播一次命中音**（与弹数/命中数无关）；
+    ///   持续型 AoE 若同一轮超过 HitSfxSameCastCooldown 仍会补一声，避免长技能全程静音。
+    /// </summary>
     public virtual void PlayHitSfx()
     {
         if (string.IsNullOrEmpty(Skillname)) return;
+
+        // 本轮已经响过 → 直接静音（这正是"和数量无关"的关键）
+        if (_hitSfxSerial == _castSerial &&
+            Time.time - _lastHitSfxTime < HitSfxSameCastCooldown) return;
+        _hitSfxSerial   = _castSerial;
+        _lastHitSfxTime = Time.time;
+
         if (Skillname.Contains("火球") || Skillname.Contains("地狱火"))
             AudioManager.PlaySfx(AudioManager.SfxKey.FireballHit);
         else if (Skillname.Contains("冰"))
@@ -177,12 +203,17 @@ private static Transform s_enemyLayerCacheSB;
     ///
     /// 注意：只有走 Skillbase.Useskill() 的技能会自动调用本方法；
     /// 所有 override 了 Useskill() 的子类需要在自己的发射时机显式调用 PlayCastSfx()。
+    /// 各子类都是在"整轮发射前"调用一次（循环外），所以发射音天然与弹数无关。
     ///
     /// 音效的最小播放间隔由 AudioManager.SfxIntervalOverride 按 key 统一管理，
     /// 短 CD / 多弹连发技能不会因为一帧内多次调用而叠成噪音。
     /// </summary>
     public virtual void PlayCastSfx()
     {
+        // 新一轮施法：解锁本轮的命中音配额（放在最前面，
+        // 即使技能名为空或没有匹配的发射音，轮次也要照常推进）
+        _castSerial++;
+
         if (string.IsNullOrEmpty(Skillname)) return;
 
         // 火系
