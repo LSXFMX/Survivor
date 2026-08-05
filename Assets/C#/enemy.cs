@@ -146,6 +146,8 @@ public class enemy : Attribute
         SlimeFactionRegistrar.ResetStatics();
         // Skillbase 的 enemylayer 缓存（火球术攻击范围判定用），同样会在场景重载后失效
         Skillbase.ResetEnemyLayerCache();
+        // 继承装备：Sprite / 程序化边框贴图都绑定在旧场景的 Texture2D上
+        InheritEquipmentHooks.ResetSceneCaches();
     }
 
     private const string KEY_SPORE_MUTATION_ENABLED = "SporeMutationEnabled";

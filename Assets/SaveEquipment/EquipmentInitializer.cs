@@ -105,6 +105,12 @@ public class EquipmentInitializer : MonoBehaviour
             EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.FavorEquipment,
                                 SlimeFactionAssets.EQUIP_TAIJI))
             SlimeFactionRegistrar.ApplyEquip11_TaijiLiangYi(player, playerSkillList);
+
+        // ── 继承装备加成（终局装备，放在所有其它装备之后叠加）──
+        // 语义上继承装备是"叠在基础装备之上"的终局成长，所以必须最后应用；
+        // 若放在前面，后续 ApplyXxx 里若有乘法型加成会把继承装备的数值也乘进去，
+        // 造成继承装备实际收益随基础装备数量漂移。
+        InheritEquipmentHooks.ApplyToPlayerOnRunStart(player);
     }
 
     /// <summary>
@@ -244,7 +250,7 @@ public class EquipmentInitializer : MonoBehaviour
         GameObject upDmg   = BuildParaUpgrade(skillbase, Upgradeoptionsbase.skillAttribute.damage,       1f,  "伤害 +1");
         GameObject upCd    = BuildParaUpgrade(skillbase, Upgradeoptionsbase.skillAttribute.CDtime,       -0.1f, "冷却 -0.1s");
         GameObject upNum   = BuildParaUpgrade(skillbase, Upgradeoptionsbase.skillAttribute.number,       1f,  "数量 +1");
-        GameObject upRange = BuildParaUpgrade(skillbase, Upgradeoptionsbase.skillAttribute.attackRadius, 5f,  "范围 +5");
+        GameObject upRange = BuildParaUpgrade(skillbase, Upgradeoptionsbase.skillAttribute.attackRadius, 3f,  "范围 +3");
 
         var entry = new SkillUpgradeEntry();
         entry.learnSkillPrefab = learnGo;

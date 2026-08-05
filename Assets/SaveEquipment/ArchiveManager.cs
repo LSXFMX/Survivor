@@ -146,7 +146,14 @@ public class ArchiveManager : MonoBehaviour
             equipmentContainers.Add(EquipmentType.GachaEquipment, gachaEquipmentContainer);
 
         if (inheritEquipmentContainer != null)
+        {
             equipmentContainers.Add(EquipmentType.InheritEquipment, inheritEquipmentContainer);
+            // 继承装备走一套完全独立的 UI（人形轮廓 + 六槽位 + 仓库 + 分解/重铸），
+            // 不使用 EquipmentIcon 那套"固定图标格子"机制，因此在这里单独挂载面板。
+            // 场景里这个容器是个空节点，面板整体由代码构建。
+            SafeRun(() => InheritEquipmentHooks.AttachUIToArchiveContainer(inheritEquipmentContainer),
+                    "AttachInheritEquipmentUI");
+        }
 
         // 初始时全部隐藏
         HideAllContainers();
@@ -742,6 +749,36 @@ public class ArchiveManager : MonoBehaviour
         ShowEquipmentInfo(type, id, icon);
     }
 
+    // ════════════════════════════════════════════════════════════════
+    //  继承装备页签：右侧信息板切换
+    // ════════════════════════════════════════════════════════════════
+
+    /// <summary>右侧 5 个 TMP 的缓存，避免每次遍历找引用。</summary>
+    private TextMeshProUGUI[] _rightInfoTexts;
+
+    /// <summary>
+    /// 继承装备 tab 切换：<c>true</c> = 隐藏右侧「请选择装备」信息板（继承装备自绘详情区在容器内），
+    /// <c>false</c> = 恢复显示。
+    /// 之所以需要，是因为存档界面的继承装备容器和右侧信息板**位置不重叠但语义冲突**：
+    /// 玩家点继承装备 tab 时，右边「[请选择装备] 点击左侧装备查看详情」这种通用空状态提示
+    /// 应当让位给继承装备自带的详情区。
+    /// </summary>
+    public void SetInheritEquipmentMode(bool active)
+    {
+        if (_rightInfoTexts == null)
+        {
+            _rightInfoTexts = new TextMeshProUGUI[]
+            {
+                typeText, nameText, descriptionText, howToGetText, idText
+            };
+        }
+        foreach (var t in _rightInfoTexts)
+        {
+            if (t == null) continue;
+            t.gameObject.SetActive(!active);
+        }
+    }
+
     // 清空所有显示
     public void ClearAllDisplay()
     {
@@ -788,8 +825,6 @@ public class ArchiveManager : MonoBehaviour
         //   • idText anchor 强制左上对齐并截断到 RectTransform 内（不再溢出到右栏外）。
         // 这种"运行时校正"是不动场景工程的妥协 —— 若改场景能根治但需要你打开工程。
         ApplyDetailPanelLayout();
-            return;
-        }
 
         // 从EquipmentSystem检查是否解锁
         bool isUnlocked = false;
@@ -929,7 +964,7 @@ public class ArchiveManager : MonoBehaviour
             nameText.fontSize = 26;
             nameText.lineSpacing = 4f;
             nameText.alignment = TextAlignmentOptions.TopLeft;
-            nameText.textWrappingMode = TextWrappingModes.NoWrap;
+            nameText.enableWordWrapping = false;
             nameText.overflowMode = TextOverflowModes.Ellipsis;
         }
 
@@ -961,7 +996,7 @@ public class ArchiveManager : MonoBehaviour
             idText.fontSize = 16;
             idText.lineSpacing = 0f;
             idText.alignment = TextAlignmentOptions.TopLeft;
-            idText.textWrappingMode = TextWrappingModes.NoWrap;
+            idText.enableWordWrapping = false;
             idText.overflowMode = TextOverflowModes.Ellipsis;
         }
 
@@ -972,7 +1007,7 @@ public class ArchiveManager : MonoBehaviour
             typeText.fontSize = 16;
             typeText.lineSpacing = 0f;
             typeText.alignment = TextAlignmentOptions.TopLeft;
-            typeText.textWrappingMode = TextWrappingModes.NoWrap;
+            typeText.enableWordWrapping = false;
             typeText.overflowMode = TextOverflowModes.Ellipsis;
         }
 

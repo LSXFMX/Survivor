@@ -199,6 +199,20 @@ public class WorldBossManager : MonoBehaviour
         };
         GameSessionTracker.Instance?.RecordBossDefeated(bossName);
 
+        // ── 继承装备掉落（策划案第 2 条）──
+        // 必须放在下面那句 `if (_unlockedFactions.Contains(faction)) return;` **之前**：
+        // 那句是"社群首次解锁"的守卫，已解锁的社群会提前 return，
+        // 而继承装备是**每次击杀都要判定掉落**的（终局玩法靠反复刷取）。
+        //
+        // 展示位置用玩家位置而非 Boss 位置：一是本方法拿不到 Boss 的transform，
+        // 二是掉落展示的目的就是"让玩家一眼看到稀有度"，出现在玩家身边比
+        // 出现在可能已飘到屏幕外的 Boss 尸体处更可靠。
+        {
+            Vector3 dropPos = Vector3.zero;
+            if (player != null) dropPos = player.transform.position;
+            InheritEquipmentHooks.TryDropFromWorldBoss(dropPos);
+        }
+
         if (_unlockedFactions.Contains(faction)) return;
 
         // 成就装备3「钥匙剑」：解锁世界Boss奖励，未解锁则跳过加成

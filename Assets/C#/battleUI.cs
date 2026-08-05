@@ -15,6 +15,18 @@ public class battleUI : MonoBehaviour
     public TextMeshProUGUI health;
     public TextMeshProUGUI level;
     public TextMeshProUGUI timeui;
+
+    /// <summary>
+    /// 无尽模式「难度倍率」独立显示框（血×25 攻×3.5）。
+    ///
+    /// 【2026-08-05 拆出】原版把倍率作为后缀拼到 <see cref="timeui"/> 里，
+    ///   在窄面板上会被 TMPro 强制换行成"01:22\n血×25 攻×3.5"贴在同一框内，
+    ///   视觉上互相挤压、换行断在奇怪位置。
+    /// 改后倍率单独写进这个文本框，位置完全由用户在场景里配置（一般与 timeui 同行偏右）。
+    ///
+    /// 为空时：自动在 <see cref="timeui"/> 旁边创建一次（详见 EnsureEndlessMultiplierText）。
+    /// </summary>
+    public TextMeshProUGUI endlessMultiplierText;
     public Transform exp;
     public Image life;
     public int minute;
@@ -636,8 +648,9 @@ public class battleUI : MonoBehaviour
             startcount = true;
             _deathFallbackTimer = 0f;
             _deathFallbackTriggered = false;
-            if (timeui != null) timeui.text = "00:00" + GetEndlessMultiplierSuffix();
-     return;
+            if (timeui != null) timeui.text = "00:00";
+            RefreshEndlessMultiplierText();
+            return;
         }
 
         minute = DifficultyManager.Instance != null ? DifficultyManager.Instance.Current.minutes : 10;
@@ -680,14 +693,23 @@ public class battleUI : MonoBehaviour
         RefreshCharacterPanel();
 
         if (startcount && _endlessMode)
-{
-            // 无尽模式：正计时，永不 timeover
-            _endlessElapsed += Time.deltaTime;
+        {
+            // 无尽模式：正计时，永不 timeover。
+            // 【2026-08 修复】计时必须用"真实时间"而非 Time.deltaTime：
+            //   Time.deltaTime 会随倍速（timeScale=2/3）放大，导致阶段判定
+            //   （每 300 秒涨一波血）被加速好几倍，endlessHpMultiplier 从
+            //   ×40 的加法叠加（每 5 分钟 +5~10）被快进成几分钟就涨一波，
+            //   几十分钟就暴涨到 ×500，玩家反馈"血量叠加太夸张"。
+            //   改用 unscaledDeltaTime + 排除暂停（timeScale==0）：
+            //   倍速只加速战斗/刷怪节奏，不再加速无尽波次与血量倍率累积。
+            if (Time.timeScale > 0f)
+                _endlessElapsed += Time.unscaledDeltaTime;
             int m = (int)(_endlessElapsed / 60f);
             int s = (int)(_endlessElapsed % 60f);
             if (timeui != null)
-          timeui.text = (m < 10 ? "0" : "") + m + (s < 10 ? ":0" : ":") + s
-             + GetEndlessMultiplierSuffix();
+                timeui.text = (m < 10 ? "0" : "") + m + (s < 10 ? ":0" : ":") + s;
+            // 倍率写入独立文本框（不在 timeui 里拼接，避免换行错位）
+            RefreshEndlessMultiplierText();
 
             // 每 5 分钟一个阶段：刷社群Boss + 血量倍率 +5
             int stage = (int)(_endlessElapsed / 300f);
@@ -1023,35 +1045,107 @@ public class battleUI : MonoBehaviour
     private float  _mulSuffixAtk = -1f;
     private string _mulSuffixCache = "";
 
+    /// <summary>是否处于无尽模式（_endlessMode 是 Start 时的快照，但开菜单返回会重置，确保安全再判定一次）。</summary>
+    private bool IsInEndlessMode() => _endlessMode ||
+        (DifficultyManager.Instance != null && DifficultyManager.Instance.IsEndless);
+
     /// <summary>
-    /// 无尽模式下拼在计时器后面的「难度倍率」后缀，形如 <c>  血×21 攻×3</c>。
+    /// 把当前无尽模式的"难度倍率"写入 <see cref="endlessMultiplierText"/>。
     ///
     /// 显示的是**最终实际生效的倍率**，即 <c>难度配置 × 奇遇 × 无尽</c> 三者相乘
     /// （与 enemy.ApplyDifficultyScaling 的公式完全一致），而不是只显示无尽那一项——
     /// 玩家关心的是"现在的怪到底比基准强多少倍"，只显示无尽增量会低估实际强度。
     ///
-    /// 结果做缓存：本方法每帧都会被调用，而倍率只在每 5 分钟的阶段跳变时变化，
-    /// 没必要每帧做字符串插值（那是稳定的每帧 GC）。
+    /// 结果做缓存：倍率只在每 5 分钟的阶段跳变时变化，没必要每帧做字符串插值。
+    ///
+    /// 非无尽模式不调用本方法，文本框保持空。
     /// </summary>
-    private string GetEndlessMultiplierSuffix()
+    private void RefreshEndlessMultiplierText()
     {
-     float baseHp  = DifficultyManager.Instance != null
-  ? DifficultyManager.Instance.Current.hpMultiplier  : 1f;
+        // 无尽模式之外不应该调用这里；调用了也直接留空（不会污染内容）
+        if (!IsInEndlessMode()) { SetEndlessMulText(string.Empty); return; }
+
+        float baseHp  = DifficultyManager.Instance != null
+            ? DifficultyManager.Instance.Current.hpMultiplier  : 1f;
         float baseAtk = DifficultyManager.Instance != null
             ? DifficultyManager.Instance.Current.atkMultiplier : 1f;
 
-   float hp  = baseHp  * enemy.adventureHpMultiplier  * enemy.endlessHpMultiplier;
+        float hp  = baseHp  * enemy.adventureHpMultiplier  * enemy.endlessHpMultiplier;
         float atk = baseAtk * enemy.adventureAtkMultiplier * enemy.endlessAtkMultiplier;
 
- if (!Mathf.Approximately(hp, _mulSuffixHp) || !Mathf.Approximately(atk, _mulSuffixAtk))
-        {
-    _mulSuffixHp  = hp;
-   _mulSuffixAtk = atk;
-       // size=60% 让倍率明显从属于时间，不抢主视觉；血红 / 攻金与项目既有配色一致
-            _mulSuffixCache =
-       $"  <size=60%><color=#FF7A7A>血×{hp:0.#}</color> <color=#FFC24A>攻×{atk:0.#}</color></size>";
-     }
-        return _mulSuffixCache;
+        if (Mathf.Approximately(hp, _mulSuffixHp) && Mathf.Approximately(atk, _mulSuffixAtk))
+            return;
+
+        _mulSuffixHp  = hp;
+        _mulSuffixAtk = atk;
+        // 与原版同配色：血红 / 攻金。无 size 标签 —— 独立文本框自己控制字号
+        SetEndlessMulText($"<color=#FF7A7A>血×{hp:0.#}</color>  <color=#FFC24A>攻×{atk:0.#}</color>");
+    }
+
+    /// <summary>
+    /// 把文本写入独立倍率框。字段为空时**自动创建一个**（timeui 的兄弟节点），
+    /// 创建后保留引用，避免每帧都重复生成。
+    /// </summary>
+    private void SetEndlessMulText(string s)
+    {
+        if (endlessMultiplierText == null) endlessMultiplierText = EnsureEndlessMultiplierText();
+        if (endlessMultiplierText != null) endlessMultiplierText.text = s;
+    }
+
+    /// <summary>
+    /// 第一次显示倍率时，自动在 <see cref="timeui"/> 旁边创建一个独立的 TextMeshProUGUI 节点。
+    ///
+    /// 为什么动态创建：让用户**不需要改场景工程**就能看到这个修复生效。
+    /// 节点是 timeui 的兄弟（同样的父级、紧邻的 anchoredPosition），且只创建一次。
+    /// 如果用户自己挂了一个文本框到 <see cref="endlessMultiplierText"/> 字段并拖入 Inspector，
+    /// 这里的创建会被跳过。
+    /// </summary>
+    private TextMeshProUGUI EnsureEndlessMultiplierText()
+    {
+        if (timeui == null) return null;
+
+        // 1. 寻找父级。timeui 多半是 timeui 的子节点，这里沿父级链找，直到能找到
+        //    至少一个 TextMeshProUGUI 子节点的层级 —— 通常就是 timeui 自身。
+        //    为简单起见，直接把倍率框也挂到 timeui 的父级，作为 timeui 的兄弟。
+        Transform parent = timeui.transform.parent;
+        if (parent == null) parent = timeui.transform;
+
+        // 2. 命名规范，便于排查
+        const string kName = "EndlessMultiplierText(Auto)";
+        var existing = parent.Find(kName);
+        if (existing != null) return existing.GetComponent<TextMeshProUGUI>();
+
+        GameObject go = new GameObject(kName, typeof(RectTransform));
+        var rt = go.GetComponent<RectTransform>();
+        rt.SetParent(parent, false);
+
+        // 3. anchor / pivot：与 timeui 对齐（多为左下或左上），这样复制它的位置最稳
+        rt.anchorMin = timeui.rectTransform.anchorMin;
+        rt.anchorMax = timeui.rectTransform.anchorMax;
+        rt.pivot = timeui.rectTransform.pivot;
+
+        // 4. 位置：紧贴 timeui 右侧。timeui 的 anchoredPosition 视为"时间框中心"，
+        //    倍率框再往右移 timeui 宽度的一半 + 倍率框自身宽度的一半 + 一点间距
+        float timeWidth = timeui.rectTransform.rect.width;
+        if (timeWidth < 50f) timeWidth = 200f; // 兜底：timeui 还未布局完成时给个估计
+        const float margin = 12f;
+        rt.sizeDelta = new Vector2(220f, timeui.rectTransform.rect.height > 0f
+            ? timeui.rectTransform.rect.height : 60f);
+        rt.anchoredPosition = timeui.rectTransform.anchoredPosition
+            + new Vector2(timeWidth * 0.5f + rt.sizeDelta.x * 0.5f + margin, 0f);
+
+        // 5. TMP 组件：尽量复用 timeui 的字体，避免 SDF 图集不匹配
+        var src = timeui;
+        var tmp = go.AddComponent<TextMeshProUGUI>();
+        tmp.font = src.font;
+        tmp.fontMaterial = src.fontMaterial;
+        tmp.fontSize = Mathf.RoundToInt(src.fontSize * 0.7f);
+        tmp.color = Color.white;
+        tmp.alignment = TextAlignmentOptions.MidlineLeft;
+        tmp.raycastTarget = false;
+        tmp.text = string.Empty;
+
+        return tmp;
     }
 
     /// <summary>无尽模式：每 5 分钟触发一次——血量倍率随机 +5~10，攻击倍率随机 +0/1（累积制，作用于之后新生成的怪）。</summary>
