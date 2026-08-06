@@ -74,6 +74,17 @@ public class EquipmentSystem : MonoBehaviour
         OnAllEquipmentsReset?.Invoke();
     }
 
+    /// <summary>
+    /// 丢弃内存缓存，下次查询时重新读 PlayerPrefs。
+    /// 【存档槽切换】<see cref="SaveSlotManager"/> 换槽后PlayerPrefs 内容整体被替换，
+    /// 而 _cache 里还留着上一个档的解锁表—— 不清就会串档。
+    /// </summary>
+    public void ReloadFromPrefs()
+    {
+        _cache.Clear();
+        OnAllEquipmentsReset?.Invoke();   // 让 UI（存档界面图标等）重新按新档刷新
+    }
+
     /// <summary>获取当前已解锁的装备列表（仅内存缓存中的）</summary>
     public List<(EquipmentType type, int id)> GetUnlockedEquipments()
     {

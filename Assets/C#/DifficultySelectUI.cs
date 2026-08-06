@@ -37,7 +37,7 @@ public class DifficultySelectUI : MonoBehaviour
         "新增N11通关装备",                // N11
         "新增N12通关装备",                // N12
         "终极难度·新增N13通关装备",        // N13
-        "正向记录时间·每5分钟随机生成已解锁社群Boss·可选难度速度(每5分钟血量倍率+15/+50/+100)·攻击固定×5·每分钟扣除10%源木·每分钟+5装备积分·继承装备品质随血量倍率递增·通关N8解锁", // 无尽
+        "无尽之塔·逐层攀爬·正向记录时间·每5分钟随机生成已解锁社群Boss·每层每波血量倍率递增(第1层+15/第2层+30/第3层+60/之后每层×1.6)·在一层存活30分钟解锁下一层·攻击固定×5·每分钟扣除10%源木·每分钟+5装备积分·继承装备品质与掉落数量随血量倍率递增·通关N8解锁", // 无尽
     };
 
     // OverlayLayer 化的运行时占位
@@ -270,20 +270,32 @@ public class DifficultySelectUI : MonoBehaviour
         titleScript?.click_start();
     }
 
-    // ══════════════════════ 无尽难度速度选择（运行时构建）══════════════════════
-    //   面板挂在 UIOverlayLayer 上，三个档位按钮 + 取消。
+    // ══════════════════════ 无尽之塔：层数选择（运行时构建）══════════════════════
+    //   面板挂在 UIOverlayLayer 上：◀ / ▶ 翻层+ 层信息 + 挑战 / 取消。
     //   不动场景（SampleScene 25MB YAML），与项目里其它运行时 UI 一致。
+    //
+    //   为什么用"翻页"而不是"每层一个按钮"：塔层理论上无上限（暗黑大秘境式），
+    //   固定几个按钮撑不住；翻页 + 钳制到已解锁范围，天然支持无限层。
 
-    private GameObject _endlessSpeedPanel;
+    private GameObject _endlessSpeedPanel;      // 沿用旧字段名，避免到处改引用
+    private Text _towerFloorText;               // "第 N 层"
+    private Text _towerInfoText;                // 该层数值与记录
+    private Text _towerUnlockHintText;          // 解锁提示
+    private int  _towerViewFloor = 1;           // 面板上正在浏览的层
+    private int  _towerEndlessIndex = -1;       // 无尽难度在 configs 里的下标
 
     private void ShowEndlessSpeedPanel(int endlessIndex)
     {
         if (tooltipPanel != null) tooltipPanel.SetActive(false);
 
+        _towerEndlessIndex = endlessIndex;
+        _towerViewFloor = EndlessRuntime.CurrentFloor;
+
         if (_endlessSpeedPanel != null)
         {
             _endlessSpeedPanel.SetActive(true);
             _endlessSpeedPanel.transform.SetAsLastSibling();
+            RefreshTowerPanel();
             return;
         }
 
@@ -294,94 +306,69 @@ public class DifficultySelectUI : MonoBehaviour
         Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
 
-        // ── 根面板（居中，含半透明底板）──
-        _endlessSpeedPanel = new GameObject("EndlessSpeedPanel", typeof(RectTransform));
+        // ── 根面板 ──
+        _endlessSpeedPanel = new GameObject("EndlessTowerPanel", typeof(RectTransform));
         _endlessSpeedPanel.transform.SetParent(host, false);
         var prt = (RectTransform)_endlessSpeedPanel.transform;
         prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0.5f);
         prt.pivot = new Vector2(0.5f, 0.5f);
-        prt.sizeDelta = new Vector2(560f, 420f);
+        prt.sizeDelta = new Vector2(620f, 460f);
         prt.anchoredPosition = Vector2.zero;
 
         var bg = _endlessSpeedPanel.AddComponent<Image>();
         bg.color = new Color(0.06f, 0.07f, 0.12f, 0.97f);
 
         // ── 标题 ──
-        CreateLabel(_endlessSpeedPanel.transform, font, "选择无尽难度",
-            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -12f),
-            new Vector2(0f, 54f), 30, new Color(1f, 0.85f, 0.4f));
+        CreateLabel(_endlessSpeedPanel.transform, font, "无 尽 之 塔",
+            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -14f),
+            new Vector2(0f, 52f), 32, new Color(1f, 0.85f, 0.4f));
 
-        // ── 说明 ──
         CreateLabel(_endlessSpeedPanel.transform, font,
-            "每 5 分钟敌人血量倍率的提升幅度\n倍率越高，继承装备的品质与掉落数量也越高",
-            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -68f),
-            new Vector2(0f, 56f), 17, new Color(0.8f, 0.85f, 0.95f));
+            "越高层敌人成长越快，掉落的继承装备也越强",
+            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -66f),
+            new Vector2(0f, 30f), 16, new Color(0.8f, 0.85f, 0.95f));
 
-        // ── 三个档位按钮 ──
-        float baseHp = DifficultyManager.Instance != null
-            ? DifficultyManager.Instance.Current.hpMultiplier : 25f;
-        var descs = new string[]
-        {
-            $"每波血量倍率 +{EndlessRuntime.StepOf(EndlessSpeedMode.Standard):0}" +
-                $"（×{baseHp:0} → ×{baseHp + EndlessRuntime.StepOf(EndlessSpeedMode.Standard):0} → …）",
-            $"每波血量倍率 +{EndlessRuntime.StepOf(EndlessSpeedMode.Fast):0}" +
-                $"（×{baseHp:0} → ×{baseHp + EndlessRuntime.StepOf(EndlessSpeedMode.Fast):0} → …）",
-            $"每波血量倍率 +{EndlessRuntime.StepOf(EndlessSpeedMode.Frenzy):0}" +
-                $"（×{baseHp:0} → ×{baseHp + EndlessRuntime.StepOf(EndlessSpeedMode.Frenzy):0} → …）",
-        };
-        var tints = new Color[]
-        {
-            new Color(0.16f, 0.30f, 0.20f),  // 标准 绿
-            new Color(0.32f, 0.26f, 0.12f),  // 加速黄
-            new Color(0.34f, 0.14f, 0.16f),  // 狂暴 红
-        };
+        // ── 层数显示 + 左右翻页 ──
+        _towerFloorText = CreateLabel(_endlessSpeedPanel.transform, font, "第 1 层",
+            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -104f),
+            new Vector2(0f, 66f), 40, new Color(1f, 0.95f, 0.75f));
 
-        for (int i = 0; i < EndlessRuntime.ModeCount; i++)
-        {
-            var mode = (EndlessSpeedMode)i;
-            float top = -140f - i * 78f;
+        MakeArrowButton(font, "◀", -1, new Vector2(28f, -104f), new Vector2(0f, 1f));
+        MakeArrowButton(font, "▶", +1, new Vector2(-28f, -104f), new Vector2(1f, 1f));
 
-            var btnGo = new GameObject($"Speed_{mode}",
-                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
-            btnGo.transform.SetParent(_endlessSpeedPanel.transform, false);
-            var brt = (RectTransform)btnGo.transform;
-            brt.anchorMin = new Vector2(0f, 1f);
-            brt.anchorMax = new Vector2(1f, 1f);
-            brt.pivot = new Vector2(0.5f, 1f);
-            brt.offsetMin = new Vector2(24f, 0f);
-            brt.offsetMax = new Vector2(-24f, 0f);
-            brt.sizeDelta = new Vector2(brt.sizeDelta.x, 66f);
-            brt.anchoredPosition = new Vector2(0f, top);
+        // ── 层信息（每波增量/ 开局倍率 / 最佳记录）──
+        _towerInfoText = CreateLabel(_endlessSpeedPanel.transform, font, "",
+            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -176f),
+            new Vector2(0f, 110f), 18, new Color(0.92f, 0.94f, 1f));
 
-            btnGo.GetComponent<Image>().color = tints[i];
+        // ── 解锁提示 ──
+        _towerUnlockHintText = CreateLabel(_endlessSpeedPanel.transform, font, "",
+            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -292f),
+            new Vector2(0f, 56f), 16, new Color(0.65f, 0.9f, 0.7f));
 
-            CreateLabel(btnGo.transform, font,
-                $"{EndlessRuntime.NameOf(mode)}\n<size=14>{descs[i]}</size>",
-                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, 22, Color.white);
-
-            int captured = endlessIndex;
-            var capturedMode = mode;
-            btnGo.GetComponent<Button>().onClick.AddListener(() =>
-            {
-                AudioManager.PlaySfx(AudioManager.SfxKey.Click);
-                EndlessRuntime.SpeedMode = capturedMode;
-                EndlessRuntime.ResetRun();
-                ToastManager.Show($"<color=#FFD24A>无尽难度：{EndlessRuntime.NameOf(capturedMode)}" +
-                    $"（每波血量 +{EndlessRuntime.StepOf(capturedMode):0}）</color>");
-                StartWithDifficulty(captured);
-            });
-        }
+        // ── 挑战 ──
+        var goBtn = new GameObject("Challenge",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        goBtn.transform.SetParent(_endlessSpeedPanel.transform, false);
+        var grt = (RectTransform)goBtn.transform;
+        grt.anchorMin = grt.anchorMax = new Vector2(0.5f, 0f);
+        grt.pivot = new Vector2(0.5f, 0f);
+        grt.sizeDelta = new Vector2(260f, 56f);
+        grt.anchoredPosition = new Vector2(0f, 76f);
+        goBtn.GetComponent<Image>().color = new Color(0.16f, 0.32f, 0.20f);
+        CreateLabel(goBtn.transform, font, "挑战",
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, 24, Color.white);
+        goBtn.GetComponent<Button>().onClick.AddListener(OnTowerChallengeClicked);
 
         // ── 取消 ──
         var cancelGo = new GameObject("Cancel",
             typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
         cancelGo.transform.SetParent(_endlessSpeedPanel.transform, false);
         var crt = (RectTransform)cancelGo.transform;
-        crt.anchorMin = new Vector2(0.5f, 0f);
-        crt.anchorMax = new Vector2(0.5f, 0f);
+        crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0f);
         crt.pivot = new Vector2(0.5f, 0f);
-        crt.sizeDelta = new Vector2(180f, 48f);
-        crt.anchoredPosition = new Vector2(0f, 16f);
+        crt.sizeDelta = new Vector2(180f, 44f);
+        crt.anchoredPosition = new Vector2(0f, 18f);
         cancelGo.GetComponent<Image>().color = new Color(0.2f, 0.2f, 0.24f);
         CreateLabel(cancelGo.transform, font, "取消",
             Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, 20, Color.white);
@@ -392,6 +379,77 @@ public class DifficultySelectUI : MonoBehaviour
         });
 
         _endlessSpeedPanel.transform.SetAsLastSibling();
+        RefreshTowerPanel();
+    }
+
+    /// <summary>造一个翻层箭头按钮。</summary>
+    private void MakeArrowButton(Font font, string glyph, int delta, Vector2 pos, Vector2 anchor)
+    {
+        var go = new GameObject($"Arrow{delta}",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        go.transform.SetParent(_endlessSpeedPanel.transform, false);
+        var rt = (RectTransform)go.transform;
+        rt.anchorMin = rt.anchorMax = anchor;
+        rt.pivot = new Vector2(anchor.x, 1f);
+        rt.sizeDelta = new Vector2(56f, 56f);
+        rt.anchoredPosition = pos;
+        go.GetComponent<Image>().color = new Color(0.18f, 0.20f, 0.30f);
+        CreateLabel(go.transform, font, glyph,
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, 26, Color.white);
+
+        int d = delta;
+        go.GetComponent<Button>().onClick.AddListener(() =>
+        {
+            AudioManager.PlaySfx(AudioManager.SfxKey.Click);
+            int max = EndlessRuntime.MaxUnlockedFloor;
+            _towerViewFloor = Mathf.Clamp(_towerViewFloor + d, 1, max);
+            RefreshTowerPanel();
+        });
+    }
+
+    /// <summary>刷新塔层面板上的文字。</summary>
+    private void RefreshTowerPanel()
+    {
+        int max = EndlessRuntime.MaxUnlockedFloor;
+        _towerViewFloor = Mathf.Clamp(_towerViewFloor, 1, max);
+
+        if (_towerFloorText != null)
+            _towerFloorText.text = $"{EndlessRuntime.FloorName(_towerViewFloor)}   " +
+                                   $"<size=18>(已解锁 1~{max})</size>";
+
+        if (_towerInfoText != null)
+        {
+            float step  = EndlessRuntime.HpStepOfFloor(_towerViewFloor);
+            float start = EndlessRuntime.StartTotalHpOfFloor(_towerViewFloor);
+            float best  = EndlessRuntime.BestTimeOfFloor(_towerViewFloor);
+            string bestStr = best > 0.5f
+                ? $"{(int)(best / 60f)} 分 {(int)(best % 60f):00} 秒"
+                : "尚无记录";
+
+            _towerInfoText.text =
+                $"开局敌人血量：×{start:0.#}\n" +
+                $"每 5 分钟血量倍率：+{step:0.#}\n" +
+                $"半小时后约：×{start + step * 6f:0.#}\n" +
+                $"本层最佳存活：{bestStr}";
+        }
+
+        if (_towerUnlockHintText != null)
+        {
+            if (_towerViewFloor < max)
+                _towerUnlockHintText.text = "本层已通过（曾存活 30 分钟）";
+            else if (_towerViewFloor >= EndlessRuntime.MAX_FLOOR)
+                _towerUnlockHintText.text = "已达最高层";
+            else
+                _towerUnlockHintText.text =
+                    $"在本层存活 30 分钟即可解锁 {EndlessRuntime.FloorName(_towerViewFloor + 1)}";
+        }
+    }
+
+    private void OnTowerChallengeClicked()
+    {
+        AudioManager.PlaySfx(AudioManager.SfxKey.Click);
+        EndlessRuntime.CurrentFloor = _towerViewFloor;   // 写入后battleUI.starttime 会快照它
+        if (_towerEndlessIndex >= 0) StartWithDifficulty(_towerEndlessIndex);
     }
 
     private void HideEndlessSpeedPanel()

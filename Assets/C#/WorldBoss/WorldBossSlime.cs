@@ -62,6 +62,13 @@ public class WorldBossSlime : SlimeBoss
     public override void Destroy1()
     {
         if (rolestate == state.dead) return;
+
+        // 【2026-08 修复】史莱姆→巨龙变身演出期间免死（SlimeBoss.Destroy1 对 Transforming
+        //   直接 return）。若在此处触发 OnWorldBossDefeated（掉落），会出现：
+        //     变身期间掉一次（但Boss没死） + 龙形态死亡再掉一次 = **双掉落**。
+        //   变身期直接返回，掉落在龙形态真正死亡时才结算一次。
+        if (IsTransformingPhase) return;
+
         // 亡者领域复活检查（与WorldBossBat/WorldBossMushroomMan一致）
         if (!_reviveAttempted) { _reviveAttempted = true; if (TombDomainHook.TryReviveAsAlly(this)) { Debug.Log("[亡者领域] 世界史莱姆Boss被永久控制为友军"); return; } }
         worldBossManager?.OnWorldBossDefeated(faction);

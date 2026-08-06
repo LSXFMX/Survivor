@@ -232,9 +232,12 @@ var dm = DifficultyManager.Instance;
     }
 
     /// <summary>
-    /// 单次世界 Boss 掉落的**件数**：无尽模式随敌人血量倍率递增。
-    /// 每 ×125 血量倍率 +1 件，上限 5 件
-    /// （留个上限只是为了别一次刷爆 120 格仓库，不是强度上限）。
+    /// 单次世界 Boss 掉落的**件数**：无尽模式按塔层递增。
+    ///
+    /// 旧公式按血量倍率 / 125 递增，在 125 倍率（约第 2 层 1 波后）就是 2 件，
+    /// 太早出多件 → Boss 掉落太多装备。
+    ///
+    /// 新公式按无尽塔层递增：每 25 层 +1 件，满 100 层 5 件。
     /// 非无尽恒 1 件。
     /// </summary>
     public static int DropCount()
@@ -242,8 +245,7 @@ var dm = DifficultyManager.Instance;
         var dm = DifficultyManager.Instance;
         if (dm == null || !dm.IsEndless) return 1;
 
-        float totalHp = EndlessRuntime.TotalHpMultiplier();
-        return Mathf.Clamp(1 + Mathf.FloorToInt(totalHp / 125f), 1, 5);
+        return Mathf.Clamp(1 + Mathf.FloorToInt(EndlessRuntime.RunFloor / 25f), 1, 5);
     }
 
     /// <summary>
@@ -264,13 +266,36 @@ var dm = DifficultyManager.Instance;
     /// <summary>按当前难度掷一次稀有度。</summary>
     public static InheritRarity RollRarity(float power)
     {
-        // 目标档位：N1 → 0，N13 → 5
-        float targetTier = Mathf.Clamp((power - 1f) / 12f * 5f, 0f, 5f);
-
-        // 无尽额外偏移：刷得越久越容易出高档
+        bool isEndless = DifficultyManager.Instance != null && DifficultyManager.Instance.IsEndless;
         int stage = EndlessStage();
-        float endlessBonus = stage * 0.15f;
-        targetTier = Mathf.Clamp(targetTier + endlessBonus, 0f, 5f);
+
+        // ═══════════════ 稀有度目标档位（0~5）═══════════════
+        //
+        // 【非无尽】按关卡编号算：
+        //   N6 → 3.0（电子级为中心；原子 0.4%、质子 7%，基本不掉）
+        //   N8 → 4.3（超弦级为中心）
+        //   N9 → 5.0（奇点级解锁）
+        //
+        // 【无尽】按塔层 + 波次时长：
+        //   基线 2 + 层数/15（30 层 → 4.0 → 奇点出现）
+        //   波次加成 ×0.04（≈每 25 波 +1 档，即约 2 小时 +1 档）
+        //
+        // 旧版有两个问题：
+        //   ① (power−1)/12·5 在 N6 只给 2.08 → 原子/质子仍 ~30% 权重 →
+        //      与"N6 进门才有世界Boss、前两档不该常见"冲突；
+        //   ② 无尽 stage×0.15 太快，1 小时 +1.8 档 → 立即全奇点，
+        //      失去"越刷越高层、越出越高档"的爬坡感。
+        float targetTier;
+        if (isEndless)
+        {
+            targetTier = Mathf.Clamp(2f + EndlessRuntime.RunFloor / 15f, 0f, 5f);
+            targetTier += stage * 0.04f;
+            targetTier = Mathf.Clamp(targetTier, 0f, 5f);
+        }
+        else
+        {
+            targetTier = Mathf.Clamp((power - 3f) / 6f * 4f + 1f, 0f, 5f);
+        }
 
         var weights = new float[InheritEquipmentDefs.RARITY_COUNT];
         float total = 0f;
@@ -278,8 +303,8 @@ var dm = DifficultyManager.Instance;
         {
             float d = i - targetTier;
             float w = Mathf.Exp(-(d * d) / (2f * RARITY_SIGMA * RARITY_SIGMA));
-            // 无尽后期进一步拉高顶档出现率
-            if (i >= 4 && endlessBonus > 0f) w *= 1f + endlessBonus;
+            // 旧版对 i≥4 额外乘 (1+endlessBonus)，导致无尽 → 奇点泛滥。
+            // 现完全由 Gaussian 随 targetTier 上移决定分布，无需人工附加。
             weights[i] = w;
             total += w;
         }

@@ -82,11 +82,21 @@ public class InheritEquipmentManager : MonoBehaviour
 
     // ─────────────────────────── 存档 ───────────────────────────
 
+    /// <summary>
+    /// 重新从PlayerPrefs 读取存档并广播变更。
+    /// 【存档槽切换】<see cref="SaveSlotManager"/> 换槽后 PlayerPrefs 里的
+    /// InheritEquipSave_v1 已经换成另一个档，但 _data 还是旧档的仓库内容 —— 必须重读。
+    /// </summary>
+    public void ReloadFromPrefs()
+    {
+        Load();
+        OnChanged?.Invoke();
+    }
+
     private void Load()
     {
         _data = new InheritSaveData();
         EnsureSlotList();
-
         string json = PlayerPrefs.GetString(SAVE_KEY, "");
         if (string.IsNullOrEmpty(json)) return;
 
@@ -287,6 +297,70 @@ public class InheritEquipmentManager : MonoBehaviour
         _data.equippedUids[(int)slot] = "";
         Save();
         OnChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// 一键装备：为 6 个槽位各挑一件**最优**装备穿上。
+    ///
+    /// 排序规则（与 <c>IsWorseThanEquipped</c> 的比较口径一致）：
+    ///   ① 稀有度高者优先（奇点 &gt; 星系 &gt; … &gt; 原子）；
+    ///   ② 同稀有度比主词条数值，高者优先；
+    ///   ③ 再相同则比副词条条数（多者优先），最后比掉落力量值。
+    ///
+    /// 为什么不按"总战力"评分：不同主词条（攻击 / 血量 / 暴击…）量纲完全不同，
+    /// 没有公允的换算权重；而玩家的直觉预期就是"穿稀有度最高、主词条最大的那件"，
+    /// 与需求描述一致，也便于自己看懂结果。
+    ///
+    /// 已穿着的装备也参与比较 —— 若它本来就是最优的，就保持不动。
+    /// 只在真的有变更时 Save +触发一次 OnChanged（避免刷 6 次 UI）。
+    /// </summary>
+    /// <returns>实际换上的件数（0 = 本来就已是最优配置）。</returns>
+    public int EquipBestAll()
+    {
+        EnsureSlotList();
+
+        int changed = 0;
+        for (int s = 0; s < InheritEquipmentDefs.SLOT_COUNT; s++)
+        {
+            var slot = (InheritSlot)s;
+
+            InheritItem best = null;
+            foreach (var it in _data.items)
+            {
+                if (it == null || it.slot != slot) continue;
+                // 只考虑"未被别的槽位占用"的：同slot 的装备不可能被别的槽位穿着，
+                // 所以这里等价于"仓库里的 + 本槽位正在穿的"，无需额外过滤。
+                if (best == null || IsBetter(it, best)) best = it;
+            }
+
+            if (best == null) continue;// 该槽位没有任何装备
+            if (_data.equippedUids[s] == best.uid) continue;         // 已经是最优，不动
+
+            _data.equippedUids[s] = best.uid;
+            changed++;
+        }
+
+        if (changed > 0)
+        {
+            Save();
+            OnChanged?.Invoke();
+        }
+        return changed;
+    }
+
+    /// <summary>a 是否比 b 更优（供<see cref="EquipBestAll"/> 排序用）。</summary>
+    private static bool IsBetter(InheritItem a, InheritItem b)
+    {
+        if (a.rarity != b.rarity) return a.rarity > b.rarity;
+
+        const float EPS = 0.001f;
+        if (Mathf.Abs(a.mainValue - b.mainValue) > EPS) return a.mainValue > b.mainValue;
+
+        int ca = a.subStats != null ? a.subStats.Count : 0;
+        int cb = b.subStats != null ? b.subStats.Count : 0;
+        if (ca != cb) return ca > cb;
+
+        return a.dropPower > b.dropPower;
     }
 
     // ─────────────────────────── 分解 / 重铸 ───────────────────────────

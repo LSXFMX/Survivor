@@ -29,7 +29,7 @@ public static class InheritEquipmentHooks
             return;
         }
 
-        // 掉落件数：无尽模式随敌人血量倍率递增（×125 起 2 件、×250 起 3 件）
+        // 掉落件数：无尽模式按塔层递增（每 25 层 +1 件，满 100 层 5 件）
         int count = InheritEquipmentGenerator.DropCount();
         for (int i = 0; i < count; i++)
  {

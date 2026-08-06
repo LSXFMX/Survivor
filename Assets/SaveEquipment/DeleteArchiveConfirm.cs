@@ -120,7 +120,7 @@ public class DeleteArchiveConfirm : MonoBehaviour
     /// </summary>
     private static void ClearAchievementCounters()
     {
-        // 沙漏（成就装备 4）：累计游玩 30 分钟
+        // 沙漏（成就装备 4）：累计游玩 15 分钟
         PlayerPrefs.DeleteKey("TotalPlayMinutes");
         // 钥匙剑（成就装备 3）：进行过门挑战
         PlayerPrefs.DeleteKey("GateChallengeStartedOnce");

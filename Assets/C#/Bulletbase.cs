@@ -111,9 +111,13 @@ public class Bulletbase : MonoBehaviour
 
         if (enemy.health > 0)
         {
-            // 闪避判定：EVA 为闪避概率（0~100）
+            // 闪避判定：EVA 为闪避概率（0~100），但**统一钳到 50%**（enemy.EVA_CAP）——
+            // 门挑战难度倍率会把闪避一起放大（愚弄叠到 ×8 时 15% → 120%），
+            // 不钳就会出现完全无法被击中的怪。
+            // 注意这里局部变量名 enemy 遮蔽了同名类型，必须用 global:: 取静态常量。
             float evaRoll = UnityEngine.Random.value * 100;
-            if (enemy.EVA > evaRoll)
+            float eva = Mathf.Min(global::enemy.EVA_CAP, enemy.EVA);
+            if (eva > evaRoll)
             {
                 // 敌人闪避成功：在敌人位置弹青蓝色 Miss
                 MissNumber.Show(enemy.atknumber, enemy.transform.position);

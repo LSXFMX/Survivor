@@ -74,6 +74,14 @@ public class WolfBoss : enemy
     private bool  busy             = false; // 技能演出中，暂停常规移动/选技能
     private bool  invincible       = false;
     private int   lockedHealth;
+
+    /// <summary>
+    /// 变身无敌期（TransformRoutine 期间 invincible=true，命中会被锁血救活）。
+    /// 供子类（WorldBossWolf）在 Destroy1 入口判断"这次击杀是否会被免死"——
+    /// 若为 true，则**不应**触发掉落/复活/好感度等结算，否则变身期掉一次、
+    /// 狼形态再掉一次（双掉落）。
+    /// </summary>
+    protected bool IsTransformInvincible => invincible;
     private string curAnim = "";
 
     // 技能 CD 计时（各自独立倒计时）

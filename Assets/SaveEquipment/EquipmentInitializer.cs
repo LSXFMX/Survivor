@@ -32,24 +32,13 @@ public class EquipmentInitializer : MonoBehaviour
         EquipmentSystem.Instance?.UnlockEquipment(EquipmentType.AchievementEquipment, 0);
         EnsurePersistentUnlocks();
 
-        // 【无尽模式存档恢复】「继续无尽」开局时跳过装备数值叠加：
-        //   存档里的玩家数值已经是"装备加成 + 局内升级/奇遇"后的最终值，
-        //   再叠一遍装备会造成属性翻倍。装备的永久解锁状态存在 PlayerPrefs，
-        //   不依赖本方法，所以这里直接整段跳过即可。
-        if (EndlessSaveManager.ResumePending)
-        {
-            Debug.Log("[EndlessSave] 继续无尽开局：跳过 ApplyAllEquipments（数值由存档恢复）");
-        }
-        else
-        {
-            // 【修复时序】ApplyAllEquipments 里的 ApplyFavorEquipment8/6 需要使用
-            // parasiteSkillPrefab/redMoonClonePetPrefab，但这两个 prefab 的 Resources.Load
-            // 原来只在末尾的 EnsureWolfFactionRegistered 才执行，导致 ApplyAllEquipments
-            // 跑的时候 prefab 还是 null，红月分身/月牙吊坠的开局注入全部静默跳过。
-            // 现在提前到 equip apply 之前补齐引用。
-            EnsureWolfFactionPrefabsLoaded();
-            ApplyAllEquipments();
-        }
+        // 【修复时序】ApplyAllEquipments 里的 ApplyFavorEquipment8/6 需要使用
+        // parasiteSkillPrefab/redMoonClonePetPrefab，但这两个 prefab 的 Resources.Load
+        // 原来只在末尾的 EnsureWolfFactionRegistered 才执行，导致 ApplyAllEquipments
+        // 跑的时候 prefab 还是 null，红月分身/月牙吊坠的开局注入全部静默跳过。
+        // 现在提前到 equip apply 之前补齐引用。
+        EnsureWolfFactionPrefabsLoaded();
+        ApplyAllEquipments();
 
         // 复活管理器（R_2 读档币）：进入战斗时重置"每局仅一次"状态。
         // ReviveManager 是 DontDestroyOnLoad 单例，若场景里没有就动态创建一个。
@@ -329,9 +318,9 @@ public class EquipmentInitializer : MonoBehaviour
     {
         if (EquipmentSystem.Instance == null) return;
 
-        // 沙漏：累计游玩时长达到30分钟后应长期保持解锁
+        // 沙漏：累计游玩时长达到15分钟后应长期保持解锁
         int totalMinutes = PlayerPrefs.GetInt(KEY_TOTAL_PLAY_MINUTES, 0);
-        if (totalMinutes >= 30)
+        if (totalMinutes >= 15)
             EquipmentSystem.Instance.UnlockEquipment(EquipmentType.AchievementEquipment, 4);
 
         // 钥匙剑：进行过门挑战后应长期保持解锁

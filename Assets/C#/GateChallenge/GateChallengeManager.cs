@@ -45,7 +45,11 @@ public class GateChallengeManager : MonoBehaviour
 
     /// <summary>
     /// 难度倍率：每次奇遇·愚弄触发 ResetAndDouble 后 ×2。
-    /// 作用于敌人血量 / 攻击 / 防御 / 闪避（闪避做上限 95% 防止 100% 无敌）。
+    /// 作用于敌人血量 / 攻击 / 防御 / 闪避
+    /// （闪避钳到 <see cref="enemy.EVA_CAP"/> = 50%，防止 ×N 后完全无敌）。
+    ///
+    /// 无尽模式下愚弄可多次选择（每120 分钟局内计时 +1 次机会），
+    /// 所以这里会依次变成 ×2 → ×4 → ×8 ……见 AdventureOption8_Fool。
     /// 默认 1（标配数值）。
     /// </summary>
     public int DifficultyMultiplier { get; private set; } = 1;
@@ -196,14 +200,14 @@ public class GateChallengeManager : MonoBehaviour
         // 按钮改为"挑战中"
         if (_btnText != null) _btnText.text = "挑战中";
 
-        // 奇遇·愚弄会把 DifficultyMultiplier 翻倍，敌人血量/攻击/防御按倍率放大；
-        // 闪避做 95% 上限，防止 ×N 后变成 100%+ 完全免疫。
+        // 奇遇·愚弄会把 DifficultyMultiplier翻倍，敌人血量/攻击/防御按倍率放大；
+        // 闪避做 enemy.EVA_CAP（50%）上限，防止 ×N 后变成 100%+ 完全免疫。
         int mult       = Mathf.Max(1, DifficultyMultiplier);
         // 难度上调：血量额外 ×HP_BOOST；攻击力保持原值（不上调）。
         int finalHp    = Mathf.RoundToInt(data.enemyHealth * mult * HP_BOOST);
         int finalAtk   = data.enemyAtk    * mult;
         int finalDef   = data.enemyDef    * mult;
-        int finalEva   = Mathf.Min(95, data.enemyEVA * mult);
+        int finalEva   = Mathf.Min(enemy.EVA_CAP, data.enemyEVA * mult);
 
         for (int i = 0; i < data.enemyCount; i++)
         {
@@ -347,7 +351,7 @@ public class GateChallengeManager : MonoBehaviour
         sb.AppendLine($"剩余敌人：{Mathf.Max(0, _remainCount)}");
         if (data.enemyDef   > 0) sb.AppendLine($"防御力：{data.enemyDef * mult}");
         if (data.enemySpeed > 0) sb.AppendLine($"移动速度：{data.enemySpeed}");
-        if (data.enemyEVA   > 0) sb.AppendLine($"闪避率：{Mathf.Min(95, data.enemyEVA * mult)}%");
+        if (data.enemyEVA   > 0) sb.AppendLine($"闪避率：{Mathf.Min(enemy.EVA_CAP, data.enemyEVA * mult)}%");
         remainText.text = sb.ToString().TrimEnd();
     }
 

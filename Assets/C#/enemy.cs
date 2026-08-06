@@ -15,6 +15,20 @@ public class enemy : Attribute
     public static float endlessHpMultiplier = 0f;
     public static float endlessAtkMultiplier = 1.0f;
 
+    /// <summary>
+    /// **怪物闪避率硬上限（%）**。
+    ///
+    /// 门挑战的敌人闪避会被难度倍率整体放大（奇遇·愚弄每次选择 ×2，
+    /// 无尽打满 240 分钟可以叠到 ×8），原始 15% 闪避 ×8 = 120% → 完全免疫、
+    /// 玩家永远打不死它。所以在这里定一个全局上限：**50%**。
+    ///
+    /// 上限在两处生效：
+    ///   ① 赋值端<see cref="GateChallengeManager"/> 算finalEva 时钳一次（UI 显示也用它）；
+    ///   ② 判定端 <see cref="Bulletbase"/> 掷骰前再钳一次 —— 兜住任何其它来源
+    ///      （世界 Boss、后续新增的加成）绕过赋值端的情况。
+    /// </summary>
+    public const int EVA_CAP = 50;
+
     public GameObject atknumber;
     public state rolestate;
     public GameObject role;//目标角色（玩家）

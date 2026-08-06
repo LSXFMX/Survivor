@@ -72,7 +72,7 @@ public class EquipmentIcon : MonoBehaviour
     public static int PrewarmAllIconsInScene()
     {
         int n = 0;
-        var icons = Object.FindObjectsOfType<EquipmentIcon>(true);
+        var icons = UnityEngine.Object.FindObjectsOfType<EquipmentIcon>(true);
         foreach (var ic in icons)
         {
             if (ic == null) continue;
@@ -230,8 +230,8 @@ public class EquipmentIcon : MonoBehaviour
         else if (equipmentId == 4)
         {
             equipmentName = "沙漏";
-            description = "解锁三倍速\n\n无限流玩家的必需品，血族血脉的最爱。";
-            howToGet = "累计游玩 30 分钟游戏";
+            description = "解锁三倍速\n\n时间的沙子由你掌控，让流速化作三倍光芒。";
+            howToGet = "累计游玩 15 分钟游戏";
         }
         else if (equipmentId == 7)
         {

@@ -59,7 +59,7 @@ MonoBehaviour:
   player: {fileID: 0}
   angel: 0
   isfaceenemy: 0
-  icon: {fileID: 21300000, guid: 275c47fe35c5bcc4581c431b67c2f492, type: 3}
+  icon: {fileID: 21300000, guid: 09e0ff7467380a343bcb4b8821cf0b65, type: 3}
   spawnHeight: 8
   strikeInterval: 0.04
   hasInheritanceSnapshot: 0

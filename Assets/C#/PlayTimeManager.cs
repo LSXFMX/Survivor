@@ -10,7 +10,7 @@ public class PlayTimeManager : MonoBehaviour
     public static PlayTimeManager Instance { get; private set; }
 
     private const string KEY = "TotalPlayMinutes";
-    private const int HOURGLASS_UNLOCK_MINUTES = 30;
+    private const int HOURGLASS_UNLOCK_MINUTES = 15;
 
     private float _secondAccum = 0f; // 本局累计秒数（未满1分钟的部分）
 

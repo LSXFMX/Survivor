@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.UI;
 
@@ -155,63 +156,41 @@ public class ArchiveManager : MonoBehaviour
                     "AttachInheritEquipmentUI");
         }
 
-        // 【2026-08 修复"所有装备都挤在第一排"】
-        //   4 个图标容器都挂着 HorizontalLayoutGroup —— 它只会把子物体沿水平轴一字排开，
-        //   **永远不会换行**。装备数量少的时候看不出来，后来通关/抽卡/好感度装备各扩到
-        //   10 个以上，就全部溢出到面板右边（甚至跑出黑框外）。
-        //   这里把它们替换成 GridLayoutGroup（按容器宽度算列数、自动换行）。
-        //   继承装备容器不参与 —— 它是整块自绘面板，见 InheritEquipmentUI。
-        SafeRun(() => ApplyGridLayout(clearEquipmentContainer), "GridLayout-Clear");
-        SafeRun(() => ApplyGridLayout(achievementEquipmentContainer), "GridLayout-Achievement");
-        SafeRun(() => ApplyGridLayout(favorEquipmentContainer), "GridLayout-Favor");
-        SafeRun(() => ApplyGridLayout(gachaEquipmentContainer), "GridLayout-Gacha");
+        // ══════════════════ 装备图标容器布局（务必对照场景实际配置）══════════════════
+        //
+        // 场景（SampleScene）里这 4 个容器的配置各不相同，**绝不能一视同仁地处理**：
+        //   ┌────────────┬──────────────────────┬─────────┬────────┬────────────────────┐
+        //   │ 容器       │ 布局组件             │ Enabled │ 格子数 │ 状态               │
+        //   ├────────────┼──────────────────────┼─────────┼────────┼────────────────────┤
+        //   │ 通关装备   │ GridLayoutGroup      │    1    │  多    │ Flexible，自动换行 │
+        //   │ 成就装备   │ GridLayoutGroup      │    1    │  多    │ Flexible，自动换行 │
+        //   │ 好感度装备 │ HorizontalLayoutGroup│    1    │ **6**  │ 共12件，缺6个→补│
+        //   │ 抽卡装备   │ GridLayoutGroup      │  **0**  │  多    │ 禁用 = 手工摆位    │
+        //   └────────────┴──────────────────────┴─────────┴────────┴────────────────────┘
+        //
+        // 踩过的三个坑（"改一个坏一个"的全部根源，勿再犯）：
+        //   ① 给 4 个容器统一套 GridLayoutGroup → 抽卡容器那个被**故意禁用**的 Grid 被
+        //      重新启用，把 R/SR/SSR/UR 标题与材料图标全部重排 → 抽卡界面炸。
+        //   ② 反过来对三个容器 Destroy(GridLayoutGroup) → 把通关/成就**场景里原有的**
+        //      Grid 删掉了，图标全叠到左下角 → 成就界面炸。
+        //   ③ 想给好感度容器 AddComponent<GridLayoutGroup>：LayoutGroup 基类带
+        //      [DisallowMultipleComponent]，已有 HorizontalLayoutGroup 时 AddComponent
+        //      直接抛异常（被 SafeRun 吞掉），等于什么都没做 —— 白改。
+        //
+        // 好感度装备**真正的问题不是"少格子"、也不是布局组件**：
+        //   它一共 12 件（蘑菇 0-2 / 蝙蝠 3-5 / 狼人 6-8 / 史莱姆 9-11）。
+        //   场景里摆了 000~005 六个，其余 6 个由 EnsureFavorEquipmentWolfIconsExist
+        //   在运行时克隆补出—— 但那里把克隆体的 x 写成 908 + 171.7×k，
+        //   即 1080/1251/1423/1595/1767/1938，而容器只有 1030 宽
+        //   → 后 6 件全部落在容器外，玩家永远看不到。
+        //   而容器上的 HorizontalLayoutGroup 只会把 12 个图标沿一行摊开
+        //   （总宽 12×98.77=1185 已超容器），同样不可能换行。
+        // 正确做法：**等那 6 个克隆体都建好之后**（即 SetupEquipmentIcons 末尾），
+        // 禁用 HorizontalLayoutGroup 并自己把 12 个图标排成 6 列 × 2 行。
+        // 布局组件不新增、不销毁 —— 见 LayoutFavorEquipmentIcons。
 
         // 初始时全部隐藏
         HideAllContainers();
-    }
-
-    /// <summary>
-    /// 把一个装备图标容器的横排布局换成自动换行的网格布局。
-    /// 单元格尺寸取容器内现有图标的实际大小（场景里配好的 ≈99），列数按容器宽度推导。
-    /// </summary>
-    private static void ApplyGridLayout(GameObject container)
-    {
-        if (container == null) return;
-        var rt = container.transform as RectTransform;
-        if (rt == null) return;
-
-        // 关掉横排/竖排布局组
-        foreach (var g in container.GetComponents<HorizontalOrVerticalLayoutGroup>())
-            if (g != null) g.enabled = false;
-
-        // 单元格边长：优先沿用现有图标的尺寸，保证观感不变
-        float cell = 99f;
-        var firstIcon = container.GetComponentInChildren<EquipmentIcon>(true);
-        if (firstIcon != null)
-        {
-            var irt = firstIcon.transform as RectTransform;
-            if (irt != null && irt.rect.width > 10f) cell = irt.rect.width;
-        }
-
-        const float space = 12f;
-        const int pad = 24;
-
-        float w = rt.rect.width > 10f ? rt.rect.width : 1030f;
-        int cols = Mathf.Max(1, Mathf.FloorToInt((w - pad * 2f + space) / (cell + space)));
-
-        var grid = container.GetComponent<GridLayoutGroup>();
-        if (grid == null) grid = container.AddComponent<GridLayoutGroup>();
-        grid.enabled = true;
-        grid.padding = new RectOffset(pad, pad, pad, pad);
-        grid.cellSize = new Vector2(cell, cell);
-        grid.spacing = new Vector2(space, space);
-        grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
-        grid.startAxis = GridLayoutGroup.Axis.Horizontal;
-        grid.childAlignment = TextAnchor.UpperLeft;
-        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        grid.constraintCount = cols;
-
-        Debug.Log($"[Archive] {container.name} 改用网格布局：{cols} 列 / 格子 {cell:0}");
     }
 
     /// <summary>
@@ -244,6 +223,11 @@ public class ArchiveManager : MonoBehaviour
         SafeRun(EnsureClearEquipmentN9toN13IconsExist, "EnsureClearEquipmentN9toN13IconsExist");
         SafeRun(EnsureAchievementIcon8Exists, "EnsureAchievementIcon8Exists");
         SafeRun(EnsureFavorEquipmentWolfIconsExist, "EnsureFavorEquipmentWolfIconsExist");
+
+        // 【必须放在克隆之后】好感度装备的 6~11 六件是上面那一步刚克隆出来的，
+        // 且被摆到了容器外（x 最大 1938，容器只有 1030 宽）。
+        // 这里统一把全部 12 个图标重排成 6 列 × 2 行，保证都在容器可视范围内。
+        SafeRun(LayoutFavorEquipmentIcons, "LayoutFavorEquipmentIcons");
 
         foreach (var container in equipmentContainers.Values)
         {
@@ -548,6 +532,94 @@ public class ArchiveManager : MonoBehaviour
         TryCloneFavorWolfIcon(template, parent, 9,  existingIds, baseX + spacing * offsetIndex++, baseY);
         TryCloneFavorWolfIcon(template, parent, 10, existingIds, baseX + spacing * offsetIndex++, baseY);
         TryCloneFavorWolfIcon(template, parent, 11, existingIds, baseX + spacing * offsetIndex++, baseY);
+    }
+
+    /// <summary>好感度装备每行几个（12 件 → 6 列 × 2 行；上行蘑菇+蝙蝠、下行狼人+史莱姆）。</summary>
+    private const int FAVOR_COLUMNS = 6;
+
+    /// <summary>
+    /// 把好感度装备图标排成 <see cref="FAVOR_COLUMNS"/> 列的网格。
+    ///
+    /// 为什么要手动排、而不是换成 GridLayoutGroup：
+    ///   · 容器上已有 HorizontalLayoutGroup，而 LayoutGroup 基类带
+    ///     [DisallowMultipleComponent] —— AddComponent&lt;GridLayoutGroup&gt; 会直接抛异常；
+    ///   · Destroy 旧组件再 Add 需要跨帧（Destroy 延迟到帧末），复杂且易错；
+    ///   · 通关/成就容器的 Grid 是**场景里配好的**，一旦顺手去"统一"就会把它们弄坏
+    ///     （已经踩过两次）。
+    /// 所以这里只做两件事：禁用容器上的 LayoutGroup（否则它每帧覆盖我们写的位置）、
+    /// 按 equipmentId 顺序改 anchoredPosition。图标尺寸一律不动。
+    ///
+    /// 必须在 <see cref="EnsureFavorEquipmentWolfIconsExist"/> **之后**调用，
+    /// 否则 6~11 六个克隆体还不存在，排完仍然看不到它们。
+    /// </summary>
+    private void LayoutFavorEquipmentIcons()
+    {
+        if (favorEquipmentContainer == null) return;
+        var containerRt = favorEquipmentContainer.transform as RectTransform;
+        if (containerRt == null) return;
+
+        // 自动布局组会每帧重排子物体、覆盖我们写的位置，必须先关掉。
+        // 注意：只关**好感度这一个**容器上的，别去动其它容器。
+        foreach (var g in favorEquipmentContainer.GetComponents<LayoutGroup>())
+            if (g != null && g.enabled) g.enabled = false;
+
+        // 收集图标并按 equipmentId 排序（Hierarchy 顺序里克隆体都在末尾，正好也是 6~11，
+        // 但显式排序更保险，将来插入新id 也不会乱）
+        var icons = new List<EquipmentIcon>();
+        foreach (var ic in favorEquipmentContainer.GetComponentsInChildren<EquipmentIcon>(true))
+        {
+            if (ic == null || ic.equipmentType != EquipmentType.FavorEquipment) continue;
+            icons.Add(ic);
+        }
+        if (icons.Count == 0) return;
+        icons.Sort((a, b) => a.equipmentId.CompareTo(b.equipmentId));
+
+        // 格子边长沿用图标自身尺寸（场景配的 98.77），不做任何缩放
+        float cell = 0f;
+        foreach (var ic in icons)
+        {
+            var rt = ic.transform as RectTransform;
+            if (rt == null) continue;
+            cell = Mathf.Max(cell, rt.sizeDelta.x, rt.sizeDelta.y);
+        }
+        if (cell < 10f) cell = 98.77f;
+
+        // 容器 anchorMin==anchorMax，rect.size 恒等于 sizeDelta（场景静态值 1030×851），
+        // 所以这里不用等 Canvas 算 rect，也就不需要延迟一帧。
+        float cw = containerRt.rect.width > 10f ? containerRt.rect.width : containerRt.sizeDelta.x;
+        if (cw < 10f) cw = 1030f;
+
+        const float pad = 24f;
+        // 列间距：把 FAVOR_COLUMNS 个格子在可用宽度里均匀铺开（至少 12）
+        float gap = Mathf.Max(12f, (cw - pad * 2f - FAVOR_COLUMNS * cell) / (FAVOR_COLUMNS - 1));
+        float rowGap = Mathf.Max(12f, gap * 0.5f);
+
+        int rows = Mathf.CeilToInt(icons.Count / (float)FAVOR_COLUMNS);
+        float totalW = FAVOR_COLUMNS * cell + (FAVOR_COLUMNS - 1) * gap;
+        float startX = (cw - totalW) * 0.5f;   // 水平居中
+        // 垂直方向**贴上边**（不居中）：装备图鉴从顶部开始往下排更符合阅读习惯，
+        // 也给下方留出空间，将来加更多好感度装备时直接往下续行、不会整体跳动。
+        float startY = pad;
+
+        for (int i = 0; i < icons.Count; i++)
+        {
+            var rt = icons[i].transform as RectTransform;
+            if (rt == null) continue;
+
+            int row = i / FAVOR_COLUMNS;
+            int col = i % FAVOR_COLUMNS;
+
+            // 统一「左上角锚定 + 中心 pivot」，只靠 anchoredPosition 定位
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot     = new Vector2(0.5f, 0.5f);
+            rt.localScale = Vector3.one;
+            rt.anchoredPosition = new Vector2(
+                 startX + col * (cell + gap)+ cell * 0.5f,
+                -startY - row * (cell + rowGap) - cell * 0.5f);
+        }
+
+        Debug.Log($"[Archive] 好感度装备排版：{icons.Count} 件 / {FAVOR_COLUMNS} 列 × {rows} 行 / 格子 {cell:0.#}");
     }
 
     private static void TryCloneFavorWolfIcon(EquipmentIcon template, Transform parent,

@@ -39,6 +39,8 @@ public class battleUI : MonoBehaviour
     private float _endlessElapsed = 0f;   // 已过秒数（正计时）
     private int   _endlessStageCount = 0; // 已触发的 5 分钟阶段数
     private int   _endlessPointsMinute = 0; // 上次发放积分的分钟数
+    private float _endlessReportedAt = 0f;      // 上次向EndlessRuntime 上报存活时长的秒数
+    private bool  _endlessUnlockToastShown = false; // 本局是否已弹过"解锁下一层"提示
     public GameObject choiceUI;
     public TextMeshProUGUI yuanmuText;
     public AdventureUI adventureUI;
@@ -116,21 +118,6 @@ public class battleUI : MonoBehaviour
     private TextMeshProUGUI _charUpgradeText;
     private int _charAppliedSkin = -2; // -2 = 从未刷新过；-1 = 头像加载失败
     private int _charCachedMaxTotal = -1; // 玩家属性升级总上限（首次访问 ChoiceUI 后缓存）
-
-    void OnEnable()
-    {
-        // 【无尽模式存档恢复】「继续无尽」进入战斗时，等场景所有 Awake/Start
-        // （装备初始化、技能卡注册、世界Boss生成等）完成后延迟恢复本局状态。
-        if (EndlessSaveManager.ResumePending)
-            StartCoroutine(DelayedRestoreEndlessRun());
-    }
-
-    private IEnumerator DelayedRestoreEndlessRun()
-    {
-        yield return new WaitForSecondsRealtime(0.2f); // 等 EquipmentInitializer.Start 等完成
-        yield return null;                            // 再稳一帧
-        EndlessSaveManager.RestoreIntoScene();
-    }
 
     void Start()
     {
@@ -326,21 +313,12 @@ public class battleUI : MonoBehaviour
     /// <summary>SSR 启动资金：开局等级+3，并连续 3 次升级三选一（与 levelup 相同 ChoiceUI）</summary>
     private void ApplyStartupFundEquipmentIfUnlocked()
     {
-     if (EquipmentSystem.Instance == null || player == null) return;
+        if (EquipmentSystem.Instance == null || player == null) return;
         if (!EquipmentSystem.Instance.IsEquipmentUnlocked(EquipmentType.GachaEquipment, 2)) return;
 
-        // 【2026-08 修复】「继续无尽」读档开局时必须跳过：
-        //   存档里的 level 已经包含了当初的 +3，技能也已按存档重建，
-        //   再执行一次会导致每次读档都白送 3 级 + 3 次三选一（越读越强）。
-        if (EndlessSaveManager.ResumePending)
- {
-    Debug.Log("[EndlessSave] 继续无尽开局：跳过 SSR 启动资金（等级+3 与 3 次三选一）");
-       return;
-}
-
         player.level += 3;
- _pendingGachaStartupChoices = 3;
- Time.timeScale = 0f;
+        _pendingGachaStartupChoices = 3;
+        Time.timeScale = 0f;
         choiceUI.SetActive(true);
         ToastManager.Show("[抽卡·SSR] 启动资金：等级+3，开局3次升级三选一");
     }
@@ -591,19 +569,17 @@ public class battleUI : MonoBehaviour
             foreach (var entry in cui.skillEntries)
             {
                 if (entry == null) continue;
-                // 学习卡（也计入）
-                getnewskill learn = entry.learnSkillPrefab != null
-                    ? entry.learnSkillPrefab.GetComponent<getnewskill>() : null;
-                if (learn != null && learn.skill != null && learn.skill.Skillname == targetSkill)
-                {
-                    if (!string.IsNullOrEmpty(learn.upgradeGroup) && learn.maxUpgrades > 0
-                        && seenGroups.Add(learn.upgradeGroup))
-                    {
-                        totalCur += cui.GetGroupCount(learn.upgradeGroup);
-                        totalMax += cui.GetEffectiveMaxUpgrades(learn, isLearnOption: true);
-                        anyMatch = true;
-                    }
-                }
+
+                // 【2026-08 修复·不再计入学习卡】
+                // 之前：把 learn 卡（maxUp=1、含被观测者/苍白记忆加成）也加进 totalMax。
+                //   每通 1 层门挑战会同时给 learn + skill 升级组各 +1 → 显示加 2，
+                //   而玩家期望"通关一次 +1"。而且 learn 是"你只能学一次"的开关，
+                //   跟"已升级次数 / 升级次数上限"是不同语义 —— 风箭学了 = 已拥有风箭，
+                //   不应消耗"升级次数"的额度。
+                // 现在：totalMax 只看该技能的"升级组"（含共享组的去重），
+                //   每通 1 层门挑战只 +1，符合直觉。
+                // 备注：getGroupCount("learn") 仍会被记录（用于"是否已学"判定），
+                //   只是不再叠加到技能图标右下角的 X/Y 文本上。
 
                 // 升级组（每个独立 group 单独计入）
                 if (entry.upgradeOptions != null)
@@ -662,12 +638,16 @@ public class battleUI : MonoBehaviour
         _endlessMode = DifficultyManager.Instance != null && DifficultyManager.Instance.IsEndless;
         if (_endlessMode)
         {
-            enemy.endlessHpMultiplier  = 0f;
+            EndlessRuntime.ResetRun();   // 先快照本局层数、清波次
+            // 无尽之塔：进门就带上该层的开局奖励倍率（= 每波增量 × 2），
+            // 否则高层也是从 ×25 慢慢爬，前 10 分钟毫无压力、纯浪费时间。
+            enemy.endlessHpMultiplier  = EndlessRuntime.InitialHpBonus(EndlessRuntime.RunFloor);
             enemy.endlessAtkMultiplier = 1.0f;
             _endlessElapsed = 0f;
             _endlessStageCount = 0;
             _endlessPointsMinute = 0;
-            EndlessRuntime.ResetRun();   // 波次归零（读档时随后会被 RestoreEndlessState覆盖）
+            _endlessReportedAt = 0f;
+            _endlessUnlockToastShown = false;
             minute = 0; second = 0;
             timer = 0;
             startcount = true;
@@ -675,6 +655,9 @@ public class battleUI : MonoBehaviour
             _deathFallbackTriggered = false;
             if (timeui != null) timeui.text = "00:00";
             RefreshEndlessMultiplierText();
+            ToastManager.Show($"<color=#FFD24A>无尽之塔 {EndlessRuntime.RunFloorName}" +
+                $"（每波血量 +{EndlessRuntime.HpStepPerStage:0}）</color>\n" +
+                $"<color=#9BE8FF>存活 30 分钟即可解锁下一层</color>");
             return;
         }
 
@@ -735,6 +718,21 @@ public class battleUI : MonoBehaviour
             {
                 _endlessStageCount = stage;
                 OnEndlessStage(stage);
+            }
+
+            // 无尽之塔：上报本层存活时长（刷新最佳记录 + 满 30 分钟解锁下一层）。
+            // 每秒调一次就够，ReportElapsed 内部还会对写盘再做一次节流。
+            if (_endlessElapsed - _endlessReportedAt >= 1f)
+            {
+                _endlessReportedAt = _endlessElapsed;
+                bool justUnlocked = EndlessRuntime.ReportElapsed(EndlessRuntime.RunFloor, _endlessElapsed);
+                if (justUnlocked && !_endlessUnlockToastShown)
+                {
+                    _endlessUnlockToastShown = true;
+                    int next = EndlessRuntime.RunFloor + 1;
+                    ToastManager.Show($"<color=#80FF80>无尽之塔 {EndlessRuntime.FloorName(next)} 已解锁！</color>\n" +
+                        $"<color=#9BE8FF>下次进入无尽可选择该层（每波血量 +{EndlessRuntime.HpStepOfFloor(next):0}）</color>");
+                }
             }
 
             // 每分钟 +5 装备积分，每 5 分钟扣除 10% 源木 + 显示提示
@@ -967,13 +965,6 @@ public class battleUI : MonoBehaviour
             yield return new WaitForSecondsRealtime(slowMoDuration);
             Time.timeScale = 0f;
             AudioManager.StopAll();
-
-            // 无尽模式死亡 → 本局结束，清除存档（避免反复从失败点读档）。
-            if (IsInEndlessMode() && EndlessSaveManager.HasSave())
-            {
-                EndlessSaveManager.Clear();
-                Debug.Log("[EndlessSave] 无尽模式死亡，已清除本局存档");
-            }
         }
 
         // 结算会话数据
@@ -1183,135 +1174,29 @@ public class battleUI : MonoBehaviour
         return (baseHp + enemy.endlessHpMultiplier) * enemy.adventureHpMultiplier;
     }
 
-    // ══════════════════════ 无尽模式「保存本局」按钮 ══════════════════════
-
-    private GameObject _endlessSaveBtnGo;
-
-    /// <summary>在暂停菜单里动态创建「保存本局」按钮（幂等）。</summary>
-    private void EnsureEndlessSaveButton()
-    {
-        if (_endlessSaveBtnGo != null)
-        {
-            _endlessSaveBtnGo.SetActive(true);
-            return;
-        }
-        if (menu == null) return;
-        var parentRt = menu.GetComponent<RectTransform>();
-        if (parentRt == null) return;
-
-        var btnGo = new GameObject("__EndlessSaveButton",
-            typeof(RectTransform), typeof(CanvasRenderer), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
-        btnGo.transform.SetParent(menu, false);
-        var rt = btnGo.GetComponent<RectTransform>();
-        // 锚定面板底部居中，向下留 10px
-        rt.anchorMin = new Vector2(0.5f, 0f);
-        rt.anchorMax = new Vector2(0.5f, 0f);
-        rt.pivot     = new Vector2(0.5f, 0f);
-        rt.anchoredPosition = new Vector2(0f, 10f);
-        rt.sizeDelta = new Vector2(240f, 56f);
-
-        var img = btnGo.GetComponent<UnityEngine.UI.Image>();
-        img.color = new Color(0.15f, 0.30f, 0.16f, 0.95f);
-        var btn = btnGo.GetComponent<UnityEngine.UI.Button>();
-        var colors = btn.colors;
-        colors.normalColor      = new Color(1f, 1f, 1f, 1f);
-        colors.highlightedColor = new Color(0.85f, 1f, 0.85f, 1f);
-        colors.pressedColor     = new Color(0.6f, 0.9f, 0.6f, 1f);
-        btn.colors = colors;
-
-        // Label
-        var labelGo = new GameObject("Label",
-            typeof(RectTransform), typeof(CanvasRenderer), typeof(TMPro.TextMeshProUGUI));
-        labelGo.transform.SetParent(btnGo.transform, false);
-        var lrt = labelGo.GetComponent<RectTransform>();
-        lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
-        lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
-        var label = labelGo.GetComponent<TMPro.TextMeshProUGUI>();
-        label.text = "保存本局";
-        label.alignment = TextAlignmentOptions.Center;
-        label.fontSize  = 24;
-        label.color     = Color.white;
-        var f = ResolveEndlessSaveFont();
-        if (f != null) label.font = f;
-
-        btn.onClick.AddListener(OnEndlessSaveClicked);
-        _endlessSaveBtnGo = btnGo;
-    }
-
-    private void HideEndlessSaveButton()
-    {
-        if (_endlessSaveBtnGo != null) _endlessSaveBtnGo.SetActive(false);
-    }
-
-    private void OnEndlessSaveClicked()
-    {
-        AudioManager.PlaySfx(AudioManager.SfxKey.Click);
-        EndlessSaveManager.Save();
-        ToastManager.Show("<color=#80FF80>本局已保存！返回主菜单后可从「继续无尽」恢复</color>");
-    }
-
-    /// <summary>中文字体解析（与 InheritEquipmentUI 同策略）。</summary>
-    private static TMPro.TMP_FontAsset _endlessSaveFont;
-    private static TMPro.TMP_FontAsset ResolveEndlessSaveFont()
-    {
-        if (_endlessSaveFont != null) return _endlessSaveFont;
-        if (ToastManager.Instance != null && ToastManager.Instance.font != null)
-        {
-            _endlessSaveFont = ToastManager.Instance.font;
-            return _endlessSaveFont;
-        }
-        var all = FindObjectsOfType<TMPro.TextMeshProUGUI>(true);
-        foreach (var t in all)
-            if (t != null && t.font != null) { _endlessSaveFont = t.font; return _endlessSaveFont; }
-        var allFonts = Resources.FindObjectsOfTypeAll<TMPro.TMP_FontAsset>();
-        foreach (var fnt in allFonts)
-            if (fnt != null && fnt.name != null && fnt.name.Contains("hei"))
-            { _endlessSaveFont = fnt; return _endlessSaveFont; }
-        foreach (var fnt in allFonts)
-            if (fnt != null) { _endlessSaveFont = fnt; return _endlessSaveFont; }
-        _endlessSaveFont = Resources.Load<TMPro.TMP_FontAsset>("heiti SDF");
-        return _endlessSaveFont;
-    }
-
-    // ══════════════════════ 无尽模式存档接口 ══════════════════════
-    // 仅供 EndlessSaveManager 保存/恢复本局时调用，不在其它地方使用。
-
-    public float GetEndlessElapsedForSave() => _endlessElapsed;
-    public int   GetEndlessStageCountForSave() => _endlessStageCount;
-    public int   GetEndlessPointsMinuteForSave() => _endlessPointsMinute;
-
-    public void RestoreEndlessState(float elapsed, int stageCount, int pointsMinute)
-    {
-        _endlessElapsed     = elapsed;
-        _endlessStageCount  = stageCount;
-        _endlessPointsMinute = pointsMinute;
-        EndlessRuntime.Stage = stageCount;   // 波次同步给继承装备强度计算
-        minute = (int)(_endlessElapsed / 60f);
-        second = (int)(_endlessElapsed % 60f);
-        timer  = _endlessElapsed;
-        if (timeui != null)
-            timeui.text = $"{(int)(_endlessElapsed / 60f):00}:{(int)(_endlessElapsed % 60f):00}";
-        // 恢复后重新校准无尽倍率显示
-        RefreshEndlessMultiplierText();
-    }
+    // ══════════════════════ 无尽模式「保存本局」按钮══════════════════════
+    // 【2026-08 已移除】无尽模式的中途保存 / 继续功能整体删除（体验不佳）：
+    //   原来这里有暂停菜单动态创建的「保存本局」按钮、字体解析，
+    //   以及供 EndlessSaveManager 读写计时/波次的存档接口。
+    //   现在无尽模式回到"一局到底、死亡即结束"的原始规则。
 
     /// <summary>
-    /// 无尽模式：每 5 分钟触发一次。
-    /// 血量倍率**加法叠加** +15（作用于之后新生成的怪）：25 → 40 → 55 → 70……
+    /// 无尽之塔：每 5 分钟触发一次。
+    /// 血量倍率**加法叠加**，每波增量由本局塔层决定
+    /// （第 1 层 +15、第 2 层 +30、第 3 层 +60，之后每层 ×1.6）。
     /// 攻击倍率仍随机 +0/1（乘法累积，语义不变）。
     /// </summary>
-private void OnEndlessStage(int stage)
+    private void OnEndlessStage(int stage)
     {
-        // 每波血量倍率增量由玩家选择的「无尽难度速度」决定：
-      //   标准 +15 / 加速 +50 / 狂暴 +100（见 EndlessRuntime.HpStepPerStage）
+        // 每波血量倍率增量 = 本局塔层对应的增量（见 EndlessRuntime.HpStepOfFloor）
         float hpAdd = EndlessRuntime.HpStepPerStage;
         int atkAdd = Random.Range(0, 2);    // 0 或 1
-      enemy.endlessHpMultiplier  += hpAdd;
-   enemy.endlessAtkMultiplier += atkAdd;
+        enemy.endlessHpMultiplier  += hpAdd;
+        enemy.endlessAtkMultiplier += atkAdd;
         EndlessRuntime.Stage = stage;       // 波次写入，供继承装备强度/稀有度使用
-     string atkStr = atkAdd > 0 ? $"，攻击倍率 ×{enemy.endlessAtkMultiplier:0}" : "";
-        ToastManager.Show($"<color=#FF6060>无尽 第{stage}波（{EndlessRuntime.SpeedModeName}）：" +
-  $"血量倍率 +{hpAdd:0}（当前 血×{GetEndlessTotalHp():0.#}）{atkStr}</color>");
+        string atkStr = atkAdd > 0 ? $"，攻击倍率 ×{enemy.endlessAtkMultiplier:0}" : "";
+        ToastManager.Show($"<color=#FF6060>{EndlessRuntime.RunFloorName} 第{stage}波：" +
+            $"血量倍率 +{hpAdd:0}（当前 血×{GetEndlessTotalHp():0.#}）{atkStr}</color>");
         // 第 1 波（第一次五分钟）不刷史莱姆 Boss —— 史莱姆社群是最后解锁的
         //（N11 才进入刷怪池、N12 才有世界 Boss），第一波就给玩家上史莱姆，
         // 会让尚未解锁该社群的玩家面对一个"还没见过就突然出现"的 Boss。
@@ -1544,9 +1429,6 @@ private void OnEndlessStage(int stage)
             AdventureEventManager.Instance.adventureUI.IsShowing) return;
 
         menu.gameObject.SetActive(true);
-        // 无尽模式：在暂停菜单里动态补一个「保存本局」按钮
-        if (IsInEndlessMode()) EnsureEndlessSaveButton();
-        else HideEndlessSaveButton();
         // 进入暂停菜单时收起子面板
         if (settingsPanel != null)     settingsPanel.SetActive(false);
         if (instructionsPanel != null) instructionsPanel.SetActive(false);

@@ -33,6 +33,10 @@ public class AdventureEventManager : MonoBehaviour
         AdventurePersonalityDissolve.ResetRunCounter();
         // 清零女娲补天无尽模式多选计数
         AdventureNuwaFailed.ResetRunCounter();
+        // 清零愚弄无尽模式多选计数（无尽下每 120 分钟局内计时 +1 次机会）
+        AdventureOption8_Fool.ResetRunCounter();
+        // 清零无敌奇遇的 static 防护锁（上一局在无敌期间死亡会卡在 true，导致下局选了没效果）
+        AdventureOption5_SomethingForNothing.ResetRunCounter();
 
         // 运行时确保奇遇10「源木收集者」存在于奇遇池（无需在场景 Inspector 手动拖入）
         EnsureYuanmuCollectorOption();

@@ -170,6 +170,18 @@ public class GachaManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 存档槽切换后重新初始化奖池。
+    /// 【为什么必要】InitPool 只在 Awake 跑一次；切到一个**全新的空档**时
+    /// PlayerPrefs 里没有任何 GachaPool_* 键，若不重跑 InitPool，
+    /// GetPoolRemain 全部为 0 → 玩家在新档里一张卡都抽不到。
+    /// </summary>
+    public void ReloadFromPrefs()
+    {
+        InitPool();
+        ApplyPoolRefillsByMilestone(PlayerPrefs.GetInt(KEY_DRAWCOUNT, 0));
+    }
+
+    /// <summary>
     /// 按需补出新增的抽卡装备数据。
     /// 完全幂等：已存在则直接返回。
     ///
@@ -711,6 +723,24 @@ public class GachaManager : MonoBehaviour
     {
         if (ClearRecordManager.Instance == null) return false;
         return ClearRecordManager.Instance.GetClearCount(difficultyLabel) > 0 && !IsFirstClearChestClaimed(difficultyLabel);
+    }
+
+    /// <summary>
+    /// 是否存在**任意**一个可领取的首通宝箱。
+    /// 聚宝盆按钮上的红点提示用——只要有一个难度通关过且未领过，就显示红点。
+    ///
+    /// 注意：N1..N8 才是普通可通关难度，N9..N13 是无尽/特殊难度（没有"首通"概念），
+    /// 所以这里只扫 N1..N8（与 <see cref="ResetFirstClearChestsAndGrantDueYuan"/> 的扫描范围一致）。
+    /// </summary>
+    public bool HasAnyUnclaimedChest()
+    {
+        if (ClearRecordManager.Instance == null) return false;
+        for (int i = 1; i <= 8; i++)
+        {
+            string label = "N" + i;
+            if (CanClaimFirstClearChest(label)) return true;
+        }
+        return false;
     }
 
     public int ClaimFirstClearChest(string difficultyLabel)

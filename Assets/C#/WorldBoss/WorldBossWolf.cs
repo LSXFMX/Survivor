@@ -61,6 +61,15 @@ public class WorldBossWolf : WolfBoss
     public override void Destroy1()
     {
         if (rolestate == state.dead) return;
+
+        // 【2026-08 修复】变身无敌期免死：此时命中只是被 WolfBoss.Destroy1 的
+        //   `if (invincible) { health = lockedHealth; return; }` 锁血救活，Boss 实际不会死。
+        //   若在此处直接触发 OnWorldBossDefeated（掉落），会出现：
+        //     变身期间掉一次（但Boss没死） + 狼形态死亡再掉一次 = **双掉落**。
+        //   无敌期直接返回，掉落在狼形态真正死亡时才结算一次。
+        //   （WolfBoss.LateUpdate 每帧 `if (invincible) health = lockedHealth` 保证血量锁死。）
+        if (IsTransformInvincible) return;
+
         // 亡者领域复活检查（与WorldBossBat/WorldBossMushroomMan一致）
         if (!_reviveAttempted) { _reviveAttempted = true; if (TombDomainHook.TryReviveAsAlly(this)) { Debug.Log("[亡者领域] 世界狼人Boss被永久控制为友军"); return; } }
         worldBossManager?.OnWorldBossDefeated(faction);

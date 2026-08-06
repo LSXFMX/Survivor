@@ -50,7 +50,7 @@ public class InheritEquipmentUI : MonoBehaviour
     private TextMeshProUGUI _warehouseTitle;
     private TextMeshProUGUI _totalsText;
     private TextMeshProUGUI _detailText;
-    private Button _autoBtn, _salvageAllBtn;
+    private Button _autoBtn, _salvageAllBtn, _equipBestBtn;
     private TextMeshProUGUI _autoBtnLabel;
 
     private Button _equipBtn, _salvageBtn, _reforgeBtn;
@@ -256,13 +256,30 @@ public class InheritEquipmentUI : MonoBehaviour
 
         _materialText = NewText("MaterialText", bar, _fs * 1.15f, TextAlignmentOptions.MidlineLeft);
         var mt = _materialText.rectTransform;
-        mt.anchorMin = new Vector2(0f, 0f); mt.anchorMax = new Vector2(0.36f, 1f);
+        mt.anchorMin = new Vector2(0f, 0f); mt.anchorMax = new Vector2(0.24f, 1f);
         mt.offsetMin = new Vector2(10f, 0f); mt.offsetMax = Vector2.zero;
         _materialText.enableWordWrapping = false;
 
+        // 一键装备：为6 个槽位各挑稀有度最高、主词条最大的那件穿上
+        _equipBestBtn = NewButton("EquipBestBtn", bar, out var ebl, "一键装备");
+        var eb = _equipBestBtn.transform as RectTransform;
+        eb.anchorMin = new Vector2(0.25f, 0.14f); eb.anchorMax = new Vector2(0.48f, 0.86f);
+        eb.offsetMin = Vector2.zero; eb.offsetMax = Vector2.zero;
+        var ebImg = _equipBestBtn.GetComponent<Image>();
+        if (ebImg != null) ebImg.color = new Color(0.16f, 0.30f, 0.20f, 0.95f);  // 绿：正向操作
+        _equipBestBtn.onClick.AddListener(() =>
+        {
+            var m = InheritEquipmentManager.Instance;
+            if (m == null) return;
+            int n = m.EquipBestAll();
+            ToastManager.Show(n > 0
+                ? $"<color=#80FF80>一键装备完成，换上 {n} 件</color>"
+                : "<color=#999999>当前已是最优配置</color>");
+        });
+
         _autoBtn = NewButton("AutoBtn", bar, out _autoBtnLabel, "自动分解: 关");
         var ab = _autoBtn.transform as RectTransform;
-        ab.anchorMin = new Vector2(0.38f, 0.14f); ab.anchorMax = new Vector2(0.65f, 0.86f);
+        ab.anchorMin = new Vector2(0.50f, 0.14f); ab.anchorMax = new Vector2(0.73f, 0.86f);
         ab.offsetMin = Vector2.zero; ab.offsetMax = Vector2.zero;
         _autoBtn.onClick.AddListener(() =>
         {
@@ -273,7 +290,7 @@ public class InheritEquipmentUI : MonoBehaviour
 
         _salvageAllBtn = NewButton("SalvageAllBtn", bar, out var sal, "一键分解劣质");
         var sb = _salvageAllBtn.transform as RectTransform;
-        sb.anchorMin = new Vector2(0.68f, 0.14f); sb.anchorMax = new Vector2(1f, 0.86f);
+        sb.anchorMin = new Vector2(0.75f, 0.14f); sb.anchorMax = new Vector2(1f, 0.86f);
         sb.offsetMin = Vector2.zero; sb.offsetMax = Vector2.zero;
         _salvageAllBtn.onClick.AddListener(() =>
         {

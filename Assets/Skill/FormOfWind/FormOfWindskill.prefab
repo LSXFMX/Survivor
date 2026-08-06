@@ -59,6 +59,6 @@ MonoBehaviour:
   player: {fileID: 0}
   angel: 0
   isfaceenemy: 0
-  icon: {fileID: 21300000, guid: 275c47fe35c5bcc4581c431b67c2f492, type: 3}
+  icon: {fileID: 21300000, guid: 696a45800aceb404cbe244bd5855e68f, type: 3}
   procChance: 0.1
   damageFactorFromWindArrow: 0.5

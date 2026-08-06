@@ -75,6 +75,14 @@ public class SlimeBoss : enemy
     private enum Phase { Slime, Transforming, Dragon, Dead }
     private Phase phase = Phase.Slime;
 
+    /// <summary>
+    /// 是否为变身演出期间（Slime→Dragon 过渡，Destroy1 对 Transforming 直接返回）。
+    /// 供子类（WorldBossSlime）在 Destroy1 入口判断"这次击杀是否会被免死"——
+    /// 若为 true，则**不应**触发掉落/复活/好感度结算，否则变身期掉一次、
+    /// 龙形态死亡再掉一次（双掉落）。
+    /// </summary>
+    protected bool IsTransformingPhase => phase == Phase.Transforming;
+
     /// <summary>亡者领域复活时强制重置为史莱姆形态（修复龙形态残留问题）。</summary>
     public void ResetToSlimeForm()
     {
@@ -555,12 +563,34 @@ public class SlimeBoss : enemy
     {
         if (phase == Phase.Dead) return;
 
+        // 【2026-08 修复】变身演出进行中不可打断：
+        //   变身动画约 1.8s，期间玩家仍可攻击，若血量被打到 0 且这里不拦截，
+        //   Destroy1 会立即把变身演出掐掉、Boss 直接死掉（同本次"临死没进2阶段"的另一种表现）。
+        if (phase == Phase.Transforming) return;
+
         // 亡者领域复活检查（关底史莱姆 Boss 也需要被复活为永久友军）
         if (!_reviveAttempted)
         {
             _reviveAttempted = true;
             if (TombDomainHook.TryReviveAsAlly(this))
                 return;
+        }
+
+        // 【2026-08 修复】临死前进入巨龙终形态（原本只有 FixedUpdate 检查，会漏判定）。
+        //   原逻辑：FixedUpdate 里 `health <= healthmax * dragonHpThreshold` 才触发变身。
+        //   但玩家一击把血从 10% 以上直接打到 ≤0 时，Bulletbase.OnTriggerEnter 在同一帧就
+        //   调了 Destroy1() → FixedUpdate 没有机会再跑血量判定 → 变身被跳过、Boss 直接死。
+        //   现在死亡入口同样检查一次：非亡者领域操控、还在史莱姆形态、血量 ≤ 阈值
+        //   （溢出伤害到 0/负数也算），就改为进入变身流程。TransformRoutine 会回 5 成血，
+        //   所以即使血量已 ≤0 也能正常进入巨龙演出 → 自毁 = 通关。
+        //   注意：复活检查在前 —— 若亡者领域复活成功（史莱姆形态友军），仍优先复活；
+        //   只有复活失败才触发变身，避免出现"看完变身又变回史莱姆友军"的怪逻辑。
+        if (phase == Phase.Slime &&
+            GetComponent<MindControlled>() == null &&
+            health <= healthmax * dragonHpThreshold)
+        {
+            StartCoroutine(TransformRoutine());
+            return;
         }
 
         phase = Phase.Dead;

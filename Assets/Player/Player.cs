@@ -318,6 +318,7 @@ public class Player : Attribute
         }
 
         healthmax += 20;
+        health    += 20;   // 升级时同时回复对应血量（否则升级只加空上限、不加实际值）
         exp = 0;
         expmax += 20;
         battleUI.openchoice();

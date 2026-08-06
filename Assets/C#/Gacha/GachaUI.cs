@@ -38,6 +38,7 @@ public class GachaUI : MonoBehaviour
     private Button infoButton;
     private GameObject infoTooltip;
     private Button treasureButton;
+    private GameObject treasureButtonRedDot;   // 聚宝盆按钮左上角红点（有待领宝箱时显示）
     private GameObject treasurePanel;
 
     void OnEnable()
@@ -173,6 +174,44 @@ public class GachaUI : MonoBehaviour
         img.preserveAspect = true;
         treasureButton = go.AddComponent<Button>();
         treasureButton.onClick.AddListener(ToggleTreasurePanel);
+
+        // 红点：左上角提示有待领首通宝箱
+        treasureButtonRedDot = CreateRedDot(go.transform, new Vector2(8f, -8f), 18f);
+        if (treasureButtonRedDot != null) treasureButtonRedDot.SetActive(false);
+    }
+
+    /// <summary>
+    /// 在指定父节点上创建一个小红点（左上角偏移 + 直径）。纯 Image，不接收射线点击，
+    /// 用 RectTransform.anchor = (0,1) 钉在父物体的左上角。
+    ///
+    /// 为什么不直接画一个实心圆 Sprite：项目里没准备现成的红点 PNG，
+    /// 而 Unity 自带 UISprite 又会被误认成图集引用。直接用 Image + 纯色 + 圆形勾边最稳。
+    /// </summary>
+    private static GameObject CreateRedDot(Transform parent, Vector2 anchoredOffset, float diameter)
+    {
+        if (parent == null) return null;
+
+        var dot = new GameObject("RedDot", typeof(RectTransform), typeof(CanvasRenderer));
+        dot.transform.SetParent(parent, false);
+        var rt = (RectTransform)dot.transform;
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(0f, 1f);
+        rt.pivot     = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = anchoredOffset;
+        rt.sizeDelta = new Vector2(diameter, diameter);
+        rt.SetAsLastSibling();   // 红点永远在最上层
+
+        var img = dot.AddComponent<Image>();
+        img.color = new Color(1f, 0.25f, 0.25f, 1f);
+        img.raycastTarget = false;
+        // 圆形遮罩 —— 不引入任何图集，靠 mask 也能圆形显示
+        // 但 mask 需要另一张 Image 作为模板，所以直接给一个深红描边 + 实心填充更简单。
+        // 这里采用"实心红点 + 白色描边光晕"的近似方案：
+        //   实心点由 img.color 提供；外圈光晕用 Outline 组件。
+        var outline = dot.AddComponent<Outline>();
+        outline.effectColor = new Color(1f, 1f, 1f, 0.95f);
+        outline.effectDistance = new Vector2(1.5f, -1.5f);
+        return dot;
     }
 
     private void ToggleTreasurePanel()
@@ -279,6 +318,10 @@ public class GachaUI : MonoBehaviour
         bool canDraw10 = GachaManager.Instance.GetYuan() >= 10;
         if (draw1Button != null) draw1Button.interactable = canDraw1;
         if (draw10Button != null) draw10Button.interactable = canDraw10;
+
+        // 聚宝盆红点：存在任一未领首通宝箱时显示
+        if (treasureButtonRedDot != null)
+            treasureButtonRedDot.SetActive(GachaManager.Instance.HasAnyUnclaimedChest());
     }
 
     private void OnDraw1()
