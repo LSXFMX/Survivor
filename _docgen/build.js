@@ -18,8 +18,10 @@ const ch09 = require("./ch09_clearequip");
 const ch10 = require("./ch10_achievement");
 const ch11 = require("./ch11_favor");
 const ch12 = require("./ch12_gacha");
-const ch13 = require("./ch13_adventure");
-const ch14 = require("./ch14_appendix");
+const ch13 = require("./ch13_inherit");
+const ch14 = require("./ch14_adventure");
+const ch15 = require("./ch15_ui");
+const ch16 = require("./ch16_appendix");
 
 // ---- 封面 ----
 function coverPage() {
@@ -52,7 +54,7 @@ function coverPage() {
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 60 },
-      children: [new TextRun({ text: "2026年7月", size: 20, color: COLOR.gray })],
+      children: [new TextRun({ text: "2026年8月", size: 20, color: COLOR.gray })],
     }),
     new Paragraph({ children: [new PageBreak()] }),
   ];
@@ -86,6 +88,8 @@ const children = [
   ...ch12(),
   ...ch13(),
   ...ch14(),
+  ...ch15(),
+  ...ch16(),
 ];
 
 const doc = new Document({
