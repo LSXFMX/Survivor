@@ -12,6 +12,9 @@ using UnityEngine;
 /// </summary>
 public class BossBat : enemy
 {
+    /// <summary>关底 Boss（世界版 WorldBossBat 会覆写为 WorldBoss）。</summary>
+    public override BossTag bossTag => BossTag.StageBoss;
+
     [Header("Boss 体型")]
     public float bossScale = 10f;
 

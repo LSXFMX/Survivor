@@ -135,8 +135,10 @@ public class PlayerStatsPanel : MonoBehaviour
 
         rt.anchorMin = rt.anchorMax = new Vector2(1f, 0.5f);
         rt.pivot     = new Vector2(1f, 0.5f);
-        rt.sizeDelta = new Vector2(340f, 470f);          // 原 280×440 → 加宽 60容纳增量列
-        rt.anchoredPosition = new Vector2(-24f, 0f);     // 距右边缘 24px
+        rt.sizeDelta = new Vector2(340f, 470f);
+        // 距右边缘 200px：原来 -24 在小屏会盖住右下角两个按钮（自动/角色/结算等），
+        // 改 -200 让出右侧约 200px 的安全区，底下按钮始终可见。
+        rt.anchoredPosition = new Vector2(-200f, 0f);
         rt.localScale = Vector3.one;
 
         // 标题同步提示开关方式（场景里序列化的旧标题是"角色属性  [Tab]"）

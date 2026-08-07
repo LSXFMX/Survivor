@@ -45,6 +45,37 @@ public class enemy : Attribute
     /// </summary>
     public float corpseStayDuration = 2f;
 
+    // ══════════════════════ Boss 类型标记 ══════════════════════
+
+    /// <summary>Boss 归属类型，用于 UI 区分「关底 Boss」与「世界 Boss」。</summary>
+    public enum BossTag
+    {
+        /// <summary>普通敌人（小怪），不是 Boss。</summary>
+        NotBoss,
+        /// <summary>关底 Boss：每个难度的最终首领，击败即通关。</summary>
+        StageBoss,
+        /// <summary>世界 Boss：地图四角刷新的可选强敌，属性翻倍且自带回血。</summary>
+        WorldBoss,
+    }
+
+    /// <summary>
+    /// 本敌人的 Boss 类型标记（默认非 Boss）。
+    ///
+    /// 为什么用虚属性而不是可序列化字段：
+    ///   ① 世界 Boss 与关底 Boss 是**不同的类**（WorldBossBat : BossBat 等），
+    ///      类型信息天然由继承体系决定，虚属性不会被场景/预制体里的错误配置带偏；
+    ///   ② 避免美术/策划在Inspector 里漏配或配错导致 UI 标记和实际行为不一致。
+    ///
+    /// 覆写约定：
+    ///   ·关底 Boss（BossBat / BossMushroomMan / WolfBoss / SlimeBoss）→ StageBoss
+    ///   · 世界 Boss（WorldBossBase 及WorldBossBat/MushroomMan/Wolf/Slime）→ WorldBoss
+    ///     （世界版继承自关底版，覆写后自动取代父类的 StageBoss）
+    /// </summary>
+    public virtual BossTag bossTag => BossTag.NotBoss;
+
+    /// <summary>是否为任意类型的 Boss（关底或世界）。</summary>
+    public bool IsAnyBoss => bossTag != BossTag.NotBoss;
+
     // 全场景共享的玩家层缓存。每只怪物 OnEnable 都做 GameObject.Find 太贵（蝙蝠潮一秒几十次）。
     // 场景重载时 Unity 会把所有 static 引用置 null（domain reload）；如果没启用 reload，这里
     // 仍能在第一次 OnEnable 时通过 != null 检查重建。

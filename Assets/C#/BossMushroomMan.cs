@@ -15,6 +15,9 @@ using TMPro;
 /// </summary>
 public class BossMushroomMan : enemy
 {
+    /// <summary>关底 Boss（世界版 WorldBossMushroomMan 会覆写为 WorldBoss）。</summary>
+    public override BossTag bossTag => BossTag.StageBoss;
+
     [Header("Boss 冲刺设置")]
     public float dashInterval   = 5f;
     public float dashSpeed      = 20f;

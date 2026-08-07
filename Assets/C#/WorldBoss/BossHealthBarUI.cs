@@ -22,6 +22,9 @@ public class BossHealthBarUI : MonoBehaviour
     public float avatarSize     = 48f;    // 头像尺寸
     public float rowSpacing     = 10f;    // 多条血条间距
     public float topOffset      = 130f;   // 距屏幕顶偏移（避开计时器 + 关底倒计时文字）
+                                         // 【2026-08】240 → 130：此前加过徽章/名称标题行导致
+                                         // 视觉顶部顶高而压住倒计时，才临时把偏移拉到 240；
+                                         // 标题行已删除，130 恢复原位置即可避开倒计时。
     public float barBorderWidth = 2f;    // 血条边框宽度
 
     private RectTransform _container;
@@ -67,6 +70,13 @@ public class BossHealthBarUI : MonoBehaviour
         _container.sizeDelta = new Vector2(avatarSize + 10f + barWidthPixels, 500f);
     }
 
+    /// <summary>
+    /// 单条 Boss 血条占用的行高（头像 + 上下留白）。
+    /// 条目根的 sizeDelta 与多Boss 垂直堆叠的步进**必须用同一个值**，
+    /// 否则两者不一致会导致堆叠重叠或留白过大。
+    /// </summary>
+    private float ROW_HEIGHT => avatarSize + 6f;
+
     void LateUpdate()
     {
         // 清理已死 Boss
@@ -111,9 +121,10 @@ public class BossHealthBarUI : MonoBehaviour
         {
             var e = _entries[i];
             if (e.root == null) continue;
-            float rowH = avatarSize + 6f;
+            // 行高与 DoRegister 里条目根的 sizeDelta 用同一个 ROW_HEIGHT，
+            // 保证多Boss 依次往下堆叠、不重叠也不留过大空隙。
             e.root.anchoredPosition = new Vector2(0f, -y);
-            y += rowH + rowSpacing;
+            y += ROW_HEIGHT + rowSpacing;
         }
     }
 
@@ -154,7 +165,19 @@ public class BossHealthBarUI : MonoBehaviour
         if (_container == null) BuildContainer();
         if (_container == null) return;
 
-        float rowH = avatarSize + 6f;
+        float rowH = ROW_HEIGHT;
+
+        // ══════ Boss 类型标记：区分「关底 Boss」与「世界 Boss」══════
+        // 数据源是 enemy.bossTag 虚属性（由继承体系决定，不依赖场景/预制体配置）。
+        // 视觉上**只用血条外框颜色**区分：
+        //   世界 Boss → 暗紫外框（可选强敌）
+        //   关底 Boss → 暗红外框（通关目标）
+        // 【2026-08 去掉徽章/名称文字】早期版本在血条上方加「关底/世界」徽章 + Boss 名称，
+        //   但这些文字在战斗场景里走了 ResolveChineseFont → 经常回退 LiberationSans
+        //   （无CJK）→ 中文渲染成方块/乱码 → 整条血条看起来"模糊不清"。
+        //   现在只靠外框颜色区分，干净且绝对不会出现字体回退问题。
+        bool isWorld = boss.bossTag == enemy.BossTag.WorldBoss;
+        Color frameColor = isWorld ? new Color(0.42f, 0.18f, 0.60f, 1f) : new Color(0.34f, 0.06f, 0.06f, 1f);
 
         // 条目根
         var rootGo = new GameObject("BossBar_" + boss.rolename, typeof(RectTransform));
@@ -200,7 +223,7 @@ public class BossHealthBarUI : MonoBehaviour
         frameRt.sizeDelta = new Vector2(barWidthPixels + barBorderWidth * 2f, frameH);
         frameRt.anchoredPosition = new Vector2(barX - barBorderWidth, 0f);
         var frameImg = frameGo.AddComponent<Image>();
-        frameImg.color = new Color(0.05f, 0.05f, 0.05f, 1f); // 黑色边框
+        frameImg.color = frameColor;   // 按 Boss 类型着色（关底=暗红 / 世界=暗紫）
         frameImg.raycastTarget = false;
 
         // 血条背景（深灰色，绝对不透明）

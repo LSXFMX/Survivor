@@ -17,6 +17,9 @@ using TMPro;
 /// </summary>
 public class SlimeBoss : enemy
 {
+    /// <summary>关底 Boss（世界版 WorldBossSlime 会覆写为 WorldBoss）。</summary>
+    public override BossTag bossTag => BossTag.StageBoss;
+
     [Header("体型")]
     public float bossScale   = 1.6f;   // 史莱姆王形态缩放
     public float dragonScale  = 2.6f;  // 巨龙终形态缩放

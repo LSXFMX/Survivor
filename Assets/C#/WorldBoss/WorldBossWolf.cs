@@ -2,6 +2,9 @@ using UnityEngine;
 
 public class WorldBossWolf : WolfBoss
 {
+    /// <summary>世界 Boss（覆写父类 WolfBoss 的 StageBoss）。</summary>
+    public override BossTag bossTag => BossTag.WorldBoss;
+
     [Header("世界Boss设置")]
     public float       activateRange            = 25f;
     public FactionType faction                  = FactionType.Wolf;

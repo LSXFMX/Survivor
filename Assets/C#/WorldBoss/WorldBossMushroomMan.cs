@@ -3,6 +3,9 @@ using UnityEngine;
 
 public class WorldBossMushroomMan : BossMushroomMan
 {
+    /// <summary>世界 Boss（覆写父类 BossMushroomMan 的 StageBoss）。</summary>
+    public override BossTag bossTag => BossTag.WorldBoss;
+
     [Header("世界Boss设置")]
     public float       activateRange   = 18f;
     public FactionType faction         = FactionType.Mushroom;

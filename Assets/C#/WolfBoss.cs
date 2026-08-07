@@ -27,6 +27,9 @@ using TMPro;
 /// </summary>
 public class WolfBoss : enemy
 {
+    /// <summary>关底 Boss（世界版 WorldBossWolf 会覆写为 WorldBoss）。</summary>
+    public override BossTag bossTag => BossTag.StageBoss;
+
     [Header("体型")]
     public float humanScale = 4f;
     public float wolfScale  = 6f;   // 狼形态缩放
