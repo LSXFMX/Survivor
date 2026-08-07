@@ -171,8 +171,8 @@ public class PlayerSkinSkillBuff : MonoBehaviour
                 // 测试用：直接把「亡者领域」也发到手，跳过升级流程
                 if (grantTombDomainOnStartForTesting)
                     TryGrantTombDomain();
-                // 无罪专属 UI：左侧显示已复活 Boss 的头像 + 血条
-                ResurrectedBossHUD.EnsureExist();
+                // 【2026-08】血条 HUD 不再在此创建——改由 TombDomainHook 在"世界 Boss 复活成功"
+                // 时统一 EnsureExist（对所有角色开放），此处移除无罪专属调用。
                 break;
         }
         _initialSkillGranted = true;

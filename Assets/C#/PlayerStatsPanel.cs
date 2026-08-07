@@ -35,6 +35,20 @@ public class PlayerStatsPanel : MonoBehaviour
 
     private bool _visible;
 
+    // ══════════════ 初始属性快照（白色基准）══════════════
+    //显示规则：白色 = 开局时的属性；绿色 = 本局内通过升级/奇遇/门挑战获得的增量。
+    //  为什么要快照而不是"当前值 - 装备加成"：局内成长来源太多（三选一升级、奇遇、
+    //  门挑战奖励、SSR启动资金、社群好感度…），逐项反推极易漏算。
+    //  直接在"开局那一刻"存一份，之后 当前 - 快照 就是纯局内收益，永远准确。
+    private struct StatSnapshot
+    {
+        public int   healthmax, speed, EVA;
+        public float atk, def, CR, CD, DR, regen;
+    }
+    private StatSnapshot _initial;
+    private bool _snapshotTaken;
+    private bool _snapshotPending;
+
     private void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(this); return; }
@@ -95,12 +109,38 @@ public class PlayerStatsPanel : MonoBehaviour
         if (player == null) FindPlayer();
         if (battleUI == null) battleUI = FindObjectOfType<battleUI>();
 
+        // 【2026-08】运行时重定位 + 加宽（不改场景，避免动25MB 的 SampleScene.unity）
+        RepositionPanel();
+
         // 【关键】运行时自动纠正字体：把面板下所有 TMP 的 LiberationSans 换成 heiti，防止中文乱码
         FixChineseFontOnAllTMP();
         // 根据面板尺寸动态调整字号
         AutoScaleFontSizes();
         // 根据面板尺寸校正 title/content 的内边距，防止文字紧贴边框
         FixTextPadding();
+    }
+
+    /// <summary>
+    /// 运行时把面板摆到**屏幕右侧垂直居中**，并加宽到能容纳「初始值 + 增量」两列。
+    ///
+    /// 为什么改到右侧：左侧从上到下已经排了血条、角色头像面板、经验条、计时器等 HUD，
+    /// 原来的"左侧居中 x=20"会压在血条/头像上，属性一多就互相遮挡。
+    /// 右侧只有无尽倍率文本（右上角），垂直居中不冲突。
+    /// </summary>
+    private void RepositionPanel()
+    {
+        if (panelRoot == null) return;
+        var rt = panelRoot.transform as RectTransform;
+        if (rt == null) return;
+
+        rt.anchorMin = rt.anchorMax = new Vector2(1f, 0.5f);
+        rt.pivot     = new Vector2(1f, 0.5f);
+        rt.sizeDelta = new Vector2(340f, 470f);          // 原 280×440 → 加宽 60容纳增量列
+        rt.anchoredPosition = new Vector2(-24f, 0f);     // 距右边缘 24px
+        rt.localScale = Vector3.one;
+
+        // 标题同步提示开关方式（场景里序列化的旧标题是"角色属性  [Tab]"）
+        if (titleText != null) titleText.text = "角色属性  [Tab]";
     }
 
     /// <summary>
@@ -140,9 +180,11 @@ public class PlayerStatsPanel : MonoBehaviour
             var crt = contentText.rectTransform;
             crt.anchorMin = Vector2.zero;
             crt.anchorMax = Vector2.one;
-            // 左右 padSide，底部 padSide，顶部为 padTop + titleH + titleGap
-            crt.offsetMin = new Vector2(padSide, padSide);
-            crt.offsetMax = new Vector2(-padSide, -(padTop + titleH + titleGap));
+            // 左 pad 加大让属性行整体右移，避开背景素材的四个小角框。
+            // 用 0.12f 容器宽度（340px 下 = 40px）做绝对偏移，免受面板缩放影响。
+            float padLeft = Mathf.Clamp(size.x * 0.12f, 30f, 60f);
+            crt.offsetMin = new Vector2(padLeft,     padSide);
+            crt.offsetMax = new Vector2(-padSide,   -(padTop + titleH + titleGap));
         }
     }
 
@@ -223,12 +265,73 @@ public class PlayerStatsPanel : MonoBehaviour
         if (Input.GetKeyDown(toggleKey))
             Toggle();
 
+        TrackRunStartForSnapshot();
+
         if (_visible && contentText != null)
         {
             if (player == null) FindPlayer();
             RefreshContent();
         }
     }
+
+    /// <summary>
+    /// 监听对局开始/结束，在开局那一刻抓取初始属性快照。
+    ///
+    /// 时机说明：不能在Start() 里直接抓 —— 那时 EquipmentInitializer.Start()
+    /// 还没把装备加成叠上去，抓到的是"裸数值"，会把装备加成误算成局内收益。
+    /// 所以等 battleUI.startcount 变true 之后再延迟一小段真实时间（不受 timeScale=0
+    /// 影响，SSR启动资金会把 timeScale 置 0 弹三选一）再抓。
+    /// </summary>
+    private void TrackRunStartForSnapshot()
+    {
+        bool running = battleUI != null && battleUI.startcount;
+
+        if (!running)
+        {
+            // 回到主菜单/对局结束 → 允许下一局重新抓
+            _snapshotTaken = false;
+            _snapshotPending = false;
+            return;
+        }
+
+        if (_snapshotTaken || _snapshotPending) return;
+        _snapshotPending = true;
+        StartCoroutine(CaptureInitialSnapshotDelayed());
+    }
+
+    private System.Collections.IEnumerator CaptureInitialSnapshotDelayed()
+    {
+        // 等装备初始化 / 开局注入全部结算完（EquipmentInitializer及其协程）
+        yield return new WaitForSecondsRealtime(0.6f);
+
+        if (player == null) FindPlayer();
+        if (player == null)
+        {
+            _snapshotPending = false;   // 玩家还没生成，下一帧重试
+            yield break;
+        }
+
+        _initial = new StatSnapshot
+        {
+            healthmax = player.healthmax,
+            speed     = player.speed,
+            EVA       = player.EVA,
+            atk       = player.atk,
+            def       = player.def,
+            CR        = player.CR,
+            CD        = player.CD,
+            DR        = player.DR,
+            regen     = player.regen,
+        };
+        _snapshotTaken = true;
+        _snapshotPending = false;
+    }
+
+    /// <summary>供战斗 UI 的「角色」按钮调用（与按 Tab 等价）。</summary>
+    public void ToggleFromButton() => Toggle();
+
+    /// <summary>当前面板是否可见（按钮高亮状态用）。</summary>
+    public bool IsVisible => _visible;
 
     private void Toggle()
     {
@@ -248,7 +351,8 @@ public class PlayerStatsPanel : MonoBehaviour
         panelRoot.SetActive(_visible);
         if (_visible)
         {
-            // 每次显示都再纠正一次字体、字号、背景、内边距
+            // 每次显示都再纠正一次位置、字体、字号、背景、内边距
+            RepositionPanel();
             FixChineseFontOnAllTMP();
             AutoScaleFontSizes();
             ApplyBackgroundAtRuntime();
@@ -304,19 +408,46 @@ public class PlayerStatsPanel : MonoBehaviour
     {
         if (player == null || contentText == null) return;
 
-        string s = $"攻击力  <color=#FFA040>{player.atk:F1}</color>\n"
-                 + $"防御力  <color=#80C0FF>{player.def:F1}</color>\n"
-                 + $"暴击率  <color=#FFD24A>{player.CR:F1}%</color>\n"
-                 + $"暴伤    <color=#FF6050>{player.CD:F1}%</color>\n"
-                 + $"闪避率  <color=#80FFC0>{player.EVA}%</color>\n"
-                 + $"经验    <color=#C0C0FF>×{player.DR:F1}</color>\n"
-                 + $"移速    <color=#FFFFFF>{player.speed}</color>\n"
-                 + $"回血    <color=#FF80C0>{player.regen}/s</color>\n"
-                 + $"\n生命  <color=#FF4040>{player.health}/{player.healthmax}</color>\n"
-                 + $"等级  <color=#FFD24A>{player.level}</color>  exp {player.exp}/{player.expmax}\n"
-                 + $"\n估算 DPS  <color=#FF4040>{CalcDPS():F1}</color>";
+        var sb = new System.Text.StringBuilder(512);
 
-        contentText.text = s;
+        sb.Append(Row("攻击力", _initial.atk,       player.atk,       "F1"));
+        sb.Append(Row("防御力", _initial.def,       player.def,       "F1"));
+        sb.Append(Row("暴击率", _initial.CR,        player.CR,        "F1", "%"));
+        sb.Append(Row("暴  伤", _initial.CD,        player.CD,        "F1", "%"));
+        sb.Append(Row("闪避率", _initial.EVA,       player.EVA,       "F0", "%"));
+        sb.Append(Row("经验值", _initial.DR,        player.DR,        "F1", "", "×"));
+        sb.Append(Row("移速", _initial.speed,     player.speed,     "F0"));
+        sb.Append(Row("回  血", _initial.regen,     player.regen,     "F1", "/s"));
+        sb.Append(Row("生命上限", _initial.healthmax, player.healthmax, "F0"));
+
+        sb.Append('\n');
+        sb.Append($"当前生命  <color=#FF4040>{player.health}/{player.healthmax}</color>\n");
+        sb.Append($"经验  <color=#C0C0FF>{player.exp}/{player.expmax}</color>\n");
+        sb.Append($"\n估算 DPS  <color=#FF4040>{CalcDPS():F1}</color>");
+
+        contentText.text = sb.ToString();
+    }
+
+    /// <summary>
+    /// 生成一行「名称  白色初始值 +绿色增量后缀」。
+    /// 快照还没抓到时（对局刚开始的头0.6 秒）只显示当前值，不显示增量，
+    /// 避免把开局值误标成"本局成长"。
+    /// </summary>
+    private string Row(string label, float init, float cur, string fmt,
+                       string suffix = "", string prefix = "")
+    {
+        if (!_snapshotTaken)
+            return $"{label}  <color=#FFFFFF>{prefix}{cur.ToString(fmt)}{suffix}</color>\n";
+
+        float delta = cur - init;
+        string head = $"{label}  <color=#FFFFFF>{prefix}{init.ToString(fmt)}{suffix}</color>";
+
+        // 只在有意义的增量时显示绿字（浮点误差 <0.05 视为无变化）
+        if (Mathf.Abs(delta) < 0.05f) return head + "\n";
+
+        string sign = delta > 0f ? "+" : "-";
+        string color = delta > 0f ? "#66FF88" : "#FF7A7A";   // 负增量（如被debuff）用红字
+        return head + $"  <color={color}>{sign}{Mathf.Abs(delta).ToString(fmt)}{suffix}</color>\n";
     }
 
     private float CalcDPS()

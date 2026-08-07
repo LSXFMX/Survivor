@@ -3,13 +3,14 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 「无罪」角色（SKIN_TOMB）专属 UI：在屏幕右侧从上到下动态显示
+/// 「亡者领域」专属 UI（**所有角色通用**）：在屏幕右侧从上到下动态显示
 /// 「已被亡者领域复活的世界 Boss」头像 + 血条。
 ///
 /// 接入方式
 /// ========
-/// - 单例 Canvas（ScreenSpaceOverlay），由 PlayerSkinSkillBuff 在 SKIN_TOMB 分支
-///   调用 ResurrectedBossHUD.EnsureExist() 自动建立；其它皮肤不调用即不存在。
+/// - 单例 Canvas（ScreenSpaceOverlay）。由 TombDomainHook.TryReviveAsAlly 在
+///   「世界 Boss 复活成功」时调用 ResurrectedBossHUD.EnsureExist() 自动建立；
+///   任何角色（不只无罪）学习亡者领域并复活世界 Boss 后都会创建。
 /// - 数据源：MindControlled.All 里 isWorldBoss=true && IsAlive 的成员。
 /// - 头像：直接复用对应 Boss 自身 SpriteRenderer 当前帧的 sprite —— 不需要额外生成
 ///   PNG 素材；当 Boss 的 sprite 切换（行走/idle）时，HUD 头像随之更新。
@@ -51,7 +52,10 @@ public class ResurrectedBossHUD : MonoBehaviour
     private static ResurrectedBossHUD _instance;
     public static ResurrectedBossHUD Instance => _instance;
 
-    /// <summary>由 PlayerSkinSkillBuff 在 SKIN_TOMB 分支调用：单例不存在则创建。</summary>
+    /// <summary>
+    /// 确保血条 HUD 单例存在（幂等）。
+    /// 由 TombDomainHook 在"世界 Boss 复活成功"时调用，任何角色通用。
+    /// </summary>
     public static void EnsureExist()
     {
         if (_instance != null) return;
@@ -136,12 +140,9 @@ public class ResurrectedBossHUD : MonoBehaviour
 
     void LateUpdate()
     {
-        // 仅 SKIN_TOMB（无罪）启用——其它皮肤万一误挂上也直接 hide
-        if (PlayerSkinSkillBuff.CurrentSkinIndex != PlayerSkinSkillBuff.SKIN_TOMB)
-        {
-            HideAll();
-            return;
-        }
+        // 【2026-08】亡者领域对所有角色开放，不再限制 SKIN_TOMB（无罪）。
+        // 显示与否完全由"是否存在被复活的世界 Boss 友军"决定：
+        //   有 → 显示血条；没有 → 下方循环自然把所有 entry 隐藏（无需手动 HideAll）。
 
         // 收集当前活跃的世界 Boss 友军
         var list = MindControlled.All;

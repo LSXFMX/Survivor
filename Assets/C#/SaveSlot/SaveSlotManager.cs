@@ -340,6 +340,7 @@ public static class SaveSlotManager
         yield return ("InstructionsLastSeenUnlockCount", PrefType.Int);
         yield return ("InstructionsEverViewed", PrefType.Int);
         yield return ("TutorialN1Shown", PrefType.Int);
+        yield return ("WorldBossHintShown", PrefType.Int);   // N6 首次世界Boss提示（每档独立）
     }
 
     [System.Serializable]

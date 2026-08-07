@@ -269,44 +269,52 @@ var dm = DifficultyManager.Instance;
         bool isEndless = DifficultyManager.Instance != null && DifficultyManager.Instance.IsEndless;
         int stage = EndlessStage();
 
+        // ═══════════════ 稀有度硬上限（保证性封顶）═══════════════
+        //
+        // 【非无尽】永远不产出 超弦(4)/奇点(5)——最高只到 电子(3)。
+        //   超弦/奇点只在无尽模式产出，普通关卡世界Boss 再也不掉奇点。
+        //
+        // 【无尽】第 1~4 层同样封顶到 电子(3)（与普通关卡一致，不会比关卡差）；
+        //   第 5 层起解除上限，开始有概率掉落 超弦/奇点（层数越高概率越大）。
+        //
+        // 为什么"封顶"用清权重而不是只压 targetTier：
+        //   高斯分布是无限尾巴——只把 targetTier 压到 3，i=4/5 仍有非零权重
+        //   （σ=1.15 时 ~35% / ~7%），无法"保证"不出超弦/奇点。
+        //   直接把上限档以上的权重清零，从概率上根除。
+        int rarityCap = 3;   // 电子（普通关卡 + 无尽 1~4 层）
+        if (isEndless && EndlessRuntime.RunFloor >= 5)
+            rarityCap = InheritEquipmentDefs.RARITY_COUNT - 1;   // 奇点
+
         // ═══════════════ 稀有度目标档位（0~5）═══════════════
         //
-        // 【非无尽】按关卡编号算：
-        //   N6 → 3.0（电子级为中心；原子 0.4%、质子 7%，基本不掉）
-        //   N8 → 4.3（超弦级为中心）
-        //   N9 → 5.0（奇点级解锁）
+        // 【非无尽】按关卡编号算，封顶 3.0（电子级为中心）：
+        //   N1 → 0.0（原子级）、N5 → 2.3（中子级）、N6+ → 3.0（电子级封顶）
         //
-        // 【无尽】按塔层 + 波次时长：
-        //   基线 2 + 层数/15（30 层 → 4.0 → 奇点出现）
-        //   波次加成 ×0.04（≈每 25 波 +1 档，即约 2 小时 +1 档）
-        //
-        // 旧版有两个问题：
-        //   ① (power−1)/12·5 在 N6 只给 2.08 → 原子/质子仍 ~30% 权重 →
-        //      与"N6 进门才有世界Boss、前两档不该常见"冲突；
-        //   ② 无尽 stage×0.15 太快，1 小时 +1.8 档 → 立即全奇点，
-        //      失去"越刷越高层、越出越高档"的爬坡感。
+        // 【无尽】按塔层稳步上移 + 波次时长微调：
+        //   第 1 层 ≈ 2.5（中子/电子之间，比普通关卡下限更好）
+        //   第 4 层 ≈ 2.7（电子级封顶，不比普通关卡差）
+        //   第 5 层 解除封顶 → 超弦开始有概率
+        //   第 30 层 → ~4.2（超弦为主）· 第 45 层 → 5.0（奇点为主）
         float targetTier;
         if (isEndless)
         {
-            targetTier = Mathf.Clamp(2f + EndlessRuntime.RunFloor / 15f, 0f, 5f);
+            targetTier = Mathf.Clamp(2.5f + (EndlessRuntime.RunFloor - 1) * 0.06f, 0f, 5f);
             targetTier += stage * 0.04f;
             targetTier = Mathf.Clamp(targetTier, 0f, 5f);
         }
         else
         {
-            targetTier = Mathf.Clamp((power - 3f) / 6f * 4f + 1f, 0f, 5f);
+            targetTier = Mathf.Clamp((power - 3f) / 6f * 4f + 1f, 0f, 3f);
         }
 
         var weights = new float[InheritEquipmentDefs.RARITY_COUNT];
         float total = 0f;
         for (int i = 0; i < weights.Length; i++)
         {
+            if (i > rarityCap) { weights[i] = 0f; continue; }   // 封顶档位以上：权重清零（保证不掉）
             float d = i - targetTier;
-            float w = Mathf.Exp(-(d * d) / (2f * RARITY_SIGMA * RARITY_SIGMA));
-            // 旧版对 i≥4 额外乘 (1+endlessBonus)，导致无尽 → 奇点泛滥。
-            // 现完全由 Gaussian 随 targetTier 上移决定分布，无需人工附加。
-            weights[i] = w;
-            total += w;
+            weights[i] = Mathf.Exp(-(d * d) / (2f * RARITY_SIGMA * RARITY_SIGMA));
+            total += weights[i];
         }
 
         float roll = Random.value * total;

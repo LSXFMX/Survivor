@@ -125,7 +125,7 @@ public class WorldBossManager : MonoBehaviour
         if (DifficultyManager.Instance == null) return false;
         string label = DifficultyManager.Instance.Current.label;
         if (label.StartsWith("N") && int.TryParse(label.Substring(1), out int n))
-            return n >= 7;
+            return n >= 6;   // 【2026-08】N7 → N6：与难度选择面板"N6解锁世界Boss"及N6首次提示统一
         return false;
     }
 

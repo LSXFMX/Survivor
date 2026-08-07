@@ -552,6 +552,10 @@ public class SkinChanger : MonoBehaviour
             // panel 必须晚于 backdrop 渲染（画在它之上）→ 放最末位
             if (backdropGo != null) backdropGo.transform.SetAsLastSibling();
             if (panelGo != null)    panelGo.transform.SetAsLastSibling();
+            // 【2026-08 修复】角色介绍 tooltip 若可见，也必须压到面板之上，
+            // 否则本帧把 backdrop/panel 推到最后，tooltip（介绍）就被面板盖住了。
+            if (_infoTooltip != null && _infoTooltip.activeSelf)
+                _infoTooltip.transform.SetAsLastSibling();
         }
 
         // 把面板引用回填到 title.skinShowroomPanel（这样 title.openskin/closeskin 会作用到这个面板）
@@ -1248,7 +1252,13 @@ public class SkinChanger : MonoBehaviour
                     ? SkinInfoTexts[skinId]
                     : "—";
             }
-            if (_infoTooltip != null) _infoTooltip.SetActive(true);
+            if (_infoTooltip != null)
+            {
+                _infoTooltip.SetActive(true);
+                // 置顶：backdrop/panel 在 EnsureUI 每帧都会 SetAsLastSibling，
+                // 显示时也必须把 tooltip 顶到最上层，否则下一秒就被面板盖住。
+                _infoTooltip.transform.SetAsLastSibling();
+            }
         }
         else
         {
@@ -1261,15 +1271,26 @@ public class SkinChanger : MonoBehaviour
         if (_infoTooltip != null) return;
         if (panelGo == null) return;
 
+        // 【2026-08 修复】必须挂到 OverlayLayer（sortingOrder=10000）而不是 SkinChanger 自身：
+        //   EnsureUI 第8步已把 SkinChangerPanel + backdrop reparent 到 OverlayLayer，
+        //   若 tooltip（角色介绍）还挂在主菜单 Canvas（sortingOrder 低）下，
+        //   排序永远低于面板 → 介绍面板被角色存档面板盖住、看不到。
+        //   挂到同一 OverlayLayer 后，二者处于同一渲染层级，配合 SetAsLastSibling 保证 tooltip 最顶。
+        Transform overlay = UIOverlayLayer.Get();
+        Transform parent = overlay != null ? overlay : transform;
+
         var go = new GameObject("SkinInfoTooltip", typeof(RectTransform));
-        // 挂在 panel 之外（直接挂到 SkinChanger transform），保证位于面板上层，且不被卡片裁剪
-        go.transform.SetParent(transform, false);
+        go.transform.SetParent(parent, false);
         var rt = (RectTransform)go.transform;
         rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(620f, 320f);
-        // 显示在面板上方一点
-        rt.anchoredPosition = new Vector2(0f, panelSize.y * 0.5f + 180f);
+        rt.sizeDelta = new Vector2(620f, 300f);
+        // 【2026-08 修复】原公式 panelSize.y*0.5+180 = 450，720p 下 tooltip 中心在 y=810，
+        // 顶部 y=970 直接被画布裁掉，标题/前几行都看不到。改为固定 y=120：
+        //   · 720p：中心 480，顶部 630（离屏顶 90px），全可见；底 330，与面板顶部叠一点
+        //   · 1080p：中心 660，顶部 810（紧贴面板顶部），不与面板重叠
+        // tooltip 短暂悬浮即消失，覆盖面板顶部可接受；优先保证内容完整。
+        rt.anchoredPosition = new Vector2(0f, 120f);
 
         var bg = go.AddComponent<Image>();
         bg.color = new Color(0.02f, 0.025f, 0.04f, 0.96f);

@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// 伤害飘字显示开关 + 大小档位：全局静态状态 + PlayerPrefs 持久化。
-/// 大小档位：0=小 (×0.30), 1=中 (×0.50), 2=大 (×0.70, 默认)
+/// 大小档位：0=小 (×0.30, 默认), 1=中 (×0.50), 2=大 (×0.70)
 /// </summary>
 public static class DamageNumberSettings
 {
@@ -18,10 +18,10 @@ public static class DamageNumberSettings
         set { _visible = value; _loaded = true; PlayerPrefs.SetInt(KEY_VISIBLE, value ? 1 : 0); PlayerPrefs.Save(); }
     }
 
-    /// <summary>0=小, 1=中, 2=大（默认）</summary>
+    /// <summary>0=小（默认）, 1=中, 2=大</summary>
     public static int Size
     {
-        get { Load(); return _size >= 0 ? _size : 2; }
+        get { Load(); return _size >= 0 ? _size : 0; }
         set { _size = Mathf.Clamp(value, 0, 2); PlayerPrefs.SetInt(KEY_SIZE, _size); PlayerPrefs.Save(); }
     }
 
@@ -35,6 +35,6 @@ public static class DamageNumberSettings
         if (_loaded) return;
         _loaded = true;
         _visible = PlayerPrefs.GetInt(KEY_VISIBLE, 1) != 0;
-        _size    = PlayerPrefs.GetInt(KEY_SIZE, 2);
+        _size    = PlayerPrefs.GetInt(KEY_SIZE, 0);   // 默认小（0）
     }
 }

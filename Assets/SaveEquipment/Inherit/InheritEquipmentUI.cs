@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
@@ -52,6 +53,26 @@ public class InheritEquipmentUI : MonoBehaviour
     private TextMeshProUGUI _detailText;
     private Button _autoBtn, _salvageAllBtn, _equipBestBtn;
     private TextMeshProUGUI _autoBtnLabel;
+
+    // 顶栏右上角 "i" 系统说明（hover tooltip，仿 SkinChanger / GachaUI 的 "i"）。
+    private GameObject      _infoTooltip;
+    private TextMeshProUGUI _infoTooltipText;
+
+    /// <summary>"i" 悬停弹出的继承装备系统介绍文案。</summary>
+    private static readonly string InheritSystemInfoText =
+        "<b><color=#FFE066>继承装备系统</color></b>\n\n" +
+        "<color=#9BE8FF>什么是继承装备：</color>击败世界Boss / 无尽之塔Boss掉落的装备，\n" +
+        "穿戴后**永久**提供属性加成，且在本局内随波次/塔层成长。\n\n" +
+        "<color=#9BE8FF>稀有度（由低到高）：</color>\n" +
+        "  <color=#6BDF66>原子</color> < <color=#5C9EFF>质子</color> < <color=#B86BFF>中子</color> < " +
+        "<color=#FFCC40>电子</color> < <color=#FF4D47>无限超弦</color> < <color=#9FE1FF>奇点</color>\n" +
+        "稀有度越高，主/副词条数值越强；难度越高、塔层越高，掉落越高级。\n\n" +
+        "<color=#9BE8FF>六个部位：</color>头盔 / 衣服 / 靴子 / 手镯 / 项链 / 武器\n\n" +
+        "<color=#9BE8FF>操作说明：</color>\n" +
+        "· <color=#80FF80>一键装备</color>：自动穿上稀有度最高、主词条最大的装备\n" +
+        "· <color=#80FF80>分解</color>：装备 → 材料（用于重铸）\n" +
+        "· <color=#80FF80>重铸</color>：消耗材料随机重掷副词条\n" +
+        "· <color=#80FF80>自动分解</color>：新掉落中自动分解劣质装备";
 
     private Button _equipBtn, _salvageBtn, _reforgeBtn;
     private TextMeshProUGUI _equipLabel, _salvageLabel, _reforgeLabel;
@@ -118,8 +139,14 @@ public class InheritEquipmentUI : MonoBehaviour
         Unsubscribe();
         // 离开继承装备 tab 时恢复右侧信息板（防止切回其他 tab 看到空板）。
         NotifyArchiveManager(false);
+        // 顺带隐藏系统说明 tooltip（防切 tab 后它孤悬在 OverlayLayer 上）。
+        if (_infoTooltip != null) _infoTooltip.SetActive(false);
     }
-    private void OnDestroy() { Unsubscribe(); }
+    private void OnDestroy()
+    {
+        Unsubscribe();
+        if (_infoTooltip != null) _infoTooltip.SetActive(false);
+    }
 
     /// <summary>
     /// 通知 <see cref="ArchiveManager"/> 切到 / 离开「继承装备」tab。
@@ -256,9 +283,13 @@ public class InheritEquipmentUI : MonoBehaviour
 
         _materialText = NewText("MaterialText", bar, _fs * 1.15f, TextAlignmentOptions.MidlineLeft);
         var mt = _materialText.rectTransform;
-        mt.anchorMin = new Vector2(0f, 0f); mt.anchorMax = new Vector2(0.24f, 1f);
+        mt.anchorMin = new Vector2(0f, 0f); mt.anchorMax = new Vector2(0.22f, 1f);
         mt.offsetMin = new Vector2(10f, 0f); mt.offsetMax = Vector2.zero;
         _materialText.enableWordWrapping = false;
+
+        // 系统说明 "i" 按钮：悬停弹出继承装备系统介绍（仿 SkinChanger / GachaUI 的 "i"）。
+        // 缩小材料文本宽度（0.24→0.22），在它右侧塞一个小的圆形提示钮。
+        BuildInfoButton(bar);
 
         // 一键装备：为6 个槽位各挑稀有度最高、主词条最大的那件穿上
         _equipBestBtn = NewButton("EquipBestBtn", bar, out var ebl, "一键装备");
@@ -301,6 +332,95 @@ public class InheritEquipmentUI : MonoBehaviour
             ? $"<color=#9BE8FF>一键分解完成，材料 +{gain}</color>"
             : "<color=#999999>没有可分解的劣质装备</color>");
         });
+    }
+
+    /// <summary>顶栏 "i" 说明按钮：鼠标悬停弹出系统介绍，移开消失。</summary>
+    private void BuildInfoButton(RectTransform bar)
+    {
+        var go = NewRect("InfoBtn", bar);
+        go.anchorMin = new Vector2(0.225f, 0.22f);
+        go.anchorMax = new Vector2(0.245f, 0.78f);
+        go.offsetMin = Vector2.zero; go.offsetMax = Vector2.zero;
+
+        var img = go.gameObject.AddComponent<Image>();
+        img.color = new Color(0.22f, 0.25f, 0.40f, 1f);
+        img.raycastTarget = true;
+
+        var btn = go.gameObject.AddComponent<Button>();
+        btn.targetGraphic = img;
+        btn.transition = Selectable.Transition.None;
+
+        var t = NewText("i", go, _fs * 0.85f, TextAlignmentOptions.Center);
+        Stretch(t.rectTransform);
+        t.text = "i";
+        t.fontStyle = FontStyles.Bold;
+        t.color = new Color(1f, 0.92f, 0.4f, 1f);
+        t.raycastTarget = false;
+
+        var trigger = go.gameObject.AddComponent<EventTrigger>();
+        var enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+        enter.callback.AddListener(_ => ShowInfoTooltip(true));
+        trigger.triggers.Add(enter);
+        var exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+        exit.callback.AddListener(_ => ShowInfoTooltip(false));
+        trigger.triggers.Add(exit);
+    }
+
+    /// <summary>显示/隐藏系统说明 tooltip。</summary>
+    private void ShowInfoTooltip(bool show)
+    {
+        if (show)
+        {
+            EnsureInfoTooltip();
+            if (_infoTooltip != null)
+            {
+                _infoTooltip.SetActive(true);
+                _infoTooltip.transform.SetAsLastSibling();
+            }
+        }
+        else
+        {
+            if (_infoTooltip != null) _infoTooltip.SetActive(false);
+        }
+    }
+
+    /// <summary>
+    /// 创建系统说明 tooltip。
+    /// 必须挂到 OverlayLayer（sortingOrder=10000）：继承装备 UI 在存档面板（主菜单 Canvas）内，
+    /// 若 tooltip 也挂在主菜单 Canvas 下，会被存档面板的深色底板/装饰边盖住，或与其它面板层级冲突。
+    /// </summary>
+    private void EnsureInfoTooltip()
+    {
+        if (_infoTooltip != null) return;
+
+        Transform overlay = UIOverlayLayer.Get();
+        Transform parent = overlay != null ? overlay : transform;
+
+        var go = new GameObject("InheritInfoTooltip", typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        var rt = (RectTransform)go.transform;
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(620f, 430f);
+        rt.anchoredPosition = Vector2.zero;
+
+        var bg = go.AddComponent<Image>();
+        bg.color = new Color(0.05f, 0.06f, 0.12f, 0.97f);
+        bg.raycastTarget = false;
+
+        _infoTooltipText = NewText("Content", rt, _fs * 0.8f, TextAlignmentOptions.TopLeft);
+        var tr = _infoTooltipText.rectTransform;
+        tr.anchorMin = new Vector2(0f, 0f); tr.anchorMax = new Vector2(1f, 1f);
+        tr.offsetMin = new Vector2(20f, 16f); tr.offsetMax = new Vector2(-20f, -16f);
+        _infoTooltipText.text = InheritSystemInfoText;
+        _infoTooltipText.enableAutoSizing = true;
+        _infoTooltipText.fontSizeMin = 12f;
+        _infoTooltipText.fontSizeMax = _fs;
+        _infoTooltipText.lineSpacing = 2f;
+
+        _infoTooltip = go;
+        go.transform.SetAsLastSibling();
+        go.SetActive(false);
     }
 
     // ── 左侧：人形轮廓 + 六个装备槽（左三右三）──

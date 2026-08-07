@@ -319,6 +319,8 @@ public class Bat : enemy
         if (ani != null) ani.enabled = false;
 
         Instantiate(expstone, transform.position, Quaternion.Euler(45, 0, 0));
+        // 【2026-08】蝙蝠尸体停留缩短：默认 2s（倒 0.6s + 躺 1.4s）→ 1.1s（倒 0.6s + 躺 0.5s）
+        corpseStayDuration = 1.1f;
         StartCoroutine(Destroy2());
     }
 

@@ -41,6 +41,20 @@ public class WorldBossWolf : WolfBoss
         }
         TickNaturalHeal();
         base.FixedUpdate();
+
+        // 【2026-08 修复·无尽模式狼人 boss 二阶段】
+        //   症状：无尽模式打到世界狼人 boss，半血变身进 Phase.Wolf 后既不显示血条又无敌。
+        //   根因：TransformRoutine 的协程在无尽模式（busy 监控阈值 9s）边界条件下
+        //   可能未走到 finally 块 —— phase 进入 Wolf 但 invincible 仍为 true，
+        //   WolfBoss.LateUpdate 每帧 `if (invincible) health = lockedHealth` 把它锁死，
+        //   子弹命中即"无效"= 真正无敌；血条条目虽然已注册但 health 不变 + 中途重建易丢。
+        //   修复：Wolf 形态每帧兜底 —— 强制 invincible=false（解锁锁血），
+        //   并幂等重新注册血条（DoRegister 内部 _entries.Exists 去重，无副作用）。
+        if (IsWolfPhase)
+        {
+            if (IsTransformInvincible) ClearTransformInvincible();
+            BossHealthBarUI.Register(this);
+        }
     }
 
     private void TickNaturalHeal()

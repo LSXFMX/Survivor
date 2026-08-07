@@ -39,6 +39,12 @@ public class enemy : Attribute
     public Material red;
     public GameObject expstone;
 
+    /// <summary>
+    /// 死亡后尸体停留总时长（秒，含 0.6s 倒地动画）。默认 2s。
+    /// 某些敌人（如蝙蝠）尸体停留太久会显得杂乱，可在子类里调小。
+    /// </summary>
+    public float corpseStayDuration = 2f;
+
     // 全场景共享的玩家层缓存。每只怪物 OnEnable 都做 GameObject.Find 太贵（蝙蝠潮一秒几十次）。
     // 场景重载时 Unity 会把所有 static 引用置 null（domain reload）；如果没启用 reload，这里
     // 仍能在第一次 OnEnable 时通过 != null 检查重建。
@@ -663,6 +669,7 @@ public class enemy : Attribute
         // 对于没有专用死亡精灵/动画的敌人（如狼人小怪、史莱姆），不再只是"定格站着 2 秒后消失"，
         // 而是有一个视觉上可辨识的倒地效果。
         // 蘑菇人（Shoom）、Boss（Mushroom/Bat/Wolf/Slime）有专属死亡动画，跳过倒地效果
+        const float fallDuration = 0.6f;
         if (!IsMushroomEnemy() && !HasBossDeathAnimation())
         {
             SpriteRenderer sr = _cachedSpriteRenderer;
@@ -673,7 +680,6 @@ public class enemy : Attribute
 
             // 倒下：绕 Z 轴从 0° 旋转到 90°（侧倒），时长 0.6s
             Vector3 startEuler = transform.localEulerAngles;
-            float fallDuration  = 0.6f;
             float fallElapsed   = 0f;
             while (fallElapsed < fallDuration)
             {
@@ -684,8 +690,8 @@ public class enemy : Attribute
             }
         }
 
-        // 剩余时间保持倒下姿态
-        float remain = 2f - 0.6f;
+        // 剩余时间保持倒下姿态（总停留时长可配置，见 corpseStayDuration）
+        float remain = corpseStayDuration - fallDuration;
         if (remain > 0f) yield return new WaitForSeconds(remain);
 
         Destroy(gameObject);

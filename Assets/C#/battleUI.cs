@@ -155,8 +155,93 @@ public class battleUI : MonoBehaviour
         AutoMode.Enabled = false;
         EnsureAutoButton();
 
+        // 角色属性按钮（右上角，点击等价于按 Tab 开关属性面板）
+        EnsureStatsToggleButton();
+
         // 运行时构造总结面板 & 属性面板
         EnsureSummaryAndStatsPanels();
+    }
+
+    // ── 角色属性按钮（开关 PlayerStatsPanel，等价于 Tab）──
+    private Image _statsBtnHighlight;   // 面板打开时的高亮边框
+
+    /// <summary>
+    /// 在右上角构造「角色」按钮：图标 Resources/UI/Icon_Character + 文字，
+    /// 点击 =按 Tab（开关角色属性面板）。面板打开时按钮描边转为金色。
+    ///
+    /// 为什么放右上角竖排：右上角已经是"功能按钮区"（自动模式在 y=-150），
+    /// 与左侧 HUD（血条/头像/经验条）和底部技能栏都不冲突；
+    /// 属性面板本身也已移到右侧居中，按钮与面板同侧，视线不用来回跳。
+    /// </summary>
+    private void EnsureStatsToggleButton()
+    {
+        Canvas canvas = null;
+        if (speedButtonText != null) canvas = speedButtonText.GetComponentInParent<Canvas>();
+        if (canvas == null) canvas = GetComponentInParent<Canvas>();
+        if (canvas == null) canvas = FindObjectOfType<Canvas>();
+        if (canvas == null) return;
+        var parent = (RectTransform)canvas.transform;
+        if (parent.Find("StatsToggleButton") != null) return;
+
+        var go = new GameObject("StatsToggleButton", typeof(RectTransform));
+        var rt = (RectTransform)go.transform;
+        rt.SetParent(parent, false);
+        rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(1f, 1f);
+        rt.sizeDelta = new Vector2(120f, 60f);
+        // 自动模式按钮在 y=-360（若未解锁则不存在），这里放 y=-425 保证两者都在时不重叠
+        rt.anchoredPosition = new Vector2(-20f, -425f);
+
+        var bg = go.AddComponent<Image>();
+        bg.color = new Color(0.1f, 0.1f, 0.12f, 0.85f);
+        _statsBtnHighlight = bg;   // 面板开合时改它的底色作为高亮反馈
+
+        var btn = go.AddComponent<Button>();
+        btn.onClick.AddListener(() =>
+        {
+            AudioManager.PlaySfx(AudioManager.SfxKey.Click);
+            if (PlayerStatsPanel.Instance != null) PlayerStatsPanel.Instance.ToggleFromButton();
+        });
+
+        // 图标（左侧）
+        var iconGo = new GameObject("Icon", typeof(RectTransform));
+        var irt = (RectTransform)iconGo.transform;
+        irt.SetParent(rt, false);
+        irt.anchorMin = irt.anchorMax = new Vector2(0f, 0.5f);
+        irt.pivot = new Vector2(0f, 0.5f);
+        irt.sizeDelta = new Vector2(44f, 44f);
+        irt.anchoredPosition = new Vector2(8f, 0f);
+        var iconImg = iconGo.AddComponent<Image>();
+        iconImg.preserveAspect = true;
+        iconImg.raycastTarget = false;
+        var iconSprite = Resources.Load<Sprite>("UI/Icon_Character");
+        if (iconSprite != null) iconImg.sprite = iconSprite;
+        else iconImg.color = new Color(0.5f, 0.8f, 1f, 1f);   // 素材缺失兜底：淡蓝方块
+
+        // 文字（右侧）
+        var labelGo = new GameObject("Label", typeof(RectTransform));
+        var lrt = (RectTransform)labelGo.transform;
+        lrt.SetParent(rt, false);
+        lrt.anchorMin = new Vector2(0f, 0f); lrt.anchorMax = new Vector2(1f, 1f);
+        lrt.offsetMin = new Vector2(54f, 0f); lrt.offsetMax = new Vector2(-6f, 0f);
+        var lbl = labelGo.AddComponent<TextMeshProUGUI>();
+        lbl.text = "角色";
+        lbl.fontSize = 20;
+        lbl.alignment = TextAlignmentOptions.Center;
+        lbl.color = new Color(0.92f, 0.95f, 1f, 1f);
+        lbl.raycastTarget = false;
+        lbl.enableWordWrapping = false;
+        if (health != null && health.font != null) lbl.font = health.font;
+    }
+
+    /// <summary>面板开合时同步按钮底色（打开=偏亮蓝，关闭=常态深灰）。由 Update 调用。</summary>
+    private void RefreshStatsToggleButtonState()
+    {
+        if (_statsBtnHighlight == null) return;
+        bool open = PlayerStatsPanel.Instance != null && PlayerStatsPanel.Instance.IsVisible;
+        _statsBtnHighlight.color = open
+            ? new Color(0.16f, 0.26f, 0.40f, 0.95f)
+            : new Color(0.10f, 0.10f, 0.12f, 0.85f);
     }
 
     // ── 自动模式按钮 ──
@@ -184,7 +269,7 @@ public class battleUI : MonoBehaviour
         rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
         rt.pivot = new Vector2(1f, 1f);
         rt.sizeDelta = new Vector2(120f, 60f);
-        rt.anchoredPosition = new Vector2(-20f, -150f);
+        rt.anchoredPosition = new Vector2(-20f, -360f);
 
         var bg = go.AddComponent<Image>();
         bg.color = new Color(0.1f, 0.1f, 0.12f, 0.85f);
@@ -369,6 +454,32 @@ public class battleUI : MonoBehaviour
         yield return null;
         starttime();
         TryAutoOpenN1Tutorial();
+        TryAutoOpenWorldBossHint();
+    }
+
+    /// <summary>
+    /// 第一次进入 N6 时弹出世界 Boss 提示（一次性，每存档槽独立记录）。
+    ///
+    /// 为什么是 N6：世界 Boss 从 N6 起解锁（与难度选择面板描述一致，
+    /// WorldBossManager.ShouldSpawnWorldBoss 已同步改为 n>=6）。
+    /// 提示要点：位置在地图四个角、属性翻倍+每秒回血、击败解锁社群。
+    /// </summary>
+    private void TryAutoOpenWorldBossHint()
+    {
+        if (!_gameStarted) return;
+        if (DifficultyManager.Instance == null || DifficultyManager.Instance.Current.label != "N6") return;
+        if (InstructionsPanelUI.WasWorldBossHintShown()) return;
+        if (ToastManager.Instance == null) return;
+
+        InstructionsPanelUI.MarkWorldBossHintShown();
+        // 延迟一帧，等战斗 UI 就绪、Toast 可用后再弹
+        StartCoroutine(ShowWorldBossHintDelayed());
+    }
+
+    private IEnumerator ShowWorldBossHintDelayed()
+    {
+        yield return null;
+        ToastManager.Show(InstructionsPanelUI.WorldBossHintText());
     }
 
     /// <summary>N1 开局时自动弹出操作说明（新手引导），每台设备仅触发一次。</summary>
@@ -584,6 +695,17 @@ public class battleUI : MonoBehaviour
                 // 升级组（每个独立 group 单独计入）
                 if (entry.upgradeOptions != null)
                 {
+                    // 【2026-08 修复】火球术显示 9/62 而非与其他技能一致的 X/32：
+                    //   火球术内部有 2 个不同升级组（fireball: maxUp=5 + fireball_multi: maxUp=3），
+                    //   原逻辑对每个组各加一次 `gateChallengeMaxUpgradeBonus + paleMemoryBonus`，
+                    //   导致上限翻倍：8 + 2*G + 2 = 8+10+2=20（base），叠加 paleMemory/gate 后显示 62。
+                    //   太极史莱姆 8/128 是 yin+yang 两个独立技能各自累加 → 翻倍合理；
+                    //   但火球术是同一技能的多个组，gate/pale 不该各加一次。
+                    //   修复：非史莱姆对的单技能，多组时 max 取 MAX（不是 SUM），
+                    //   这样 fireball 上限 = 5+G+1 = windarrow 上限，与其他单技能一致。
+                    //   史莱姆对（yin/yang 两个独立技能）保持 SUM 不变，玩家可理解。
+                    bool isSlimePairTarget = targetSkill == SlimeFactionAssets.SKILL_YIN
+                                            || targetSkill == SlimeFactionAssets.SKILL_YANG;
                     foreach (var upGo in entry.upgradeOptions)
                     {
                         if (upGo == null) continue;
@@ -593,11 +715,20 @@ public class battleUI : MonoBehaviour
                         if (opt.skill == null) continue;
                         if (!IsSameSkillForUpgradeCount(opt.skill.Skillname, targetSkill)) continue;
                         if (string.IsNullOrEmpty(opt.upgradeGroup)) continue;
-                        if (!seenGroups.Add(opt.upgradeGroup)) continue;  // 已统计过同 group
-                        totalCur += cui.GetGroupCount(opt.upgradeGroup);
-                        totalMax += (opt.maxUpgrades > 0)
+                        // 【2026-08 防御性修复】规范化 group 名（去首尾空格）后去重——
+                        //   场景/prefab 序列化偶尔会带入尾随空格（如 "fireball " vs "fireball"），
+                        //   导致同 group 被重复计入，每次额外加一次 GetEffectiveMaxUpgrades，
+                        //   是火球术 9/62 之类"上限异常膨胀"的最常见根因。
+                        string groupKey = opt.upgradeGroup.Trim();
+                        if (!seenGroups.Add(groupKey)) continue;  // 已统计过同 group
+                        totalCur += cui.GetGroupCount(groupKey);
+                        int groupCap = (opt.maxUpgrades > 0)
                             ? cui.GetEffectiveMaxUpgrades(opt, isLearnOption: false)
                             : 0;
+                        if (isSlimePairTarget)
+                            totalMax += groupCap;                    // 两个技能各自的 cap 累加
+                        else
+                            totalMax = Mathf.Max(totalMax, groupCap); // 同一技能的多个组取最大
                         anyMatch = true;
                     }
                 }
@@ -699,6 +830,8 @@ public class battleUI : MonoBehaviour
 
         // 角色头像 + 玩家升级进度（每帧刷新文字与皮肤切换检测——成本极低）
         RefreshCharacterPanel();
+        // 角色属性按钮的开/关高亮
+        RefreshStatsToggleButtonState();
 
         if (startcount && _endlessMode)
         {

@@ -82,6 +82,16 @@ public class WolfBoss : enemy
     /// 狼形态再掉一次（双掉落）。
     /// </summary>
     protected bool IsTransformInvincible => invincible;
+
+    /// <summary>是否处于狼形态（供子类在 FixedUpdate 里做形态兜底判断）。</summary>
+    protected bool IsWolfPhase => phase == Phase.Wolf;
+
+    /// <summary>
+    /// 强制解除变身无敌锁（WolfBoss.LateUpdate 每帧 `if (invincible) health = lockedHealth`）。
+    /// 供子类（WorldBossWolf）在狼形态兜底：若变身协程异常未走 finally、invincible 卡死为 true，
+    /// 用它解锁，否则 Wolf 形态会永远无敌。
+    /// </summary>
+    protected void ClearTransformInvincible() => invincible = false;
     private string curAnim = "";
 
     // 技能 CD 计时（各自独立倒计时）
@@ -261,6 +271,9 @@ public class WolfBoss : enemy
         {
             PlayAnim("WolfWalk");
             MoveToward(role.transform.position, wolfWalkSpeed, dt);
+            // 接触伤害：狼形态保持距离后碰撞盒不重叠、OnCollisionEnter 不再触发，
+            // 用近距范围判定补回"贴身即受伤"（沿用 1s 冷却，与 OnCollisionEnter 共用 dmgCooldown）。
+            TryWolfContactDamage();
 
             // 技能状态机：各技能独立 CD，就绪则随机释放一个（busy 保证互斥不冲突）
             cdQuake  -= dt;
@@ -308,10 +321,20 @@ public class WolfBoss : enemy
         Vector3 d = target - transform.position; d.y = 0;
         if (d.sqrMagnitude < 0.0001f) return;
 
-        // 狼形态：贴身追击（技能需要），不做任何距离保持
+        // 狼形态：贴身追击，但保持"碰撞盒刚好不重叠"的最小距离。
+        // 【2026-08 修复·顶飞+卡顿】原来直接 transform.position += 直移进玩家——
+        //   狼是 kinematic + 实体碰撞盒，PhysX 每帧强行分离重叠体：轻则把玩家顶推，
+        //   重则沿碰撞面抛向高空（"顶到高空"），且大碰撞盒持续解算导致卡顿（"很卡"）。
+        //   现在按双方碰撞半径保持最小距离（比人形更贴，余量 0.15）。
+        //   技能演出由各自协程处理（冲刺切 Trigger、扑击锁定玩家、震地为范围伤害），不受影响；
+        //   接触伤害改用近距范围判定补回（见 TryWolfContactDamage）。
         if (phase != Phase.Human)
         {
-            transform.position += d.normalized * spd * dt;
+            float wolfKeep = ResolveWolfKeepDistance();
+            float wolfDist = d.magnitude;
+            if (wolfDist <= wolfKeep) return;   // 已到位：停下，不再挤压玩家
+            float wolfStep = Mathf.Min(spd * dt, wolfDist - wolfKeep);
+            transform.position += d.normalized * wolfStep;
             return;
         }
 
@@ -357,6 +380,42 @@ public class WolfBoss : enemy
         // contactKeepDistance 作为下限，保证 Inspector 调大仍然有效
         _cachedKeep = Mathf.Max(contactKeepDistance, bossR + playerR + 0.35f);
         return _cachedKeep;
+    }
+
+    private float _cachedWolfKeep = -1f;
+
+    /// <summary>
+    /// 狼形态保持距离 = Boss 碰撞半径 + 玩家碰撞半径 + 0.15 余量（比人形更贴）。
+    /// 用途：狼追击时让碰撞盒刚好不重叠，杜绝 PhysX 顶飞玩家 + 每帧解算卡顿。
+    /// 结果缓存，避免每帧取 bounds。
+    /// </summary>
+    private float ResolveWolfKeepDistance()
+    {
+        if (_cachedWolfKeep > 0f) return _cachedWolfKeep;
+
+        float bossR = 1.5f;
+        var col = _bodyCol != null ? _bodyCol : GetComponent<Collider>();
+        if (col != null)
+        {
+            var e = col.bounds.extents;
+            bossR = Mathf.Max(e.x, e.z);
+        }
+
+        float playerR = 0.5f;
+        if (role != null)
+        {
+            var pc = role.GetComponent<Collider>();
+            if (pc != null)
+            {
+                var pe = pc.bounds.extents;
+                playerR = Mathf.Max(pe.x, pe.z);
+            }
+        }
+
+        // 0.3×contactKeepDistance 作为下限（人形是 1×）：狼形态比人形贴得更近，
+        // 但下限仍保证碰撞盒不重叠。
+        _cachedWolfKeep = Mathf.Max(contactKeepDistance * 0.3f, bossR + playerR + 0.15f);
+        return _cachedWolfKeep;
     }
 
     // ── 能量狼爪震地（人形/狼形通用） ──
@@ -804,6 +863,25 @@ public class WolfBoss : enemy
         float s = (phase == Phase.Wolf || phase == Phase.Transforming) ? wolfScale : humanScale;
         fx.transform.localScale = new Vector3(s, s, s) * 0.5f;
         Destroy(fx, 0.5f);
+    }
+
+    /// <summary>
+    /// 狼形态接触伤害（近距范围判定）。
+    ///
+    /// 【2026-08 修复】追击改为保持距离后，狼与玩家的碰撞盒不再物理接触，
+    ///   OnCollisionEnter 不再触发。这里在狼形态每帧检查：玩家进入"保持距离 + 0.6"
+    ///   范围内即判定贴身受伤（1s 冷却，与 OnCollisionEnter 共用 dmgCooldown，
+    ///   避免两套逻辑叠加）。友军状态由 DamagePlayers 自动转向敌人，行为一致。
+    /// </summary>
+    private void TryWolfContactDamage()
+    {
+        if (Time.time - dmgCooldown < 1f) return;
+        if (role == null) return;
+        if (GetComponent<MindControlled>() != null) return;   // 友军狼不咬主人
+        float range = ResolveWolfKeepDistance() + 0.6f;
+        if (Vector3.Distance(transform.position, role.transform.position) > range) return;
+        dmgCooldown = Time.time;
+        DamagePlayers(transform.position, range, Mathf.RoundToInt(atk), 0f);
     }
 
     // 接触伤害：变身/死亡时不造成；与其他敌人互不碰撞（不被挤走）；加 1s 冷却防多碰撞体重复

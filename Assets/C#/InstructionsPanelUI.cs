@@ -80,18 +80,19 @@ public class InstructionsPanelUI : MonoBehaviour
 
     /// <summary>若 Inspector 未设置 slideTexts，则填充内置新手教程文字。
     ///
-    /// 【2026-08 全面重写】移除过时内容 + 补充最新功能：
-    ///   移除/修正：
-    ///     • "抽卡装备(SSR)：消耗金币抽取" —— 项目里抽卡不消耗金币，表述错误；
-    ///     • "UR 角色通过抽卡 (SSR) 解锁" —— 实际是 UR 档位，不是 SSR；
-    ///     • "门挑战位于主界面门按钮" —— 实际入口在战斗场景内；
-    ///     • "装备共四种类型" —— 实际有五类（漏了继承装备）；
-    ///     • 难度页只笼统说"敌人变强"，未提 N3/N4/N5/N6/N7/N8 的关键解锁节点。
-    ///   新增（此前完全没有文档的系统）：
-    ///     • 亡者领域（三条复活链路 / 友军机制）
-    ///     • 世界 Boss、营地攻占、对局结算面板、读档币复活
-    ///     • 伤害公式与各项属性的实际作用
-    ///     • 四位角色的具体定位、装备积分、技能进化的真实条件
+    /// 【2026-08 全面重写 · 只写玩法/教程/提示】移除技能描述与错误内容：
+    ///   移除（技能描述，与教程无关）：
+    ///     • 亡者领域整页（复活概率/友军机制的技能细节）→ 仅在世界Boss页提示一句"可被亡者领域复活"
+    ///     • 太极史莱姆整页（阴/阳鱼、太极印、齐射的技能机制）
+    ///     • 角色页的技能数值（风箭多重/范围/CD、血族使魔、孢子领域扩张…）
+    ///   修正（对照代码核实）：
+    ///     • "关底Boss无法被复活，只有世界Boss可以" → 错！所有关底Boss(BossBat/BossMushroomMan/
+    ///       WolfBoss/SlimeBoss) 都在 Destroy1 里调 TombDomainHook.TryReviveAsAlly，均可被复活。
+    ///     • "无尽每分钟扣除10%源木" → 错！battleUI 是每5分钟扣10%源木（每分钟+5装备积分）。
+    ///     • "世界Boss N6起" → 代码 WorldBossManager.ShouldSpawnWorldBoss 是 N7 起。
+    ///       （DifficultySelectUI 的 N6 描述仍是旧文案，已另行汇报给用户。）
+    ///   保留（已对照代码确认正确）：伤害公式、门挑战13层/每层+1上限/全通+10、读档币每局限1次、
+    ///     好感度首杀+10/之后每次+1/上限100、无尽通关N8解锁。
     /// </summary>
     private void EnsureDefaultSlideTexts()
     {
@@ -105,7 +106,8 @@ public class InstructionsPanelUI : MonoBehaviour
             + "<color=#80FFC0>核心目标</color>：在限时内生存，并击败关底首领。\n"
             + "<color=#80FFC0>核心循环</color>：击杀敌人 → 获取经验 → 升级强化 → 变强 → 击败首领。\n\n"
             + "你唯一需要手动做的事是 <color=#FF80C0>走位</color>，技能会自动释放。\n\n"
-            + "本教程共 <color=#FFD24A>15 页</color>，可用 <color=#FF80C0>← →</color> 按钮翻页。",
+            + "本教程共 <color=#FFD24A>12 页</color>，可用 <color=#FF80C0>← →</color> 按钮、方向键或鼠标滚轮翻页。\n"
+            + "<color=#80FFC0>右键点击</color>可随时快速关闭本面板。",
 
             // ── 1. 移动与自动战斗 ──
             "<size=34><color=#FFD24A>1. 移动与自动战斗</color></size>\n\n"
@@ -113,162 +115,117 @@ public class InstructionsPanelUI : MonoBehaviour
             + "<color=#80FFC0>自动施法</color>：所有技能自动瞄准最近敌人释放，无需手动。\n\n"
             + "每个技能有独立 <color=#FFD24A>冷却 (CD)</color>，冷却结束即自动触发；\n"
             + "技能图标下方显示冷却进度。\n\n"
-            + "<color=#80FFC0>拾取经验</color>：靠近经验石会自动吸附。\n"
-            + "脚下的圆圈就是技能范围，可通过升级和装备扩大。\n\n"
+            + "<color=#80FFC0>拾取经验</color>：靠近经验石会自动吸附。\n\n"
             + "<color=#888>提示：范围圈显示可在设置面板中开关。</color>",
 
             // ── 2. 升级三选一 ──
             "<size=34><color=#FFD24A>2. 升级三选一</color></size>\n\n"
             + "经验条满后升级，弹出 <color=#FFD24A>三张卡牌</color> 供你选择：\n\n"
             + "<color=#80FFC0>学习新技能</color>：获得一个全新的自动攻击技能。\n"
-            + "  <color=#888>开局第一次升级保底三张全是学习卡。</color>\n\n"
-            + "<color=#80FFC0>技能升级</color>：提升已有技能的伤害 / 冷却 / 数量 / 范围 / 穿透。\n"
-            + "  <color=#888>每项属性都有独立的升级次数上限。</color>\n\n"
+            + "<color=#80FFC0>技能升级</color>：提升已有技能的伤害 / 冷却 / 数量 / 范围 / 穿透，\n"
+            + "  每项属性都有独立的升级次数上限。\n"
             + "<color=#80FFC0>人物升级</color>：提升基础属性（攻 / 防 / 血 / 速 / 暴击 / 闪避）。\n\n"
-            + "三张都不想要时，可点 <color=#FF80C0>刷新按钮</color> 重抽（需对应抽卡装备）。",
+            + "三张都不想要时，可点 <color=#FF80C0>刷新按钮</color> 重抽（需对应抽卡装备）。\n\n"
+            + "<color=#888>提示：部分基础技能满足条件后可进化为更强的 UR 形态（见抽卡页）。</color>",
 
             // ── 3. 属性与战斗公式 ──
             "<size=34><color=#FFD24A>3. 属性与战斗公式</color></size>\n\n"
             + "<color=#FFD24A>伤害公式</color>：\n"
-            + "  最终伤害 = 技能伤害 × (1 + 攻击力 × 0.1) − 目标防御\n"
-            + "  触发暴击时再乘以暴击伤害倍率。\n\n"
+            + "  最终伤害 = 技能伤害 × (1 + 攻击力 × 0.1)\n"
+            + "  触发暴击时 × 暴击伤害，再减去目标防御，最低 1 点。\n\n"
             + "<color=#80FFC0>攻击力</color>：对所有技能生效的通用乘区，优先堆。\n"
             + "<color=#80FFC0>防御力</color>：直接减免每次受到的伤害。\n"
             + "<color=#80FFC0>暴击率 / 暴击伤害</color>：暴击时伤害数字显示为金色。\n"
             + "<color=#80FFC0>闪避</color>：成功闪避会弹出青色 <color=#40E0D0>Miss</color>。\n"
             + "<color=#80FFC0>经验效率</color>：提升每颗经验石收益，加快升级节奏。\n\n"
-            + "<color=#888>敌人同样拥有防御与闪避，高难度下需要足够攻击力才能破防。</color>",
+            + "<color=#888>提示：敌人同样拥有防御与闪避，高难度下需要足够攻击力才能破防。</color>",
 
-            // ── 4. 技能进化 (UR) ──
-            "<size=34><color=#FFD24A>4. 技能进化 (UR)</color></size>\n\n"
-            + "部分基础技能满足条件后，可进化为更强大的 <color=#FF80C0>UR 形态</color>。\n\n"
-            + "进化的通用条件：\n"
-            + "  • 学会全部 <color=#80FFC0>前置基础技能</color>\n"
-            + "  • 前置技能的关键属性（范围 / 数量等）达到门槛\n"
-            + "  • 已通过 <color=#FF80C0>UR 抽卡</color> 解锁该进化资格\n"
-            + "  • 满足难度门槛，并在三选一里选择进化卡\n\n"
-            + "进化后拥有全新攻击模式与视觉效果，成长曲线也完全不同。\n\n"
-            + "<color=#888>默认进化会消耗（移除）前置技能；\n"
-            + "「不忘初心」类装备可让前置技能保留。</color>",
-
-            // ── 5. 亡者领域 ──
-            "<size=34><color=#C080FF>5. 亡者领域</color></size>\n\n"
-            + "「孢子领域」的 UR 进化，也是角色 <color=#C080FF>无罪</color> 的本命技能。\n\n"
-            + "效果：敌人死亡时有概率 <color=#FF80C0>复活为你的友军</color> 替你作战。\n"
-            + "概率取决于「是谁击杀了它」：\n"
-            + "  • 被 <color=#C080FF>领域(孢子)</color> 击杀 → <color=#80FF80>100%</color>\n"
-            + "  • 被 <color=#C080FF>已复活的友军</color> 击杀 → <color=#FFD24A>25%</color>\n"
-            + "  • 被其余技能击杀 → <color=#FF8080>5%</color>\n\n"
-            + "<color=#80FFC0>友军小怪</color>：存活数秒并持续掉血，之后自然消亡。\n"
-            + "<color=#80FFC0>友军世界 Boss</color>：<color=#FF80C0>永久</color> 跟随，且你每次受伤都会治疗它；\n"
-            + "  屏幕右侧会显示它的头像与血条。\n\n"
-            + "<color=#888>注意：关底 Boss 无法被复活，只有世界 Boss 可以。</color>",
-
-            // ── 6. 装备系统 ──
-            "<size=34><color=#FFD24A>6. 装备系统</color></size>\n\n"
+            // ── 4. 装备系统 ──
+            "<size=34><color=#FFD24A>4. 装备系统</color></size>\n\n"
             + "装备一律 <color=#FF80C0>持久化解锁、跨局永久生效</color>，共五类：\n\n"
             + "<color=#FFD24A>成就装备</color>：达成条件自动解锁（冲刺、三倍速、自动模式…）。\n"
-            + "<color=#FF80C0>好感度装备</color>：各社群好感度达标解锁，多为强力技能。\n"
+            + "<color=#FF80C0>好感度装备</color>：各社群好感度达标解锁。\n"
             + "<color=#C0C0FF>抽卡装备</color>：抽卡获得，SSR / UR 直接影响局内战斗。\n"
             + "<color=#80FFC0>通关装备</color>：按难度通关解锁，主要提供面板属性。\n"
-            + "<color=#C0A060>继承装备</color>：特殊继承奖励。\n\n"
+            + "<color=#C0A060>继承装备</color>：世界 Boss / 无尽塔 Boss 掉落，可跨局穿戴继承。\n\n"
             + "在 <color=#FFD24A>存档界面</color> 可查看每件装备的效果与获得条件。\n\n"
-            + "<color=#888>重复获得的抽卡装备会转为「装备积分」，可兑换通关装备。</color>",
+            + "<color=#888>提示：重复获得的抽卡装备会转为「装备积分」，可兑换通关装备。</color>",
 
-            // ── 7. 抽卡系统 ──
-            "<size=34><color=#C0C0FF>7. 抽卡系统</color></size>\n\n"
+            // ── 5. 抽卡系统 ──
+            "<size=34><color=#C0C0FF>5. 抽卡系统</color></size>\n\n"
             + "共 <color=#FFD24A>R / SR / SSR / UR</color> 四档，带 <color=#FF80C0>软保底</color>：\n"
             + "连续不中会逐步提升出率，避免长期空手。\n\n"
             + "<color=#C0C0FF>R</color>：消耗品（Remake、量子源木、<color=#FFD24A>读档币</color>）。\n"
             + "<color=#80FFC0>SR</color>：各类灵果，永久提升某项面板属性。\n"
-            + "<color=#FFD24A>SSR</color>：独特全局效果（开局资金、分身翻倍、全能吸血…）。\n"
+            + "<color=#FFD24A>SSR</color>：独特全局效果（开局资金、分身翻倍、吸血…）。\n"
             + "<color=#FF80C0>UR</color>：解锁 <color=#FF80C0>技能进化路线</color> 与对应 UR 角色。\n\n"
             + "<color=#FFD24A>读档币</color>：死亡时可消耗 1 张原地满血复活，每局限一次。\n\n"
-            + "<color=#888>UR 有难度硬门槛，需先通关对应难度才会进池。</color>",
+            + "<color=#888>提示：R 档消耗品与 SR 灵果是稳定积累来源，SSR/UR 决定流派走向。</color>",
 
-            // ── 8. 好感度与社群 ──
-            "<size=34><color=#FF80C0>8. 好感度与社群</color></size>\n\n"
+            // ── 6. 好感度与社群 ──
+            "<size=34><color=#FF80C0>6. 好感度与社群</color></size>\n\n"
             + "游戏内有四个 <color=#FF80C0>社群</color>：蘑菇 / 蝙蝠 / 狼人 / 史莱姆。\n\n"
-            + "击败对应的 <color=#FFD24A>世界 Boss</color> 即可解锁社群并累积好感度。\n"
-            + "首次击败关底首领<color=#80FFC0>+10</color>，之后每次击败 <color=#80FFC0>+1</color>（上限 100）。\n\n"
-            + "每个社群会：\n"
-            + "  • <color=#80FFC0>解锁一个专属技能</color>，并随好感度不断强化它\n"
-            + "  • 提供额外面板加成（攻 / 防 / 速 / 闪避 / 经验/ 回血）\n"
-            + "  • 在好感度 <color=#FFD24A>10 / 50 / 100</color> 三档各解锁一件装备\n"
+            + "好感度获取：\n"
+            + "  • 首次击败对应关底首领 <color=#80FFC0>+10</color>（并解锁专属装备）\n"
+            + "  • 之后每次击败该首领 <color=#80FFC0>+1</color>\n"
+            + "  • 击败对应世界 Boss <color=#80FFC0>+1</color>\n\n"
+            + "好感度 <color=#FF80C0>跨局永久保存</color>（上限 100）：\n"
+            + "  • 在 <color=#FFD24A>10 / 50 / 100</color> 三档各解锁一件装备\n"
             + "  • 好感度 <color=#FFD24A>100</color> 时赠予该社群的 <color=#FF80C0>宠物</color>\n\n"
-            + "好感度 <color=#FF80C0>跨局永久保存</color>，是长线养成的核心。\n\n"
-            + "<color=#888>四社群专属技能：孢子领域 / 血族血统 / 命途:寄生 / 阴·阳史莱姆。</color>",
+            + "<color=#888>提示：每个社群还会解锁专属技能与额外面板加成，是长线养成的核心。</color>",
 
-            // ── 9. 太极史莱姆（史莱姆社群） ──
-            "<size=34><color=#9BE8FF>9. 太极史莱姆</color></size>\n\n"
-            + "史莱姆社群的专属技能，由<color=#C0C0FF>两个独立技能</color> 组成：\n\n"
-            + "<color=#B278FF>阴史莱姆</color>（好感 10）：召唤太极阴鱼，向四周齐射黑色能量灵弹。\n"
-            + "<color=#FFF5C8>阳史莱姆</color>（好感 50）：召唤太极阳鱼，齐射白色能量灵弹。\n"
-            + "  <color=#888>单发伤害低，但数量极多（初始每轮 6 发）。</color>\n\n"
-            + "<color=#9BE8FF>★ 同时持有两者时，自动合体为「太极史莱姆」</color>，\n"
-            + "两种攻击方式<color=#FFD24A>轮流</color>切换（合体与拆分都有演出）：\n"
-            + "  <color=#FFD24A>①太极印</color> — 从敌人头顶威压压制，连续落下多次；\n"
-            + "<color=#FF80C0>被压制的敌人无法移动</color>，是强力控场手段。\n"
-            + "  <color=#FFD24A>②阴阳齐射</color> — 拆分为双鱼，同时向四周倾泻黑白灵弹。\n\n"
-            + "<color=#80FFC0>升级卡共享</color>：写作「阴/阳史莱姆」，一张卡同时强化两支。\n"
-            + "可升级<color=#C0C0FF>伤害 / 冷却 / 数量 / 范围</color>；其中 <color=#FFD24A>数量</color>同时决定\n"
-            + "每轮射弹数与太极印次数，是最核心的成长项。\n\n"
-            + "<color=#888>好感 100「太极两仪」：开局直接自带太极史莱姆 + 太极图宠物。</color>",
-
-            // ── 10. 世界 Boss 与营地 ──
-            "<size=34><color=#FFD24A>10. 世界 Boss 与营地</color></size>\n\n"
-            + "<color=#FF6060>世界 Boss</color>（N6 起解锁）：\n"
+            // ── 7. 世界 Boss 与营地 ──
+            "<size=34><color=#FFD24A>7. 世界 Boss 与营地</color></size>\n\n"
+            + "<color=#FF6060>世界 Boss</color>（N6 起出现，固定刷新在地图<color=#FFD24A>四个角</color>，靠近才会开战）：\n"
             + "  • 属性为同名关底 Boss 的 <color=#FF6060>两倍</color>，并自带每秒回血\n"
             + "  • 击败后解锁对应社群，好感度 +1\n"
+            + "  • 难度越高出现的社群越多：蘑菇 → 蝙蝠 → 狼人 → 史莱姆\n"
             + "  • 血厚且持续恢复，必须有足够持续输出才能击杀\n\n"
             + "<color=#80FFC0>中立营地</color>：\n"
             + "  • 战场上会出现不会攻击你的营地\n"
             + "  • 打掉它即可 <color=#FFD24A>攻占</color>，之后每秒自动产出源木\n"
             + "  • 累计攻占达标可解锁成就装备\n\n"
-            + "<color=#888>无尽模式每 5 分钟随机刷出一只已解锁社群的 Boss。</color>",
+            + "<color=#888>提示：学习「亡者领域」后，击败的世界 Boss 也可被复活为永久友军。\n无尽模式每 5 分钟随机刷出一只已解锁社群的 Boss。</color>",
 
-            // ── 11. 源木与奇遇 ──
-            "<size=34><color=#C0A060>11. 源木与奇遇</color></size>\n\n"
+            // ── 8. 源木与奇遇 ──
+            "<size=34><color=#C0A060>8. 源木与奇遇</color></size>\n\n"
             + "<color=#C0A060>源木</color>：局内货币，来自击杀敌人与已占领的营地。\n\n"
             + "<color=#FF80C0>奇遇事件</color>（N3 起开放）：\n"
             + "  • 消耗源木触发，随机给出若干效果供你选择其一\n"
             + "  • 效果包含临时增益、永久面板加成、技能强化等\n"
             + "  • 部分强力奇遇有难度门槛，低难度不会出现\n\n"
-            + "点击战斗界面的 <color=#FF80C0>奇遇按钮</color> 即可触发。\n"
-            + "特定 SSR 可让可选项从二选一变为三选一。\n\n"
-            + "<color=#888>无尽模式下每分钟会扣除 10% 源木，需持续补充。</color>",
+            + "点击战斗界面的 <color=#FF80C0>奇遇按钮</color> 即可触发。\n\n"
+            + "<color=#888>提示：无尽模式每 5 分钟扣除 10% 源木作为传送门维持费，需持续补充；\n每 1 分钟自动获得 5 装备积分。</color>",
 
-            // ── 12. 门挑战 ──
-            "<size=34><color=#FFD24A>12. 门挑战 (N5+)</color></size>\n\n"
+            // ── 9. 门挑战 ──
+            "<size=34><color=#FFD24A>9. 门挑战 (N5+)</color></size>\n\n"
             + "N5 及以上难度的战斗中会出现 <color=#FFD24A>门</color>，点击即可进入挑战。\n\n"
             + "共 <color=#FFD24A>13 层</color>，逐层递增，每层生成强化过的守门敌人。\n\n"
             + "每层通关奖励：\n"
             + "  • <color=#80FFC0>所有技能的升级上限永久 +1</color>\n"
-            + "  • 随机获得 攻击 / 防御 / 经验效率 / 闪避 +2\n\n"
+            + "  • 随机获得 攻击 / 防御 / 经验效率 / 闪避 之一 +2\n\n"
             + "全部 13 层通关：额外获得 <color=#FFD24A>经验效率 +10</color>。\n\n"
-            + "<color=#888>守门人自带回血，输出不足会陷入僵持，建议中后期再挑战。</color>",
+            + "<color=#888>提示：守门人自带回血，输出不足会陷入僵持，建议中后期再挑战。</color>",
 
-            // ── 13. 角色与冲刺 ──
-            "<size=34><color=#FFD24A>13. 角色与冲刺</color></size>\n\n"
-            + "共 <color=#FFD24A>4</color> 位角色，在主菜单切换。默认角色始终可用，\n"
-            + "其余 3 位通过 <color=#FF80C0>UR 抽卡</color> 解锁：\n\n"
-            + "  • <color=#80FFC0>琪诺露</color> — 默认角色，均衡，享受难度攻击加成\n"
-            + "  • <color=#40E0D0>南筱风</color> — 风系特化，风箭范围与数量大幅领先\n"
-            + "  • <color=#FF6060>夏  无</color> — 火系特化，倾向火球进化路线\n"
-            + "  • <color=#C080FF>无  罪</color> — 亡者领域本命，领域范围随时间持续扩张\n\n"
+            // ── 10. 角色与冲刺 ──
+            "<size=34><color=#FFD24A>10. 角色与冲刺</color></size>\n\n"
+            + "共 <color=#FFD24A>4</color> 位角色，在 <color=#FF80C0>人物存档</color> 面板切换：\n\n"
+            + "  • <color=#80FFC0>琪诺露</color> — 默认角色，均衡成长\n"
+            + "  • 其余 3 位角色通过 <color=#FF80C0>UR 抽卡</color> 解锁\n\n"
+            + "不同角色拥有各自的本命技能与成长方向，\n"
+            + "详情可在角色存档面板右上角的 <color=#FF80C0>i</color> 按钮中查看。\n\n"
             + "<color=#FFD24A>冲刺</color>（成就装备解锁）：<color=#FF80C0>方向键 + 空格</color>\n"
             + "向移动方向瞬移一段距离，有独立冷却，是核心保命手段。\n\n"
-            + "<color=#888>可通过升级为冲刺附加无敌 / 穿怪效果。</color>",
+            + "<color=#888>提示：可通过升级为冲刺附加无敌 / 穿怪效果。</color>",
 
-            // ── 14. 难度、结算与设置 ──
-            "<size=34><color=#FFD24A>14. 难度 · 结算 · 设置</color></size>\n\n"
+            // ── 11. 难度 · 结算 · 设置 ──
+            "<size=34><color=#FFD24A>11. 难度 · 结算 · 设置</color></size>\n\n"
             + "<color=#FFD24A>难度</color>：N1 ~ N13 + <color=#FF80C0>无尽模式</color>，通关当前解锁下一档。\n"
             + "  关键节点：<color=#80FFC0>N3</color> 奇遇 · <color=#80FFC0>N4</color> 蝙蝠 · <color=#80FFC0>N5</color> 门挑战\n"
-            + "  <color=#80FFC0>N6</color> 世界 Boss · <color=#80FFC0>N7</color> 血攻翻倍 · <color=#80FFC0>N8</color> 社群挑战\n"
-            + "  <color=#FF80C0>无尽</color>（通关 N8 解锁）：难度无上限持续上涨。\n\n"
+            + "  <color=#80FFC0>N6</color> 世界 Boss · <color=#80FFC0>N8</color> 社群挑战\n"
+            + "  <color=#FF80C0>无尽</color>（通关 N8 解锁）：逐层攀爬，血量倍率无限上涨\n\n"
             + "<color=#FFD24A>对局结算</color>：结束后弹出总结面板，共 4 页 ——\n"
-            + "  概览（伤害 / DPS / 击杀 / 承伤 / 治疗）、技能伤害占比、\n"
-            + "  击败首领、本局技能与新解锁装备。\n"
+            + "  概览、技能伤害占比、击败首领、本局技能与新解锁装备。\n"
             + "  可用 <color=#FF80C0>← →</color> 按钮、方向键或 <color=#FF80C0>鼠标滚轮</color> 翻页。\n\n"
             + "<color=#FFD24A>倍速</color>：1x / 2x / 3x 切换（3x 需成就装备）。\n"
             + "<color=#FFD24A>暂停</color>：<color=#FF80C0>ESC</color> — 继续 / 设置 / 操作说明 / 返回主菜单。\n\n"
@@ -414,6 +371,23 @@ public class InstructionsPanelUI : MonoBehaviour
     }
     public static bool WasN1TutorialShown() => PlayerPrefs.GetInt(PREF_N1_SHOWN, 0) == 1;
     public static void MarkN1TutorialShown() { PlayerPrefs.SetInt(PREF_N1_SHOWN, 1); PlayerPrefs.Save(); }
+
+    // ── N6 首次进入的世界 Boss 提示（一次性 Toast，不入操作说明面板）──
+
+    private const string PREF_WORLD_BOSS_HINT = "WorldBossHintShown";
+
+    public static bool WasWorldBossHintShown() => PlayerPrefs.GetInt(PREF_WORLD_BOSS_HINT, 0) == 1;
+    public static void MarkWorldBossHintShown() { PlayerPrefs.SetInt(PREF_WORLD_BOSS_HINT, 1); PlayerPrefs.Save(); }
+
+    /// <summary>N6 首次进入时弹出的世界 Boss 提示文案（Toast 用，支持富文本）。</summary>
+    public static string WorldBossHintText()
+    {
+        return "<color=#FF6060>⚠ 世界Boss 出现！</color>\n"
+             + "本局新增<color=#FFD24A>世界Boss</color>，固定刷新在地图<color=#FFD24A>四个角</color>，\n"
+             + "靠近才会开始战斗。\n\n"
+             + "它们属性为关底Boss的<color=#FF6060>两倍</color>并每秒回血，\n"
+             + "击败后可解锁对应<color=#FF80C0>社群</color>并累积好感度。";
+    }
 
     // ─── 自动构建 ─────────────────────────
 

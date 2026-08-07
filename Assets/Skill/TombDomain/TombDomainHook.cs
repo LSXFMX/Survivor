@@ -198,6 +198,12 @@ public static class TombDomainHook
             return false;
         }
 
+        // === 2026-08：世界 Boss 血条 HUD 对所有角色开放 ===
+        // 亡者领域不再是"无罪"专属技能——任何角色学习后都能复活世界 Boss 为永久友军，
+        // 因此右侧血条 HUD 不再只在 SKIN_TOMB 分支创建，而在"世界 Boss 复活成功"这里确保存在
+        // （幂等，单例已存在时无操作）。
+        if (isWorldBoss) ResurrectedBossHUD.EnsureExist();
+
         // === 复活：MindControlled 接管 → Boss 级特效 Spawn ===
         // ★ 顺序修复（v10.1）：必须**先** AddComponent + Setup + SetReviveFreeze(true)，**再** Spawn
         //   特效。原因：
